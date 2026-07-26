@@ -1,0 +1,31 @@
+﻿@page "/Error"
+@layout Layout.MainLayout
+@using System.Diagnostics
+
+<PageTitle>Error — 5/3/1 Tracker</PageTitle>
+
+<div class="empty-state animate-fade-in">
+    <div class="empty-state-icon">⚠️</div>
+    <h3>Something went wrong</h3>
+    <p>An error occurred while processing your request.</p>
+
+    @if (ShowRequestId)
+    {
+        <p class="text-muted" style="font-size:var(--text-xs);font-family:var(--font-mono);margin-top:var(--space-2)">
+            Request ID: @RequestId
+        </p>
+    }
+
+    <a href="/" class="btn btn-primary mt-2">Back to Dashboard</a>
+</div>
+
+@code{
+    [CascadingParameter]
+    private HttpContext? HttpContext { get; set; }
+
+    private string? RequestId { get; set; }
+    private bool ShowRequestId => !string.IsNullOrEmpty(RequestId);
+
+    protected override void OnInitialized() =>
+        RequestId = Activity.Current?.Id ?? HttpContext?.TraceIdentifier;
+}

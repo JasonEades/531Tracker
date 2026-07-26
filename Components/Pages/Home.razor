@@ -1,0 +1,305 @@
+@page "/"
+@rendermode InteractiveServer
+@inject ICycleService CycleService
+@inject IWorkoutService WorkoutService
+@inject ILiftService LiftService
+@inject NavigationManager Nav
+
+<PageTitle>Dashboard — 5/3/1 Tracker</PageTitle>
+
+@if (loading)
+{
+    <div class="loading">
+        <div class="spinner"></div>
+    </div>
+}
+else if (currentCycle is null)
+{
+    <div class="empty-state animate-fade-in">
+        <div class="empty-state-icon">🏋️</div>
+        <h3>Ready to get strong?</h3>
+        <p>Create your first 5/3/1 training cycle to get started.</p>
+        <button class="btn btn-primary btn-lg mt-2" @onclick="() => showSetup = true">
+            + Create Cycle
+        </button>
+    </div>
+
+    @if (showSetup)
+    {
+        <div class="setup-sheet animate-slide-up">
+            <div class="setup-sheet-header">
+                <h3>New Cycle Setup</h3>
+                <button class="btn btn-ghost btn-sm" @onclick="() => showSetup = false">✕</button>
+            </div>
+
+            <div class="form-group">
+                <label class="toggle-row">
+                    <span class="form-label" style="margin-bottom:0">Include BBB (5×10)</span>
+                    <input type="checkbox" @bind="enableBbb" />
+                </label>
+            </div>
+
+            <div class="form-group">
+                <label class="toggle-row">
+                    <span class="form-label" style="margin-bottom:0">Include Warmup Sets (2×5)</span>
+                    <input type="checkbox" @bind="enableWarmup" />
+                </label>
+            </div>
+
+            @if (enableBbb)
+            {
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">BBB Mapping</label>
+                        <select class="form-control" @bind="selectedBbbMode">
+                            <option value="@BbbMode.OppositeDay">Opposite Day</option>
+                            <option value="@BbbMode.SameDay">Same Day</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">BBB % of TM</label>
+                        <select class="form-control" @bind="selectedBbbPct">
+                            @foreach (var pct in new[] { 30, 35, 40, 45, 50, 55, 60, 65, 70 })
+                            {
+                                <option value="@pct">@pct%</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            }
+
+            <div class="flex gap-1 mt-2">
+                <button class="btn btn-primary flex-1" @onclick="CreateFirstCycle" disabled="@loading">
+                    🚀 Create Cycle
+                </button>
+                <button class="btn btn-outline" @onclick="() => showSetup = false">Cancel</button>
+            </div>
+        </div>
+    }
+}
+else
+{
+    @* ── Hero Card ──────────────────────────────────────── *@
+    <div class="hero-card animate-fade-in">
+        <div class="flex items-center justify-between mb-2">
+            <div>
+                <div class="hero-subtitle">TODAY'S WORKOUT</div>
+                @if (nextWorkout is not null)
+                {
+                    <div class="hero-title">@GetLiftDisplayName(nextWorkout.MainLiftType) Day</div>
+                    <div class="hero-meta">
+                        @currentCycle.Name · Week @((int)nextWorkout.Week.WeekNumber)
+                        <span class="badge badge-primary ml-1">@GetWeekLabel(nextWorkout.Week.WeekNumber)</span>
+                    </div>
+                }
+                else
+                {
+                    <div class="hero-title">Cycle Complete 🎉</div>
+                    <div class="hero-meta">@currentCycle.Name · All workouts done</div>
+                }
+            </div>
+            <div class="progress-ring-wrap">
+                <svg class="progress-ring-svg" width="72" height="72" viewBox="0 0 72 72">
+                    <defs>
+                        <linearGradient id="ringGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                            <stop offset="0%" stop-color="#5E7CFF"/>
+                            <stop offset="100%" stop-color="#6EE7FF"/>
+                        </linearGradient>
+                    </defs>
+                    <circle cx="36" cy="36" r="30" fill="none" stroke="rgba(255,255,255,0.08)" stroke-width="6"/>
+                    <circle cx="36" cy="36" r="30" fill="none"
+                            stroke="url(#ringGrad)"
+                            stroke-width="6"
+                            stroke-linecap="round"
+                            stroke-dasharray="@(2 * Math.PI * 30)"
+                            stroke-dashoffset="@(2 * Math.PI * 30 * (1 - progressPercent / 100.0))"
+                            transform="rotate(-90 36 36)"/>
+                    <text x="36" y="40" text-anchor="middle" font-size="14" font-weight="700" fill="white">@progressPercent%</text>
+                </svg>
+            </div>
+        </div>
+
+        @if (nextWorkout is not null)
+        {
+            <button class="btn btn-primary btn-full mt-3" @onclick="() => GoToWorkout(nextWorkout.Id)">
+                ▶ Start Workout
+            </button>
+        }
+        else
+        {
+            <button class="btn btn-success btn-full mt-3" @onclick="GoToCycle">
+                View Cycle Summary
+            </button>
+        }
+    </div>
+
+    @* ── Progress strip ─────────────────────────────────── *@
+    <div class="progress-strip mb-3">
+        <div class="flex items-center justify-between mb-1">
+            <span class="text-muted" style="font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:0.06em">Cycle Progress</span>
+            <span class="text-muted" style="font-size:var(--text-xs)">@completedWorkouts / @totalWorkouts workouts</span>
+        </div>
+        <div class="progress-bar-wrapper">
+            <div class="progress-bar-fill" style="width: @progressPercent%"></div>
+        </div>
+    </div>
+
+    @* ── Stat cards ─────────────────────────────────────── *@
+    <div class="stats-grid">
+        <div class="stat-card animate-scale-in">
+            <div class="stat-label">Current Week</div>
+            <div class="stat-value">@currentWeekDisplay</div>
+        </div>
+        <div class="stat-card animate-scale-in">
+            <div class="stat-label">Completion</div>
+            <div class="stat-value">@progressPercent<span style="font-size:var(--text-lg)">%</span></div>
+        </div>
+        @foreach (var lift in lifts.Take(2))
+        {
+            <div class="stat-card animate-scale-in">
+                <div class="stat-label">@lift.Name TM</div>
+                <div class="stat-value">@lift.TrainingMax<span style="font-size:var(--text-sm);font-weight:400;color:var(--color-text-muted)"> lbs</span></div>
+            </div>
+        }
+    </div>
+
+    @* ── Training Maxes ─────────────────────────────────── *@
+    @if (lifts.Count > 0)
+    {
+        <div class="card mb-3 animate-fade-in">
+            <div class="card-header">Training Maxes</div>
+            <div class="card-body" style="padding:0">
+                @foreach (var lift in lifts)
+                {
+                    <div class="tm-row">
+                        <div class="tm-lift">@lift.Name</div>
+                        <div class="tm-weight">@lift.TrainingMax <span class="tm-unit">lbs</span></div>
+                        @if (lift.BbbPercentage > 0)
+                        {
+                            <div class="tm-bbb">BBB @lift.BbbPercentage%</div>
+                        }
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
+    @* ── Upcoming workouts ──────────────────────────────── *@
+    @if (upcomingWorkouts.Count > 0)
+    {
+        <div class="section-header">
+            <h3>Upcoming</h3>
+        </div>
+        <div class="week-grid animate-fade-in">
+            @foreach (var wo in upcomingWorkouts)
+            {
+                <button class="workout-item" @onclick="() => GoToWorkout(wo.Id)">
+                    <div class="flex items-center gap-2">
+                        <span class="status-dot @GetStatusClass(wo.Status)"></span>
+                        <div>
+                            <div class="workout-name">@GetLiftDisplayName(wo.MainLiftType)</div>
+                            <div class="workout-meta">Week @((int)wo.Week.WeekNumber) · @GetWeekLabel(wo.Week.WeekNumber)</div>
+                        </div>
+                    </div>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-text-muted);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+            }
+        </div>
+    }
+}
+
+@code {
+    private Cycle? currentCycle;
+    private Workout? nextWorkout;
+    private List<Lift> lifts = [];
+    private List<Workout> upcomingWorkouts = [];
+    private bool loading = true;
+    private bool showSetup;
+    private bool enableBbb;
+    private bool enableWarmup;
+    private BbbMode selectedBbbMode = BbbMode.OppositeDay;
+    private double selectedBbbPct = 50;
+
+    private int totalWorkouts;
+    private int completedWorkouts;
+    private int progressPercent;
+    private string currentWeekDisplay = "-";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+        loading = false;
+    }
+
+    private async Task LoadData()
+    {
+        currentCycle = await CycleService.GetCurrentCycleAsync();
+        lifts = await LiftService.GetAllLiftsAsync();
+
+        if (currentCycle is not null)
+        {
+            var allWorkouts = currentCycle.Weeks.SelectMany(w => w.Workouts).ToList();
+            totalWorkouts = allWorkouts.Count;
+            completedWorkouts = allWorkouts.Count(w => w.Status == WorkoutStatus.Completed);
+            progressPercent = totalWorkouts > 0 ? (int)(completedWorkouts * 100.0 / totalWorkouts) : 0;
+
+            var activeWeek = currentCycle.Weeks
+                .OrderBy(w => w.WeekNumber)
+                .FirstOrDefault(w => w.Workouts.Any(wo => wo.Status != WorkoutStatus.Completed));
+            currentWeekDisplay = activeWeek is not null
+                ? $"Week {(int)activeWeek.WeekNumber}"
+                : "Done";
+
+            nextWorkout = await WorkoutService.GetNextIncompleteWorkoutAsync();
+
+            upcomingWorkouts = allWorkouts
+                .Where(w => w.Status != WorkoutStatus.Completed)
+                .OrderBy(w => w.Week.WeekNumber).ThenBy(w => w.MainLiftType)
+                .Take(6)
+                .ToList();
+        }
+    }
+
+    private async Task CreateFirstCycle()
+    {
+        loading = true;
+        var mode = enableBbb ? selectedBbbMode : BbbMode.None;
+        await CycleService.CreateCycleAsync(mode, selectedBbbPct, enableWarmup);
+        showSetup = false;
+        await LoadData();
+        loading = false;
+    }
+
+    private void GoToWorkout(int id) => Nav.NavigateTo("/workout/" + id);
+
+    private void GoToCycle()
+    {
+        if (currentCycle is not null)
+            Nav.NavigateTo("/cycles/" + currentCycle.Id);
+    }
+
+    private static string GetLiftDisplayName(LiftType lt) => lt switch
+    {
+        LiftType.Squat       => "Squat",
+        LiftType.BenchPress  => "Bench Press",
+        LiftType.Deadlift    => "Deadlift",
+        LiftType.OverheadPress => "Overhead Press",
+        _                    => lt.ToString()
+    };
+
+    private static string GetWeekLabel(WeekNumber wn) => wn switch
+    {
+        WeekNumber.Week1 => "5s",
+        WeekNumber.Week2 => "3s",
+        WeekNumber.Week3 => "5/3/1",
+        WeekNumber.Week4 => "Deload",
+        _                => ""
+    };
+
+    private static string GetStatusClass(WorkoutStatus s) => s switch
+    {
+        WorkoutStatus.Completed  => "status-completed",
+        WorkoutStatus.InProgress => "status-in-progress",
+        _                        => "status-not-started",
+    };
+}

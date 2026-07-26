@@ -1,0 +1,91 @@
+/* ── WorkoutDetail isolation styles ── */
+
+.workout-header {
+    margin-bottom: var(--space-5);
+}
+
+.back-btn {
+    padding: 0 var(--space-2);
+    gap: 4px;
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-3);
+    height: 36px;
+}
+
+.workout-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+}
+
+.workout-meta-line {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.workout-actions {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    flex-shrink: 0;
+}
+
+.sets-progress {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+}
+
+.sets-progress-label {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+.set-unit {
+    font-size: var(--text-sm);
+    font-weight: 400;
+    color: var(--color-text-muted);
+}
+
+/* Add accessory form */
+.add-accessory-form {
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+}
+
+.acc-inputs-row {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: var(--space-3);
+}
+
+.acc-empty {
+    padding: var(--space-6) var(--space-5);
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    text-align: center;
+}
+
+.acc-card-actions {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+    justify-content: flex-end;
+}
+
+/* Make accessories scroll container have left padding */
+.accessories-scroll {
+    padding-left: var(--space-5);
+    padding-right: var(--space-5);
+}

@@ -1,0 +1,8 @@
+/* NavMenu isolation — both bottom tab bar and sidebar variants
+   are handled by global app.css .nav-menu / .nav-item rules.
+   Component-specific tweaks only here. */
+
+/* Ensure NavLink active class is picked up — Blazor adds "active" class */
+.nav-item.active {
+    color: var(--color-primary);
+}

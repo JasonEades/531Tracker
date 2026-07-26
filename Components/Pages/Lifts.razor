@@ -1,0 +1,151 @@
+@page "/lifts"
+@rendermode InteractiveServer
+@inject ILiftService LiftService
+@inject IBbbMappingService BbbMapping
+
+<PageTitle>Lifts — 5/3/1 Tracker</PageTitle>
+
+<div class="page-header animate-fade-in">
+    <h1>Lifts</h1>
+    <p class="page-subtitle">Training maxes and BBB configuration</p>
+</div>
+
+@if (loading)
+{
+    <div class="loading"><div class="spinner"></div></div>
+}
+else
+{
+    @* ── Training Maxes ─────────────────────────────────── *@
+    <div class="section-header">
+        <h3>Training Maxes</h3>
+    </div>
+
+    <div class="lift-list animate-fade-in">
+        @foreach (var lift in lifts)
+        {
+            var isEditing = editingLiftId == lift.Id;
+
+            <div class="lift-card @(isEditing ? "lift-card-editing" : "")">
+                <div class="lift-card-top">
+                    <div class="lift-card-info">
+                        <div class="lift-name">@lift.Name</div>
+                        <span class="badge @(lift.IsUpperBody ? "badge-info" : "badge-warning")">
+                            @(lift.IsUpperBody ? "Upper" : "Lower")
+                        </span>
+                    </div>
+                    @if (!isEditing)
+                    {
+                        <div class="lift-card-stats">
+                            <div class="lift-tm-value">@lift.TrainingMax <span class="lift-unit">lbs</span></div>
+                            <div class="lift-bbb-value">BBB @lift.BbbPercentage<span class="lift-unit">%</span></div>
+                        </div>
+                    }
+                </div>
+
+                @if (isEditing)
+                {
+                    <div class="lift-edit-row">
+                        <div class="form-group mb-0" style="flex:1">
+                            <label class="form-label">Training Max (lbs)</label>
+                            <input type="number" class="form-control input-big" inputmode="numeric"
+                                   @bind="editTm" step="5" />
+                        </div>
+                        <div class="form-group mb-0" style="flex:1">
+                            <label class="form-label">BBB %</label>
+                            <input type="number" class="form-control input-big" inputmode="numeric"
+                                   @bind="editBbbPct" step="5" min="30" max="70" />
+                        </div>
+                    </div>
+                    <div class="lift-edit-actions">
+                        <button class="btn btn-success flex-1" @onclick="() => SaveLift(lift.Id)">Save</button>
+                        <button class="btn btn-outline" @onclick="CancelEdit">Cancel</button>
+                    </div>
+                }
+                else
+                {
+                    <button class="btn btn-ghost btn-sm lift-edit-btn" @onclick="() => StartEdit(lift)">
+                        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+                        Edit
+                    </button>
+                }
+            </div>
+        }
+    </div>
+
+    @* ── BBB Mapping Reference ──────────────────────────── *@
+    <div class="section-header mt-3">
+        <h3>BBB Mapping Reference</h3>
+    </div>
+
+    <div class="card animate-fade-in mb-3">
+        <div class="card-header">
+            Opposite Day
+            <span class="badge badge-muted">Recommended</span>
+        </div>
+        <div class="card-body" style="padding:0">
+            @foreach (var mapping in BbbMapping.GetMappings(BbbMode.OppositeDay))
+            {
+                <div class="mapping-row">
+                    <span class="mapping-day">@GetLiftDisplayName(mapping.Key) Day</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--color-text-muted);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+                    <span class="mapping-target">@GetLiftDisplayName(mapping.Value) <span class="text-muted" style="font-weight:400">5×10</span></span>
+                </div>
+            }
+        </div>
+    </div>
+
+    <div class="card animate-fade-in">
+        <div class="card-header">Same Day</div>
+        <div class="card-body" style="padding:0">
+            @foreach (var mapping in BbbMapping.GetMappings(BbbMode.SameDay))
+            {
+                <div class="mapping-row">
+                    <span class="mapping-day">@GetLiftDisplayName(mapping.Key) Day</span>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="color:var(--color-text-muted);flex-shrink:0"><polyline points="9 18 15 12 9 6"/></svg>
+                    <span class="mapping-target">@GetLiftDisplayName(mapping.Value) <span class="text-muted" style="font-weight:400">5×10</span></span>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private List<Lift> lifts = [];
+    private bool loading = true;
+    private int? editingLiftId;
+    private double editTm;
+    private double editBbbPct;
+
+    protected override async Task OnInitializedAsync()
+    {
+        lifts = await LiftService.GetAllLiftsAsync();
+        loading = false;
+    }
+
+    private void StartEdit(Lift lift)
+    {
+        editingLiftId = lift.Id;
+        editTm        = lift.TrainingMax;
+        editBbbPct    = lift.BbbPercentage;
+    }
+
+    private void CancelEdit() => editingLiftId = null;
+
+    private async Task SaveLift(int liftId)
+    {
+        await LiftService.UpdateTrainingMaxAsync(liftId, editTm);
+        await LiftService.UpdateBbbPercentageAsync(liftId, editBbbPct);
+        lifts = await LiftService.GetAllLiftsAsync();
+        editingLiftId = null;
+    }
+
+    private static string GetLiftDisplayName(LiftType lt) => lt switch
+    {
+        LiftType.Squat         => "Squat",
+        LiftType.BenchPress    => "Bench Press",
+        LiftType.Deadlift      => "Deadlift",
+        LiftType.OverheadPress => "Overhead Press",
+        _                      => lt.ToString()
+    };
+}

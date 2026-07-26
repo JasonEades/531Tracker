@@ -1,0 +1,520 @@
+@page "/workout/{WorkoutId:int}"
+@rendermode InteractiveServer
+@inject IWorkoutService WorkoutService
+@inject IAccessoryService AccessoryService
+@inject IBbbMappingService BbbMapping
+@inject IPlateCalculatorService PlateCalc
+@inject NavigationManager Nav
+
+<PageTitle>Workout — 5/3/1 Tracker</PageTitle>
+
+@if (loading)
+{
+    <div class="loading"><div class="spinner"></div></div>
+}
+else if (workout is null)
+{
+    <div class="empty-state">
+        <h3>Workout not found</h3>
+        <button class="btn btn-outline mt-1" @onclick='() => Nav.NavigateTo("/")'>Back to Dashboard</button>
+    </div>
+}
+else
+{
+    @* ── Page Header ───────────────────────────────────── *@
+    <div class="workout-header animate-fade-in">
+        <button class="btn btn-ghost btn-sm back-btn" @onclick="GoBack">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Back
+        </button>
+        <div class="workout-title-row">
+            <div>
+                <h1>@GetLiftDisplayName(workout.MainLiftType) Day</h1>
+                <div class="workout-meta-line">
+                    @workout.Week.Cycle.Name · Week @((int)workout.Week.WeekNumber)
+                    <span class="badge @GetStatusBadgeClass(workout.Status) ml-1">@GetStatusLabel(workout.Status)</span>
+                </div>
+            </div>
+            <div class="workout-actions">
+                @if (workout.Status == WorkoutStatus.NotStarted)
+                {
+                    <button class="btn btn-primary" @onclick="StartWorkout">▶ Start</button>
+                }
+                @if (workout.Status == WorkoutStatus.Completed)
+                {
+                    <button class="btn btn-outline btn-sm" @onclick="ReopenWorkout">↩ Reopen</button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── Progress bar ─────────────────────────────────── *@
+    <div class="sets-progress mb-3 animate-fade-in">
+        <div class="flex items-center justify-between mb-1">
+            <span class="sets-progress-label">Sets Completed</span>
+            <span class="sets-progress-label">@SetsDone / @SetsTotal</span>
+        </div>
+        <div class="progress-bar-wrapper">
+            <div class="progress-bar-fill" style="width:@SetsPct%"></div>
+        </div>
+    </div>
+
+    @* ── Warmup Sets ──────────────────────────────────── *@
+    @if (warmupSets.Count > 0)
+    {
+        <div class="exercise-section animate-slide-up">
+            <div class="exercise-section-header">
+                <div class="exercise-section-title">
+                    🔥 Warmup — @GetLiftDisplayName(workout.MainLiftType)
+                </div>
+                <span class="badge badge-muted">2×5</span>
+            </div>
+            @foreach (var set in warmupSets)
+            {
+                <div class="set-card @(set.IsCompleted ? "completed-set" : "")">
+                    <div class="set-num">@set.SetNumber</div>
+                    <div class="set-info">
+                        <div class="set-weight-label">@set.PrescribedWeight <span class="set-unit">lbs</span></div>
+                        <div class="set-reps-label">× @set.PrescribedReps reps</div>
+                        @if (plateMap.TryGetValue(set.PrescribedWeight, out var plates) && plates.Count > 0)
+                        {
+                            <div class="plate-chips-inline">
+                                @foreach (var p in plates)
+                                {
+                                    @for (int i = 0; i < p.CountPerSide; i++)
+                                    {
+                                        <span class="plate-chip-sm" style="@GetPlateStyle(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="set-inputs">
+                        <input class="set-input" type="number" inputmode="numeric"
+                               value="@(set.ActualWeight ?? set.PrescribedWeight)"
+                               @onchange="e => OnWeightChanged(set, e)" step="5"
+                               disabled="@(workout.Status == WorkoutStatus.Completed)" />
+                        <input class="set-input" type="number" inputmode="numeric"
+                               value="@(set.ActualReps ?? set.PrescribedReps)"
+                               @onchange="e => OnRepsChanged(set, e)" min="0"
+                               disabled="@(workout.Status == WorkoutStatus.Completed)" />
+                    </div>
+                    <button class="check-btn @(set.IsCompleted ? "checked" : "")"
+                            @onclick="() => ToggleSet(set)"
+                            disabled="@(workout.Status == WorkoutStatus.Completed)">
+                        @(set.IsCompleted ? "✓" : "")
+                    </button>
+                </div>
+            }
+        </div>
+    }
+
+    @* ── Main Lift Sets ───────────────────────────────── *@
+    <div class="exercise-section animate-slide-up">
+        <div class="exercise-section-header">
+            <div class="exercise-section-title">
+                🏋️ Main Lift — @GetLiftDisplayName(workout.MainLiftType)
+            </div>
+            <span class="badge badge-primary">@GetWeekLabel(workout.Week.WeekNumber)</span>
+        </div>
+        @foreach (var set in mainSets)
+        {
+            var isAmrap = set.SetNumber == mainSets.Count && workout.Week.WeekNumber != WeekNumber.Week4;
+            <div class="set-card @(set.IsCompleted ? "completed-set" : "")">
+                <div class="set-num">@set.SetNumber</div>
+                <div class="set-info">
+                    <div class="set-weight-label">
+                        @set.PrescribedWeight <span class="set-unit">lbs</span>
+                        @if (isAmrap)
+                        {
+                            <span class="badge badge-amrap ml-1">AMRAP</span>
+                        }
+                    </div>
+                    <div class="set-reps-label">
+                        × @(isAmrap ? $"{set.PrescribedReps}+" : set.PrescribedReps.ToString()) reps
+                    </div>
+                    @if (plateMap.TryGetValue(set.PrescribedWeight, out var plates) && plates.Count > 0)
+                    {
+                        <div class="plate-chips-inline">
+                            @foreach (var p in plates)
+                            {
+                                @for (int i = 0; i < p.CountPerSide; i++)
+                                {
+                                    <span class="plate-chip-sm" style="@GetPlateStyle(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
+                                }
+                            }
+                        </div>
+                    }
+                </div>
+                <div class="set-inputs">
+                    <input class="set-input" type="number" inputmode="numeric"
+                           value="@(set.ActualWeight ?? set.PrescribedWeight)"
+                           @onchange="e => OnWeightChanged(set, e)" step="5"
+                           disabled="@(workout.Status == WorkoutStatus.Completed)" />
+                    <input class="set-input" type="number" inputmode="numeric"
+                           value="@(set.ActualReps ?? set.PrescribedReps)"
+                           @onchange="e => OnRepsChanged(set, e)" min="0"
+                           disabled="@(workout.Status == WorkoutStatus.Completed)" />
+                </div>
+                <button class="check-btn @(set.IsCompleted ? "checked" : "")"
+                        @onclick="() => ToggleSet(set)"
+                        disabled="@(workout.Status == WorkoutStatus.Completed)">
+                    @(set.IsCompleted ? "✓" : "")
+                </button>
+            </div>
+        }
+    </div>
+
+    @* ── BBB Sets ─────────────────────────────────────── *@
+    @if (bbbSets.Count > 0)
+    {
+        <div class="exercise-section animate-slide-up">
+            <div class="exercise-section-header">
+                <div class="exercise-section-title">
+                    🔁 BBB — @BbbMapping.GetBbbLiftName(workout.MainLiftType, workout.Week.Cycle.BbbMode)
+                </div>
+                <span class="badge badge-warning">@GetBbbModeLabel(workout.Week.Cycle.BbbMode)</span>
+            </div>
+            @foreach (var set in bbbSets)
+            {
+                <div class="set-card @(set.IsCompleted ? "completed-set" : "")">
+                    <div class="set-num">@set.SetNumber</div>
+                    <div class="set-info">
+                        <div class="set-weight-label">@set.PrescribedWeight <span class="set-unit">lbs</span></div>
+                        <div class="set-reps-label">× @set.PrescribedReps reps</div>
+                        @if (plateMap.TryGetValue(set.PrescribedWeight, out var plates) && plates.Count > 0)
+                        {
+                            <div class="plate-chips-inline">
+                                @foreach (var p in plates)
+                                {
+                                    @for (int i = 0; i < p.CountPerSide; i++)
+                                    {
+                                        <span class="plate-chip-sm" style="@GetPlateStyle(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="set-inputs">
+                        <input class="set-input" type="number" inputmode="numeric"
+                               value="@(set.ActualWeight ?? set.PrescribedWeight)"
+                               @onchange="e => OnWeightChanged(set, e)" step="5"
+                               disabled="@(workout.Status == WorkoutStatus.Completed)" />
+                        <input class="set-input" type="number" inputmode="numeric"
+                               value="@(set.ActualReps ?? set.PrescribedReps)"
+                               @onchange="e => OnRepsChanged(set, e)" min="0"
+                               disabled="@(workout.Status == WorkoutStatus.Completed)" />
+                    </div>
+                    <button class="check-btn @(set.IsCompleted ? "checked" : "")"
+                            @onclick="() => ToggleSet(set)"
+                            disabled="@(workout.Status == WorkoutStatus.Completed)">
+                        @(set.IsCompleted ? "✓" : "")
+                    </button>
+                </div>
+            }
+        </div>
+    }
+
+    @* ── Accessories ──────────────────────────────────── *@
+    <div class="exercise-section animate-slide-up">
+        <div class="exercise-section-header">
+            <div class="exercise-section-title">💪 Accessories</div>
+            @if (workout.Status != WorkoutStatus.Completed)
+            {
+                <button class="btn btn-sm btn-outline" @onclick="() => showAddAccessory = !showAddAccessory">
+                    @(showAddAccessory ? "Cancel" : "+ Add")
+                </button>
+            }
+        </div>
+
+        @if (showAddAccessory)
+        {
+            <div class="add-accessory-form">
+                <div class="form-group">
+                    <label class="form-label">Accessory Exercise</label>
+                    <select class="form-control" @onchange="OnAccessorySelected">
+                        <option value="">Select an accessory…</option>
+                        @foreach (var acc in availableAccessories)
+                        {
+                            <option value="@acc.Id">@acc.Name</option>
+                        }
+                    </select>
+                </div>
+                @if (suggestedWeight.HasValue)
+                {
+                    <p class="text-muted mb-1" style="font-size:var(--text-sm)">💡 Last used: @suggestedWeight.Value lbs</p>
+                }
+                <div class="acc-inputs-row">
+                    <div class="form-group">
+                        <label class="form-label">Weight</label>
+                        <input type="number" class="form-control" inputmode="numeric" @bind="newAccWeight" step="5" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Reps</label>
+                        <input type="number" class="form-control" inputmode="numeric" @bind="newAccReps" min="1" />
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">Sets</label>
+                        <input type="number" class="form-control" inputmode="numeric" @bind="newAccSets" min="1" />
+                    </div>
+                </div>
+                <button class="btn btn-primary btn-full" @onclick="AddAccessory"
+                        disabled="@(selectedAccessoryId == 0)">
+                    Add to Workout
+                </button>
+            </div>
+        }
+
+        @if (workout.WorkoutAccessories.Count == 0 && !showAddAccessory)
+        {
+            <div class="acc-empty">No accessories added yet.</div>
+        }
+        else
+        {
+            <div class="accessories-scroll">
+                @foreach (var wa in workout.WorkoutAccessories)
+                {
+                    <div class="accessory-card @(wa.IsCompleted ? "completed-acc" : "")">
+                        <div class="accessory-name">@wa.Accessory.Name</div>
+                        <div class="accessory-scheme">@wa.Sets × @wa.Reps reps · @wa.Weight lbs</div>
+                        <div class="acc-card-actions">
+                            <button class="check-btn @(wa.IsCompleted ? "checked" : "")" style="width:40px;height:40px;"
+                                    @onclick="() => ToggleAccessory(wa)"
+                                    disabled="@(workout.Status == WorkoutStatus.Completed)">
+                                @(wa.IsCompleted ? "✓" : "")
+                            </button>
+                            @if (workout.Status != WorkoutStatus.Completed)
+                            {
+                                <button class="btn btn-sm btn-danger" style="width:40px;height:40px;padding:0;"
+                                        @onclick="() => RemoveAccessory(wa.Id)">✕</button>
+                            }
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @* ── Sticky Finish / Complete Button ───────────────── *@
+    @if (workout.Status == WorkoutStatus.InProgress)
+    {
+        <div class="sticky-action">
+            <button class="btn btn-success btn-full btn-lg" @onclick="CompleteWorkout">
+                ✓ Finish Workout
+            </button>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int WorkoutId { get; set; }
+
+    private Workout? workout;
+    private bool loading = true;
+
+    private List<WorkoutSet> mainSets = [];
+    private List<WorkoutSet> bbbSets = [];
+    private List<WorkoutSet> warmupSets = [];
+
+    private int SetsTotal => warmupSets.Count + mainSets.Count + bbbSets.Count;
+    private int SetsDone  => warmupSets.Concat(mainSets).Concat(bbbSets).Count(s => s.IsCompleted);
+    private int SetsPct   => SetsTotal > 0 ? (int)(SetsDone * 100.0 / SetsTotal) : 0;
+    private Dictionary<double, List<PlateLoadingResult>> plateMap = [];
+
+    private List<Accessory> availableAccessories = [];
+    private bool showAddAccessory;
+    private int selectedAccessoryId;
+    private double newAccWeight;
+    private int newAccReps = 10;
+    private int newAccSets = 3;
+    private double? suggestedWeight;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadWorkout();
+        availableAccessories = await AccessoryService.GetAllAccessoriesAsync();
+        loading = false;
+    }
+
+    private async Task LoadWorkout()
+    {
+        workout = await WorkoutService.GetWorkoutWithDetailsAsync(WorkoutId);
+        if (workout is not null)
+        {
+            warmupSets  = workout.Sets.Where(s => s.SetType == SetType.Warmup).OrderBy(s => s.SetNumber).ToList();
+            mainSets    = workout.Sets.Where(s => s.SetType == SetType.Main).OrderBy(s => s.SetNumber).ToList();
+            bbbSets     = workout.Sets.Where(s => s.SetType == SetType.Bbb).OrderBy(s => s.SetNumber).ToList();
+
+            var allWeights = warmupSets.Concat(mainSets).Concat(bbbSets)
+                .Select(s => s.PrescribedWeight).Distinct();
+            plateMap = [];
+            foreach (var w in allWeights)
+                plateMap[w] = await PlateCalc.CalculatePlates(w);
+        }
+    }
+
+    private async Task StartWorkout()
+    {
+        await WorkoutService.StartWorkoutAsync(WorkoutId);
+        await LoadWorkout();
+    }
+
+    private async Task CompleteWorkout()
+    {
+        await WorkoutService.CompleteWorkoutAsync(WorkoutId);
+        await LoadWorkout();
+    }
+
+    private async Task ReopenWorkout()
+    {
+        await WorkoutService.ReopenWorkoutAsync(WorkoutId);
+        await LoadWorkout();
+    }
+
+    private async Task OnWeightChanged(WorkoutSet set, ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var weight))
+        {
+            set.ActualWeight = weight;
+            await WorkoutService.UpdateSetAsync(set.Id, set.ActualWeight, set.ActualReps, set.IsCompleted);
+            await AutoStartIfNeeded();
+        }
+    }
+
+    private async Task OnRepsChanged(WorkoutSet set, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var reps))
+        {
+            set.ActualReps = reps;
+            await WorkoutService.UpdateSetAsync(set.Id, set.ActualWeight, set.ActualReps, set.IsCompleted);
+            await AutoStartIfNeeded();
+        }
+    }
+
+    private async Task ToggleSet(WorkoutSet set)
+    {
+        set.IsCompleted = !set.IsCompleted;
+        if (set.IsCompleted)
+        {
+            set.ActualWeight ??= set.PrescribedWeight;
+            set.ActualReps   ??= set.PrescribedReps;
+        }
+        await WorkoutService.UpdateSetAsync(set.Id, set.ActualWeight, set.ActualReps, set.IsCompleted);
+        await AutoStartIfNeeded();
+    }
+
+    private async Task ToggleAccessory(WorkoutAccessory wa)
+    {
+        wa.IsCompleted = !wa.IsCompleted;
+        await AccessoryService.UpdateWorkoutAccessoryAsync(wa.Id, wa.Weight, wa.Reps, wa.Sets, wa.IsCompleted);
+        await AutoStartIfNeeded();
+    }
+
+    private async Task OnAccessorySelected(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var id) && id > 0)
+        {
+            selectedAccessoryId = id;
+            suggestedWeight = await AccessoryService.GetSuggestedWeightAsync(id);
+            if (suggestedWeight.HasValue)
+                newAccWeight = suggestedWeight.Value;
+        }
+        else
+        {
+            selectedAccessoryId = 0;
+            suggestedWeight = null;
+        }
+    }
+
+    private async Task AddAccessory()
+    {
+        if (selectedAccessoryId == 0 || workout is null) return;
+        await AccessoryService.AddAccessoryToWorkoutAsync(
+            workout.Id, selectedAccessoryId, newAccWeight, newAccReps, newAccSets);
+        await LoadWorkout();
+        selectedAccessoryId = 0;
+        newAccWeight  = 0;
+        newAccReps    = 10;
+        newAccSets    = 3;
+        suggestedWeight = null;
+        showAddAccessory = false;
+    }
+
+    private async Task RemoveAccessory(int waId)
+    {
+        await AccessoryService.RemoveWorkoutAccessoryAsync(waId);
+        await LoadWorkout();
+    }
+
+    private async Task AutoStartIfNeeded()
+    {
+        if (workout?.Status == WorkoutStatus.NotStarted)
+        {
+            await WorkoutService.StartWorkoutAsync(WorkoutId);
+            workout.Status = WorkoutStatus.InProgress;
+        }
+    }
+
+    private void GoBack()
+    {
+        if (workout?.Week?.Cycle is not null)
+            Nav.NavigateTo("/cycles/" + workout.Week.Cycle.Id);
+        else
+            Nav.NavigateTo("/");
+    }
+
+    private static string GetLiftDisplayName(LiftType lt) => lt switch
+    {
+        LiftType.Squat         => "Squat",
+        LiftType.BenchPress    => "Bench Press",
+        LiftType.Deadlift      => "Deadlift",
+        LiftType.OverheadPress => "Overhead Press",
+        _                      => lt.ToString()
+    };
+
+    private static string GetWeekLabel(WeekNumber wn) => wn switch
+    {
+        WeekNumber.Week1 => "5s",
+        WeekNumber.Week2 => "3s",
+        WeekNumber.Week3 => "5/3/1",
+        WeekNumber.Week4 => "Deload",
+        _                => ""
+    };
+
+    private static string GetStatusBadgeClass(WorkoutStatus s) => s switch
+    {
+        WorkoutStatus.NotStarted => "badge-muted",
+        WorkoutStatus.InProgress => "badge-warning",
+        WorkoutStatus.Completed  => "badge-success",
+        _                        => "badge-muted"
+    };
+
+    private static string GetStatusLabel(WorkoutStatus s) => s switch
+    {
+        WorkoutStatus.NotStarted => "Not Started",
+        WorkoutStatus.InProgress => "In Progress",
+        WorkoutStatus.Completed  => "Completed",
+        _                        => ""
+    };
+
+    private static string GetBbbModeLabel(BbbMode mode) => mode switch
+    {
+        BbbMode.OppositeDay => "Opposite Day",
+        BbbMode.SameDay     => "Same Day",
+        _                   => ""
+    };
+
+    private static string FormatPlate(double w) =>
+        w == (int)w ? ((int)w).ToString() : w.ToString("0.#");
+
+    private static string GetPlateStyle(double weight) => weight switch
+    {
+        >= 45 => "color:#2563eb;",
+        >= 35 => "color:#ca8a04;",
+        >= 25 => "color:#16a34a;",
+        >= 15 => "color:#8b5cf6;",
+        >= 10 => "color:#94a3b8;",
+        >= 5  => "color:#ef4444;",
+        _     => "color:#6b7280;"
+    };
+}

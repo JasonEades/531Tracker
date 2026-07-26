@@ -1,0 +1,118 @@
+/* ── Accessories page isolation styles ── */
+
+.acc-library {
+    display: flex;
+    flex-direction: column;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    overflow: hidden;
+}
+
+.acc-library-row {
+    display: flex;
+    align-items: center;
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--color-border);
+    gap: var(--space-3);
+    transition: background var(--transition-fast);
+}
+
+.acc-library-row:last-child {
+    border-bottom: none;
+}
+
+.acc-library-row:hover {
+    background: var(--color-surface-2);
+}
+
+.acc-inactive {
+    opacity: 0.55;
+}
+
+.acc-library-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.acc-library-name {
+    font-weight: 700;
+    color: var(--color-text);
+    font-size: var(--text-base);
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.acc-library-desc {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    margin-top: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.acc-library-right {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    flex-shrink: 0;
+}
+
+.acc-last-weight {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--color-text-2);
+    white-space: nowrap;
+}
+
+.acc-library-actions {
+    display: flex;
+    gap: var(--space-1);
+}
+
+.acc-action-btn {
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--radius-sm);
+    color: var(--color-text-muted);
+}
+
+.acc-action-btn:hover {
+    color: var(--color-text);
+    background: var(--color-surface-3);
+}
+
+.acc-delete-btn:hover {
+    color: var(--color-danger);
+    background: var(--color-danger-dim);
+}
+
+/* Setup sheet — shared with other pages */
+.setup-sheet {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-2);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+}
+
+.setup-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-5);
+}
+
+.toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    cursor: pointer;
+}

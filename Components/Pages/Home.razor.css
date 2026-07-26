@@ -1,0 +1,98 @@
+/* ── Home page isolation styles ─── */
+
+.hero-subtitle {
+    font-size: 0.6875rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin-bottom: 6px;
+}
+
+.hero-meta {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    margin-top: 4px;
+}
+
+.progress-ring-wrap {
+    flex-shrink: 0;
+}
+
+.progress-ring-svg {
+    display: block;
+    filter: drop-shadow(0 0 12px rgba(94,124,255,0.3));
+}
+
+.progress-strip {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+}
+
+/* Training max rows */
+.tm-row {
+    display: flex;
+    align-items: center;
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--color-border);
+    gap: var(--space-3);
+}
+
+.tm-row:last-child {
+    border-bottom: none;
+}
+
+.tm-lift {
+    flex: 1;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.tm-weight {
+    font-size: var(--text-xl);
+    font-weight: 700;
+    color: var(--color-text);
+    text-align: right;
+}
+
+.tm-unit {
+    font-size: var(--text-sm);
+    font-weight: 400;
+    color: var(--color-text-muted);
+}
+
+.tm-bbb {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    background: var(--color-surface-3);
+    padding: 2px 8px;
+    border-radius: var(--radius-full);
+    white-space: nowrap;
+}
+
+/* Cycle setup bottom sheet */
+.setup-sheet {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-2);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    margin-top: var(--space-4);
+}
+
+.setup-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-5);
+}
+
+.toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    cursor: pointer;
+}

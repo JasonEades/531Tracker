@@ -1,0 +1,119 @@
+/* ── Lifts page isolation styles ── */
+
+.lift-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+
+.lift-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+    position: relative;
+    transition: border-color var(--transition-fast);
+}
+
+.lift-card-editing {
+    border-color: var(--color-primary);
+    box-shadow: 0 0 0 2px var(--color-primary-dim);
+}
+
+.lift-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.lift-card-info {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+}
+
+.lift-name {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.lift-card-stats {
+    display: flex;
+    align-items: baseline;
+    gap: var(--space-4);
+    flex-shrink: 0;
+}
+
+.lift-tm-value {
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.lift-bbb-value {
+    font-size: var(--text-base);
+    font-weight: 600;
+    color: var(--color-text-muted);
+}
+
+.lift-unit {
+    font-size: var(--text-sm);
+    font-weight: 400;
+    color: var(--color-text-muted);
+}
+
+.lift-edit-btn {
+    position: absolute;
+    top: var(--space-3);
+    right: var(--space-3);
+    gap: 4px;
+    height: 32px;
+    padding: 0 var(--space-3);
+    font-size: var(--text-sm);
+}
+
+.lift-edit-row {
+    display: flex;
+    gap: var(--space-4);
+    margin-top: var(--space-4);
+}
+
+.lift-edit-row .input-big {
+    height: 56px;
+    font-size: var(--text-2xl);
+}
+
+.lift-edit-actions {
+    display: flex;
+    gap: var(--space-2);
+    margin-top: var(--space-3);
+}
+
+/* BBB mapping rows */
+.mapping-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-4) var(--space-5);
+    border-bottom: 1px solid var(--color-border);
+}
+
+.mapping-row:last-child {
+    border-bottom: none;
+}
+
+.mapping-day {
+    flex: 1;
+    font-weight: 600;
+    color: var(--color-text);
+    font-size: var(--text-sm);
+}
+
+.mapping-target {
+    font-weight: 700;
+    color: var(--color-primary);
+    font-size: var(--text-sm);
+}

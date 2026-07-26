@@ -1,0 +1,194 @@
+@page "/cycles"
+@rendermode InteractiveServer
+@inject ICycleService CycleService
+@inject NavigationManager Nav
+
+<PageTitle>History — 5/3/1 Tracker</PageTitle>
+
+<div class="page-header animate-fade-in">
+    <h1>History</h1>
+    <p class="page-subtitle">All training cycles</p>
+</div>
+
+@* ── New Cycle setup form (inline sheet) ──────────────────── *@
+@if (showCreate)
+{
+    <div class="setup-sheet animate-slide-up mb-3">
+        <div class="setup-sheet-header">
+            <h3>New Cycle</h3>
+            <button class="btn btn-ghost btn-sm" @onclick="() => showCreate = false">✕</button>
+        </div>
+
+        <div class="form-group">
+            <label class="toggle-row">
+                <span class="form-label" style="margin-bottom:0">Include BBB (5×10)</span>
+                <input type="checkbox" @bind="enableBbb" />
+            </label>
+        </div>
+
+        <div class="form-group">
+            <label class="toggle-row">
+                <span class="form-label" style="margin-bottom:0">Include Warmup Sets (2×5)</span>
+                <input type="checkbox" @bind="enableWarmup" />
+            </label>
+        </div>
+
+        @if (enableBbb)
+        {
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">BBB Mapping</label>
+                    <select class="form-control" @bind="selectedBbbMode">
+                        <option value="@BbbMode.OppositeDay">Opposite Day</option>
+                        <option value="@BbbMode.SameDay">Same Day</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">BBB % of TM</label>
+                    <select class="form-control" @bind="selectedBbbPct">
+                        @foreach (var pct in new[] { 30, 35, 40, 45, 50, 55, 60, 65, 70 })
+                        {
+                            <option value="@pct">@pct%</option>
+                        }
+                    </select>
+                </div>
+            </div>
+
+            @if (selectedBbbMode == BbbMode.OppositeDay)
+            {
+                <p class="text-muted mb-2" style="font-size:var(--text-sm)">
+                    Bench→OHP · OHP→Bench · Squat→Deadlift · Deadlift→Squat
+                </p>
+            }
+            else
+            {
+                <p class="text-muted mb-2" style="font-size:var(--text-sm)">
+                    Each day performs the same main lift 5×10 at @selectedBbbPct% TM.
+                </p>
+            }
+        }
+
+        <div class="flex gap-1 mt-2">
+            <button class="btn btn-primary flex-1" @onclick="CreateCycle" disabled="@creating">
+                🚀 Create Cycle
+            </button>
+            <button class="btn btn-outline" @onclick="() => showCreate = false">Cancel</button>
+        </div>
+    </div>
+}
+
+@* ── Cycle list ────────────────────────────────────────────── *@
+@if (loading)
+{
+    <div class="loading"><div class="spinner"></div></div>
+}
+else if (cycles.Count == 0 && !showCreate)
+{
+    <div class="empty-state">
+        <div class="empty-state-icon">📅</div>
+        <h3>No Cycles Yet</h3>
+        <p>Create your first cycle to begin training.</p>
+        <button class="btn btn-primary mt-2" @onclick="ShowCreateForm">+ New Cycle</button>
+    </div>
+}
+else
+{
+    <div class="animate-fade-in">
+        @foreach (var cycle in cycles)
+        {
+            var allWorkouts = cycle.Weeks.SelectMany(w => w.Workouts).ToList();
+            var completed   = allWorkouts.Count(w => w.Status == WorkoutStatus.Completed);
+            var total       = allWorkouts.Count;
+            var pct         = total > 0 ? (int)(completed * 100.0 / total) : 0;
+
+            <div class="cycle-card">
+                <div class="cycle-card-header" @onclick="() => GoToCycle(cycle.Id)">
+                    <div class="cycle-card-left">
+                        <div class="cycle-status-dot @(cycle.IsCompleted ? "status-completed" : "status-in-progress")"></div>
+                        <div>
+                            <div class="cycle-name">@cycle.Name</div>
+                            <div class="cycle-meta">
+                                @completed / @total workouts · @pct%
+                                @if (cycle.HasBbb)
+                                {
+                                    <span class="badge badge-info ml-1">BBB @cycle.BbbPercentage%</span>
+                                }
+                                @if (cycle.IncludeWarmup)
+                                {
+                                    <span class="badge badge-muted ml-1">Warmup</span>
+                                }
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cycle-card-right">
+                        @if (cycle.IsCompleted)
+                        {
+                            <span class="badge badge-success">Done</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-warning">Active</span>
+                        }
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-text-muted)"><polyline points="9 18 15 12 9 6"/></svg>
+                    </div>
+                </div>
+                <div class="cycle-progress-bar">
+                    <div class="cycle-progress-fill" style="width:@pct%"></div>
+                </div>
+                <div class="cycle-card-actions">
+                    <button class="btn btn-ghost btn-sm" @onclick="() => GoToCycle(cycle.Id)">View Details</button>
+                    <button class="btn btn-sm" style="color:var(--color-danger);background:var(--color-danger-dim);"
+                            @onclick="() => DeleteCycle(cycle.Id)">Delete</button>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* ── FAB ───────────────────────────────────────────────────── *@
+@if (!showCreate)
+{
+    <button class="fab" @onclick="ShowCreateForm" title="New Cycle" aria-label="New Cycle">+</button>
+}
+
+@code {
+    private List<Cycle> cycles = [];
+    private bool loading = true;
+    private bool creating;
+    private bool showCreate;
+    private bool enableBbb;
+    private bool enableWarmup;
+    private BbbMode selectedBbbMode = BbbMode.OppositeDay;
+    private double selectedBbbPct = 50;
+
+    protected override async Task OnInitializedAsync()
+    {
+        cycles = await CycleService.GetAllCyclesAsync();
+        loading = false;
+    }
+
+    private void ShowCreateForm()
+    {
+        showCreate = true;
+        enableBbb = false;
+        enableWarmup = false;
+        selectedBbbMode = BbbMode.OppositeDay;
+        selectedBbbPct = 50;
+    }
+
+    private async Task CreateCycle()
+    {
+        creating = true;
+        var mode = enableBbb ? selectedBbbMode : BbbMode.None;
+        var cycle = await CycleService.CreateCycleAsync(mode, selectedBbbPct, enableWarmup);
+        Nav.NavigateTo("/cycles/" + cycle.Id);
+    }
+
+    private async Task DeleteCycle(int id)
+    {
+        await CycleService.DeleteCycleAsync(id);
+        cycles = await CycleService.GetAllCyclesAsync();
+    }
+
+    private void GoToCycle(int id) => Nav.NavigateTo("/cycles/" + id);
+}

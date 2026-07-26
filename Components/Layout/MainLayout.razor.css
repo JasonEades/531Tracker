@@ -1,0 +1,68 @@
+/* Desktop inline nav in the top bar */
+.sidebar-inline {
+    display: none;
+    margin-left: auto;
+}
+
+@media (min-width: 768px) {
+    .sidebar-inline {
+        display: flex;
+        align-items: center;
+    }
+
+    .sidebar-inline :deep(.nav-menu) {
+        flex-direction: row;
+        gap: 4px;
+    }
+
+    .sidebar-inline :deep(.nav-item) {
+        flex-direction: row;
+        gap: 8px;
+        padding: 0 14px;
+        height: 40px;
+        border-radius: 10px;
+        font-size: 0.875rem;
+    }
+
+    .sidebar-inline :deep(.nav-item.active)::before {
+        display: none;
+    }
+
+    .sidebar-inline :deep(.nav-item.active) {
+        background: rgba(94, 124, 255, 0.15);
+    }
+
+    .sidebar-inline :deep(.nav-label) {
+        font-size: 0.875rem;
+    }
+}
+
+/* Sidebar vertical layout */
+:deep(.sidebar .nav-menu) {
+    flex-direction: column;
+    gap: 4px;
+}
+
+:deep(.sidebar .nav-item) {
+    flex-direction: row;
+    justify-content: flex-start;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 0.875rem;
+    min-height: 48px;
+}
+
+:deep(.sidebar .nav-item.active)::before {
+    display: none;
+}
+
+:deep(.sidebar .nav-item.active) {
+    background: rgba(94, 124, 255, 0.15);
+    color: #5E7CFF;
+}
+
+:deep(.sidebar .nav-label) {
+    font-size: 0.9rem;
+    font-weight: 600;
+}

@@ -1,0 +1,383 @@
+@page "/cycles/{CycleId:int}"
+@rendermode InteractiveServer
+@inject ICycleService CycleService
+@inject ILiftService LiftService
+@inject NavigationManager Nav
+
+<PageTitle>Cycle Details — 5/3/1 Tracker</PageTitle>
+
+@if (loading)
+{
+    <div class="loading"><div class="spinner"></div></div>
+}
+else if (cycle is null)
+{
+    <div class="empty-state">
+        <h3>Cycle not found</h3>
+        <button class="btn btn-outline mt-1" @onclick='() => Nav.NavigateTo("/cycles")'>Back to History</button>
+    </div>
+}
+else
+{
+    @* ── Header ──────────────────────────────────────────── *@
+    <div class="workout-header animate-fade-in">
+        <button class="btn btn-ghost btn-sm back-btn" @onclick='() => Nav.NavigateTo("/cycles")'>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            History
+        </button>
+        <div class="workout-title-row">
+            <div>
+                <h1>@cycle.Name</h1>
+                <div class="workout-meta-line">
+                    Created @cycle.CreatedAt.ToString("MMM d, yyyy")
+                    @if (cycle.HasBbb)
+                    {
+                        <span class="badge badge-info ml-1">BBB @cycle.BbbPercentage%</span>
+                    }
+                    @if (cycle.IncludeWarmup)
+                    {
+                        <span class="badge badge-muted ml-1">Warmup</span>
+                    }
+                    @if (cycle.IsCompleted)
+                    {
+                        <span class="badge badge-success ml-1">Completed</span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-warning ml-1">Active</span>
+                    }
+                </div>
+            </div>
+            <div class="workout-actions">
+                @if (!cycle.IsCompleted && AllWorkoutsCompleted)
+                {
+                    <button class="btn btn-success btn-sm" @onclick="ShowCompletion">✓ Complete</button>
+                }
+                @if (cycle.IsCompleted && !showProgression)
+                {
+                    <button class="btn btn-primary btn-sm" @onclick="ShowProgression">Next Cycle →</button>
+                }
+                <button class="btn btn-sm" style="color:var(--color-danger);background:var(--color-danger-dim);"
+                        @onclick="DeleteCycle">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    @* ── Overall progress ─────────────────────────────────── *@
+    <div class="progress-strip mb-4 animate-fade-in">
+        <div class="flex items-center justify-between mb-1">
+            <span class="sets-progress-label">Cycle Progress</span>
+            <span class="sets-progress-label">@CycleDone / @CycleTotal workouts · @CyclePct%</span>
+        </div>
+        <div class="progress-bar-wrapper">
+            <div class="progress-bar-fill" style="width:@CyclePct%"></div>
+        </div>
+    </div>
+
+    @* ── Completion form ──────────────────────────────────── *@
+    @if (showCompletion)
+    {
+        <div class="setup-sheet animate-slide-up mb-4">
+            <div class="setup-sheet-header">
+                <h3>🎉 Complete Cycle</h3>
+                <button class="btn btn-ghost btn-sm" @onclick="() => showCompletion = false">✕</button>
+            </div>
+            <p class="text-muted mb-3" style="font-size:var(--text-sm)">Review your training maxes before completing. These carry forward to the next cycle.</p>
+            @foreach (var entry in completionEntries)
+            {
+                <div class="tm-adjust-row">
+                    <div class="tm-adjust-name">@entry.Name</div>
+                    <div class="tm-adjust-current">@entry.CurrentTm lbs</div>
+                    <input type="number" class="form-control form-control-sm tm-adjust-input"
+                           inputmode="numeric" @bind="entry.NewTm" step="5" />
+                </div>
+            }
+            <div class="flex gap-1 mt-3">
+                <button class="btn btn-success flex-1" @onclick="ConfirmCompletion" disabled="@completing">✓ Confirm & Complete</button>
+                <button class="btn btn-outline" @onclick="() => showCompletion = false">Cancel</button>
+            </div>
+        </div>
+    }
+
+    @* ── Next cycle progression form ──────────────────────── *@
+    @if (showProgression)
+    {
+        <div class="setup-sheet animate-slide-up mb-4">
+            <div class="setup-sheet-header">
+                <h3>Next Cycle Progression</h3>
+                <button class="btn btn-ghost btn-sm" @onclick="() => showProgression = false">✕</button>
+            </div>
+            <p class="text-muted mb-3" style="font-size:var(--text-sm)">5/3/1 standard increments applied. Adjust if needed.</p>
+            @foreach (var entry in progressionEntries)
+            {
+                <div class="tm-adjust-row">
+                    <div class="tm-adjust-name">@entry.Name</div>
+                    <div class="tm-adjust-current">
+                        @entry.CurrentTm <span class="text-success" style="font-size:var(--text-xs)">+@entry.Increment</span>
+                    </div>
+                    <input type="number" class="form-control form-control-sm tm-adjust-input"
+                           inputmode="numeric" @bind="entry.NewTm" step="5" />
+                </div>
+            }
+
+            <div class="divider"></div>
+
+            <div class="form-group">
+                <label class="toggle-row">
+                    <span class="form-label" style="margin-bottom:0">Include BBB (5×10)</span>
+                    <input type="checkbox" @bind="nextEnableBbb" />
+                </label>
+            </div>
+            @if (nextEnableBbb)
+            {
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">BBB Mapping</label>
+                        <select class="form-control" @bind="nextBbbMode">
+                            <option value="@BbbMode.OppositeDay">Opposite Day</option>
+                            <option value="@BbbMode.SameDay">Same Day</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label">BBB % of TM</label>
+                        <select class="form-control" @bind="nextBbbPct">
+                            @foreach (var pct in new[] { 30, 35, 40, 45, 50, 55, 60, 65, 70 })
+                            {
+                                <option value="@pct">@pct%</option>
+                            }
+                        </select>
+                    </div>
+                </div>
+            }
+            <div class="form-group">
+                <label class="toggle-row">
+                    <span class="form-label" style="margin-bottom:0">Include Warmup Sets</span>
+                    <input type="checkbox" @bind="nextEnableWarmup" />
+                </label>
+            </div>
+            <div class="flex gap-1 mt-3">
+                <button class="btn btn-primary flex-1" @onclick="CreateNextCycle" disabled="@creating">
+                    🚀 Create Next Cycle
+                </button>
+                <button class="btn btn-outline" @onclick="() => showProgression = false">Cancel</button>
+            </div>
+        </div>
+    }
+
+    @* ── Week / Workout list ───────────────────────────────── *@
+    <div class="animate-fade-in">
+        @foreach (var week in cycle.Weeks.OrderBy(w => w.WeekNumber))
+        {
+            var weekWorkouts = week.Workouts.ToList();
+            var wCompleted   = weekWorkouts.Count(w => w.Status == WorkoutStatus.Completed);
+            var wTotal       = weekWorkouts.Count;
+
+            <div class="week-section mb-4">
+                <div class="week-section-header">
+                    <div class="week-section-title">
+                        Week @((int)week.WeekNumber)
+                        <span class="week-scheme">@GetWeekLabel(week.WeekNumber)</span>
+                    </div>
+                    @if (wCompleted == wTotal && wTotal > 0)
+                    {
+                        <span class="badge badge-success">Done</span>
+                    }
+                    else
+                    {
+                        <span class="badge badge-muted">@wCompleted / @wTotal</span>
+                    }
+                </div>
+                <div class="week-grid">
+                    @foreach (var wo in weekWorkouts.OrderBy(w => w.MainLiftType))
+                    {
+                        <button class="workout-item" @onclick="() => GoToWorkout(wo.Id)">
+                            <div class="flex items-center gap-2">
+                                <span class="status-dot @GetStatusClass(wo.Status)"></span>
+                                <div>
+                                    <div class="workout-name">@GetLiftDisplayName(wo.MainLiftType)</div>
+                                    <div class="workout-meta">@GetStatusLabel(wo.Status)</div>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <span class="badge @GetStatusBadge(wo.Status)">
+                                    @(wo.Status == WorkoutStatus.Completed ? "View" : "Open")
+                                </span>
+                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-text-muted)"><polyline points="9 18 15 12 9 6"/></svg>
+                            </div>
+                        </button>
+                    }
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public int CycleId { get; set; }
+
+    private Cycle? cycle;
+    private bool loading = true;
+
+    private int CycleTotal => cycle?.Weeks.SelectMany(w => w.Workouts).Count() ?? 0;
+    private int CycleDone  => cycle?.Weeks.SelectMany(w => w.Workouts).Count(w => w.Status == WorkoutStatus.Completed) ?? 0;
+    private int CyclePct   => CycleTotal > 0 ? (int)(CycleDone * 100.0 / CycleTotal) : 0;
+    private bool showCompletion;
+    private bool completing;
+    private List<CompletionEntry> completionEntries = [];
+    private bool showProgression;
+    private bool creating;
+    private List<ProgressionEntry> progressionEntries = [];
+    private bool nextEnableBbb;
+    private bool nextEnableWarmup;
+    private BbbMode nextBbbMode = BbbMode.OppositeDay;
+    private double nextBbbPct = 50;
+
+    private bool AllWorkoutsCompleted =>
+        cycle?.Weeks.SelectMany(w => w.Workouts).All(w => w.Status == WorkoutStatus.Completed) ?? false;
+
+    protected override async Task OnInitializedAsync()
+    {
+        cycle = await CycleService.GetCycleWithDetailsAsync(CycleId);
+        loading = false;
+    }
+
+    private void ShowCompletion()
+    {
+        if (cycle is null) return;
+        var lifts = cycle.Weeks
+            .SelectMany(w => w.Workouts)
+            .SelectMany(w => w.Sets)
+            .Where(s => s.SetType == SetType.Main)
+            .Select(s => s.Lift)
+            .DistinctBy(l => l.Id)
+            .ToList();
+        completionEntries = lifts.Select(l => new CompletionEntry
+        {
+            LiftId    = l.Id,
+            LiftType  = l.LiftType,
+            Name      = l.Name,
+            CurrentTm = l.TrainingMax,
+            NewTm     = l.TrainingMax
+        }).ToList();
+        showCompletion = true;
+    }
+
+    private async Task ConfirmCompletion()
+    {
+        completing = true;
+        foreach (var entry in completionEntries)
+        {
+            if (Math.Abs(entry.NewTm - entry.CurrentTm) > 0.01)
+                await LiftService.UpdateTrainingMaxAsync(entry.LiftId, entry.NewTm);
+        }
+        await CycleService.CompleteCycleAsync(CycleId);
+        showCompletion = false;
+        completing = false;
+        cycle = await CycleService.GetCycleWithDetailsAsync(CycleId);
+    }
+
+    private async Task DeleteCycle()
+    {
+        await CycleService.DeleteCycleAsync(CycleId);
+        Nav.NavigateTo("/cycles");
+    }
+
+    private void ShowProgression()
+    {
+        if (cycle is null) return;
+        var lifts = cycle.Weeks
+            .SelectMany(w => w.Workouts)
+            .SelectMany(w => w.Sets)
+            .Where(s => s.SetType == SetType.Main)
+            .Select(s => s.Lift)
+            .DistinctBy(l => l.Id)
+            .ToList();
+        progressionEntries = lifts.Select(l =>
+        {
+            var increment = l.IsUpperBody ? 5.0 : 10.0;
+            return new ProgressionEntry
+            {
+                LiftType  = l.LiftType,
+                Name      = l.Name,
+                CurrentTm = l.TrainingMax,
+                Increment = increment,
+                NewTm     = l.TrainingMax + increment
+            };
+        }).ToList();
+        showProgression = true;
+        nextEnableBbb   = cycle.HasBbb;
+        nextBbbMode     = cycle.BbbMode == BbbMode.None ? BbbMode.OppositeDay : cycle.BbbMode;
+        nextBbbPct      = cycle.BbbPercentage;
+        nextEnableWarmup = cycle.IncludeWarmup;
+    }
+
+    private async Task CreateNextCycle()
+    {
+        creating = true;
+        var overrides = progressionEntries.ToDictionary(e => e.LiftType, e => e.NewTm);
+        var mode = nextEnableBbb ? nextBbbMode : BbbMode.None;
+        var newCycle = await CycleService.CreateNextCycleAsync(CycleId, overrides, mode, nextBbbPct, nextEnableWarmup);
+        Nav.NavigateTo("/cycles/" + newCycle.Id);
+    }
+
+    private void GoToWorkout(int id) => Nav.NavigateTo("/workout/" + id);
+
+    private static string GetWeekLabel(WeekNumber wn) => wn switch
+    {
+        WeekNumber.Week1 => "5s",
+        WeekNumber.Week2 => "3s",
+        WeekNumber.Week3 => "5/3/1",
+        WeekNumber.Week4 => "Deload",
+        _                => ""
+    };
+
+    private static string GetLiftDisplayName(LiftType lt) => lt switch
+    {
+        LiftType.Squat         => "Squat",
+        LiftType.BenchPress    => "Bench Press",
+        LiftType.Deadlift      => "Deadlift",
+        LiftType.OverheadPress => "Overhead Press",
+        _                      => lt.ToString()
+    };
+
+    private static string GetStatusClass(WorkoutStatus s) => s switch
+    {
+        WorkoutStatus.NotStarted => "status-not-started",
+        WorkoutStatus.InProgress => "status-in-progress",
+        WorkoutStatus.Completed  => "status-completed",
+        _                        => ""
+    };
+
+    private static string GetStatusLabel(WorkoutStatus s) => s switch
+    {
+        WorkoutStatus.NotStarted => "Not Started",
+        WorkoutStatus.InProgress => "In Progress",
+        WorkoutStatus.Completed  => "Completed",
+        _                        => ""
+    };
+
+    private static string GetStatusBadge(WorkoutStatus s) => s switch
+    {
+        WorkoutStatus.Completed  => "badge-success",
+        WorkoutStatus.InProgress => "badge-warning",
+        _                        => "badge-muted"
+    };
+
+    private class CompletionEntry
+    {
+        public int LiftId { get; set; }
+        public LiftType LiftType { get; set; }
+        public string Name { get; set; } = "";
+        public double CurrentTm { get; set; }
+        public double NewTm { get; set; }
+    }
+
+    private class ProgressionEntry
+    {
+        public LiftType LiftType { get; set; }
+        public string Name { get; set; } = "";
+        public double CurrentTm { get; set; }
+        public double Increment { get; set; }
+        public double NewTm { get; set; }
+    }
+}

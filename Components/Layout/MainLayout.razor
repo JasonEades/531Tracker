@@ -1,0 +1,47 @@
+﻿@inherits LayoutComponentBase
+
+<MudThemeProvider Theme="_theme" IsDarkMode="true" />
+<MudPopoverProvider />
+<MudDialogProvider FullWidth="true" MaxWidth="MaxWidth.Small" />
+<MudSnackbarProvider />
+
+<div class="app-container">
+    <div class="layout-body">
+        <nav class="sidebar">
+            <div class="sidebar-brand">
+                <a href="/" class="brand">
+                    <span class="brand-icon">🏋️</span>
+                    <span class="brand-text">5/3/1 Tracker</span>
+                </a>
+            </div>
+            <NavMenu />
+        </nav>
+        <div class="main-column">
+            <header class="top-bar">
+                <div class="top-bar-inner">
+                    <a href="/" class="brand">
+                        <span class="brand-icon">🏋️</span>
+                        <span class="brand-text">5/3/1 Tracker</span>
+                    </a>
+                </div>
+            </header>
+            <main class="main-content">
+                @Body
+            </main>
+        </div>
+    </div>
+
+    <nav class="bottom-tab-bar">
+        <NavMenu />
+    </nav>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    An unhandled error has occurred.
+    <a href="." class="reload">Reload</a>
+    <span class="dismiss">🗙</span>
+</div>
+
+@code {
+    private readonly MudTheme _theme = AppTheme.Create();
+}

@@ -1,0 +1,139 @@
+/* ── CycleDetail isolation styles ── */
+
+.workout-header {
+    margin-bottom: var(--space-5);
+}
+
+.back-btn {
+    padding: 0 var(--space-2);
+    gap: 4px;
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-3);
+    height: 36px;
+}
+
+.workout-title-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-4);
+}
+
+.workout-meta-line {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 4px;
+}
+
+.workout-actions {
+    display: flex;
+    gap: var(--space-2);
+    align-items: center;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+
+.progress-strip {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+}
+
+.sets-progress-label {
+    font-size: var(--text-xs);
+    font-weight: 600;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+}
+
+/* Week sections */
+.week-section {
+    /* structural wrapper */
+}
+
+.week-section-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-2);
+    padding: 0 2px;
+}
+
+.week-section-title {
+    font-size: var(--text-base);
+    font-weight: 700;
+    color: var(--color-text);
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+}
+
+.week-scheme {
+    font-size: var(--text-sm);
+    font-weight: 600;
+    color: var(--color-primary);
+    background: var(--color-primary-dim);
+    padding: 2px 10px;
+    border-radius: var(--radius-full);
+}
+
+/* TM adjustment rows */
+.tm-adjust-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    padding: var(--space-3) 0;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.tm-adjust-row:last-of-type {
+    border-bottom: none;
+    margin-bottom: var(--space-3);
+}
+
+.tm-adjust-name {
+    flex: 1;
+    font-weight: 600;
+    color: var(--color-text);
+}
+
+.tm-adjust-current {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.tm-adjust-input {
+    width: 90px;
+    text-align: right;
+    flex-shrink: 0;
+}
+
+/* Setup sheet */
+.setup-sheet {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border-2);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+}
+
+.setup-sheet-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: var(--space-4);
+}
+
+.toggle-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4);
+    cursor: pointer;
+}

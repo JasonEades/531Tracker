@@ -1,0 +1,197 @@
+@page "/equipment"
+@rendermode InteractiveServer
+@inject IPlateCalculatorService PlateCalc
+
+<PageTitle>Settings — 5/3/1 Tracker</PageTitle>
+
+<div class="page-header animate-fade-in">
+    <h1>Settings</h1>
+    <p class="page-subtitle">Bar weight, plate inventory, and loading calculator</p>
+</div>
+
+@if (loading)
+{
+    <div class="loading"><div class="spinner"></div></div>
+}
+else if (equipment is not null)
+{
+    @* ── Bar Weight ───────────────────────────────────────── *@
+    <div class="settings-section animate-fade-in">
+        <div class="settings-section-label">Bar Weight</div>
+        <div class="card">
+            <div class="card-body">
+                <div class="form-group mb-0">
+                    <label class="form-label">Select Bar</label>
+                    <select class="form-control" value="@equipment.BarWeight"
+                            @onchange="OnBarWeightChanged">
+                        <option value="45">45 lbs — Standard Olympic</option>
+                        <option value="35">35 lbs — Women's Olympic</option>
+                        <option value="33">33 lbs — 15 kg</option>
+                        <option value="25">25 lbs — Short Bar</option>
+                        <option value="15">15 lbs — EZ Curl</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ── Plate Inventory ──────────────────────────────────── *@
+    <div class="settings-section animate-fade-in">
+        <div class="settings-section-label">Plate Inventory</div>
+        <p class="text-muted mb-3" style="font-size:var(--text-sm)">Number of <strong style="color:var(--color-text-2)">pairs</strong> of each plate you own.</p>
+        <div class="card">
+            <div class="card-body" style="padding:0">
+                @foreach (var plate in equipment.Plates.OrderByDescending(p => p.Weight))
+                {
+                    <div class="plate-row">
+                        <div class="plate-visual-wrap">
+                            <span class="plate-visual-badge" style="@GetPlateAccentStyle(plate.Weight)">
+                                @FormatPlateWeight(plate.Weight)
+                            </span>
+                            <span class="plate-weight-label">@FormatPlateWeight(plate.Weight) lb</span>
+                        </div>
+                        <div class="plate-stepper">
+                            <button class="plate-step-btn" @onclick="() => AdjustPlate(plate.Id, plate.PairsAvailable - 1)"
+                                    disabled="@(plate.PairsAvailable <= 0)">−</button>
+                            <span class="plate-step-value">@plate.PairsAvailable</span>
+                            <button class="plate-step-btn" @onclick="() => AdjustPlate(plate.Id, plate.PairsAvailable + 1)">+</button>
+                        </div>
+                        <span class="text-muted" style="font-size:var(--text-xs);font-weight:600;text-transform:uppercase;letter-spacing:0.04em;width:36px;text-align:right">pairs</span>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── Plate Calculator ─────────────────────────────────── *@
+    <div class="settings-section animate-fade-in">
+        <div class="settings-section-label">Plate Calculator</div>
+        <div class="card">
+            <div class="card-body">
+                <div class="calc-input-row">
+                    <div class="form-group mb-0" style="flex:1">
+                        <label class="form-label">Target Weight (lbs)</label>
+                        <input type="number" class="form-control" inputmode="numeric"
+                               @bind="testWeight" step="5" />
+                    </div>
+                    <button class="btn btn-primary calc-btn" @onclick="TestCalculate">Calculate</button>
+                </div>
+
+                @if (testResults is not null)
+                {
+                    @if (testWeight <= equipment.BarWeight)
+                    {
+                        <div class="calc-result mt-3">
+                            <span class="calc-result-label">Just the bar</span>
+                            <span class="text-muted" style="font-size:var(--text-sm)">@equipment.BarWeight lbs — no plates needed</span>
+                        </div>
+                    }
+                    else if (testResults.Count == 0)
+                    {
+                        <div class="calc-result mt-3">
+                            <span class="text-danger">Cannot make @testWeight lbs with your current plates.</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="calc-result mt-3">
+                            <div class="calc-barbell">
+                                <div class="calc-plates-left">
+                                    @foreach (var result in testResults)
+                                    {
+                                        @for (int i = 0; i < result.CountPerSide; i++)
+                                        {
+                                            <span class="calc-plate" style="@GetPlateAccentStyle(result.PlateWeight)">
+                                                @FormatPlateWeight(result.PlateWeight)
+                                            </span>
+                                        }
+                                    }
+                                </div>
+                                <div class="calc-bar-center">│ @equipment.BarWeight lb bar │</div>
+                                <div class="calc-plates-right">
+                                    @foreach (var result in testResults)
+                                    {
+                                        @for (int i = 0; i < result.CountPerSide; i++)
+                                        {
+                                            <span class="calc-plate" style="@GetPlateAccentStyle(result.PlateWeight)">
+                                                @FormatPlateWeight(result.PlateWeight)
+                                            </span>
+                                        }
+                                    }
+                                </div>
+                            </div>
+                            <div class="calc-each-side">
+                                Each side:
+                                @foreach (var result in testResults)
+                                {
+                                    <span class="calc-plate-chip" style="@GetPlateAccentStyle(result.PlateWeight)">
+                                        @result.CountPerSide × @FormatPlateWeight(result.PlateWeight)
+                                    </span>
+                                }
+                            </div>
+                            @if (Math.Abs(ActualTotal - testWeight) > 0.01)
+                            {
+                                <p class="text-warning mt-1" style="font-size:var(--text-sm)">
+                                    ⚠️ Closest loadable: @ActualTotal lbs (off by @(Math.Abs(testWeight - ActualTotal)) lbs)
+                                </p>
+                            }
+                        </div>
+                    }
+                }
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private UserEquipment? equipment;
+    private bool loading = true;
+    private double testWeight = 135;
+    private List<PlateLoadingResult>? testResults;
+
+    private double ActualTotal => equipment is null || testResults is null
+        ? 0
+        : equipment.BarWeight + testResults.Sum(r => r.PlateWeight * r.CountPerSide * 2);
+
+    protected override async Task OnInitializedAsync()
+    {
+        equipment = await PlateCalc.GetEquipmentAsync();
+        loading = false;
+    }
+
+    private async Task OnBarWeightChanged(ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var weight))
+        {
+            await PlateCalc.UpdateBarWeightAsync(weight);
+            equipment    = await PlateCalc.GetEquipmentAsync();
+            testResults  = null;
+        }
+    }
+
+    private async Task AdjustPlate(int plateId, int newPairs)
+    {
+        await PlateCalc.UpdatePlateAsync(plateId, newPairs);
+        equipment   = await PlateCalc.GetEquipmentAsync();
+        testResults = null;
+    }
+
+    private async Task TestCalculate()
+    {
+        testResults = await PlateCalc.CalculatePlates(testWeight);
+    }
+
+    private static string FormatPlateWeight(double w) =>
+        w == (int)w ? ((int)w).ToString() : w.ToString("0.#");
+
+    private static string GetPlateAccentStyle(double weight) => weight switch
+    {
+        >= 45 => "background:rgba(37,99,235,0.25);color:#60a5fa;border-color:#2563eb;",
+        >= 35 => "background:rgba(202,138,4,0.2);color:#fbbf24;border-color:#ca8a04;",
+        >= 25 => "background:rgba(22,163,74,0.2);color:#4ade80;border-color:#16a34a;",
+        >= 15 => "background:rgba(139,92,246,0.2);color:#a78bfa;border-color:#8b5cf6;",
+        >= 10 => "background:rgba(148,163,184,0.15);color:#94a3b8;border-color:#475569;",
+        >= 5  => "background:rgba(239,68,68,0.2);color:#f87171;border-color:#ef4444;",
+        _     => "background:rgba(107,114,128,0.2);color:#9ca3af;border-color:#6b7280;"
+    };
+}
