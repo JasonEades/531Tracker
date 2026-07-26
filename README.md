@@ -13,7 +13,7 @@
 
 <br/>
 
-<img src="docs/screenshot.png" alt="5/3/1 Tracker Dashboard" width="340"/>
+<img src="https://github.com/user-attachments/assets/fb30debe-7a9f-419a-abe8-2b6ae7b7d289" alt="5/3/1 Tracker Dashboard" width="340"/>
 
 </div>
 
