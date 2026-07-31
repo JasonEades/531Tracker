@@ -1,0 +1,63 @@
+/* PPL Session Detail */
+
+.ppl-exercise-section {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4) var(--space-5);
+    margin-bottom: var(--space-3);
+}
+
+.ppl-exercise-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-4);
+}
+
+.ppl-exercise-name {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--color-text);
+    margin-bottom: 4px;
+}
+
+.ppl-exercise-meta {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+    align-items: center;
+}
+
+/* PPL day-type badges */
+.badge-push { background: rgba(94,124,255,0.2); color: #7690FF; }
+.badge-pull { background: rgba(110,231,255,0.2); color: #6EE7FF; }
+.badge-legs { background: rgba(61,220,132,0.2); color: #3DDC84; }
+
+/* e1RM card */
+.e1rm-card {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    background: rgba(110,231,255,0.08);
+    border: 1px solid rgba(110,231,255,0.25);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    margin-top: var(--space-3);
+}
+
+.e1rm-label {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+}
+
+.e1rm-value {
+    font-size: 1.4rem;
+    font-weight: 800;
+    color: var(--color-accent);
+    flex: 1;
+}

@@ -24,5 +24,9 @@ public class Cycle
 
     public bool IncludeWarmup { get; set; }
 
+    public bool IsFivesPro { get; set; }
+
+    public bool IncludeFsl { get; set; }
+
     public ICollection<Week> Weeks { get; set; } = [];
 }

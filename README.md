@@ -49,6 +49,9 @@ Each lift follows a **3-week progression cycle** followed by a **deload week**, 
 - 🏃 **Workout Tracking** — step through each set, log completed reps, and mark workouts done
 - 📅 **Cycle Management** — create new cycles, configure training maxes per lift, view full cycle history
 - 🔁 **BBB (Boring But Big)** — optional 5×10 supplemental sets at a configurable percentage, supporting both *Same Day* and *Opposite Day* variants
+- 📋 **First Set Last (FSL)** — optional 5×5 supplemental sets at the first main set's weight, the most popular supplemental template in 5/3/1 Forever
+- 5️⃣ **5s PRO mode** — all main sets capped at straight 5 reps (no AMRAP), the standard Leader cycle protocol for building volume safely
+- 🧮 **Estimated 1RM** — after completing an AMRAP set the app automatically calculates your estimated 1-rep max using the Epley formula and displays it in real time
 - 🔥 **Warmup Sets** — optional auto-generated warmup sets at 40% and 50% of your training max
 - 🏃 **Accessory Work** — log and track supplemental exercises alongside main lifts
 - ⚖️ **Plate Calculator** — enter your available plates and bar weight; the app tells you exactly what to load on each side
@@ -158,7 +161,17 @@ For example, with a **210 lb Bench Press TM** in Week 1:
 | Set 2 | 75% | 157.5 | **160 lbs** |
 | Set 3 | 85% | 178.5 | **180 lbs** |
 
-BBB sets use a separate, configurable percentage (default **50%**).
+BBB and FSL sets use a separate configurable percentage (BBB default **50%**; FSL always uses the first main set weight).
+
+### Estimated 1RM
+
+After logging your AMRAP set the app shows your estimated 1-rep max using the **Epley formula**:
+
+```
+e1RM = round(weight × (1 + reps / 30), nearest 5 lbs)
+```
+
+Example: 180 lbs × 8 reps → **e1RM ≈ 230 lbs**
 
 ---
 

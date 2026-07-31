@@ -9,9 +9,11 @@ public interface ICycleService
     Task<Cycle?> GetCurrentCycleAsync();
     Task<Cycle?> GetCycleWithDetailsAsync(int cycleId);
     Task<List<Cycle>> GetAllCyclesAsync();
-    Task<Cycle> CreateCycleAsync(BbbMode bbbMode = BbbMode.None, double bbbPercentage = 50, bool includeWarmup = false);
+    Task<Cycle> CreateCycleAsync(BbbMode bbbMode = BbbMode.None, double bbbPercentage = 50, bool includeWarmup = false,
+        bool isFivesPro = false, bool includeFsl = false);
     Task<Cycle> CreateNextCycleAsync(int previousCycleId, Dictionary<LiftType, double>? overrides = null,
-        BbbMode? bbbMode = null, double? bbbPercentage = null, bool? includeWarmup = null);
+        BbbMode? bbbMode = null, double? bbbPercentage = null, bool? includeWarmup = null,
+        bool? isFivesPro = null, bool? includeFsl = null);
     Task CompleteCycleAsync(int cycleId);
     Task DeleteCycleAsync(int cycleId);
 }
@@ -60,7 +62,8 @@ public class CycleService(
             .ToListAsync();
     }
 
-    public async Task<Cycle> CreateCycleAsync(BbbMode bbbMode = BbbMode.None, double bbbPercentage = 50, bool includeWarmup = false)
+    public async Task<Cycle> CreateCycleAsync(BbbMode bbbMode = BbbMode.None, double bbbPercentage = 50, bool includeWarmup = false,
+        bool isFivesPro = false, bool includeFsl = false)
     {
         var lastCycle = await db.Cycles.OrderByDescending(c => c.CycleNumber).FirstOrDefaultAsync();
         var cycleNumber = (lastCycle?.CycleNumber ?? 0) + 1;
@@ -72,7 +75,9 @@ public class CycleService(
             CreatedAt = DateTime.UtcNow,
             BbbMode = bbbMode,
             BbbPercentage = Math.Clamp(bbbPercentage, 30, 70),
-            IncludeWarmup = includeWarmup
+            IncludeWarmup = includeWarmup,
+            IsFivesPro = isFivesPro,
+            IncludeFsl = includeFsl
         };
 
         db.Cycles.Add(cycle);
@@ -84,7 +89,8 @@ public class CycleService(
     }
 
     public async Task<Cycle> CreateNextCycleAsync(int previousCycleId, Dictionary<LiftType, double>? overrides = null,
-        BbbMode? bbbMode = null, double? bbbPercentage = null, bool? includeWarmup = null)
+        BbbMode? bbbMode = null, double? bbbPercentage = null, bool? includeWarmup = null,
+        bool? isFivesPro = null, bool? includeFsl = null)
     {
         var previousCycle = await db.Cycles.FindAsync(previousCycleId);
         var lifts = await liftService.GetAllLiftsAsync();
@@ -102,11 +108,13 @@ public class CycleService(
             }
         }
 
-        var mode = bbbMode ?? previousCycle?.BbbMode ?? BbbMode.None;
-        var pct = bbbPercentage ?? previousCycle?.BbbPercentage ?? 50;
-        var warmup = includeWarmup ?? previousCycle?.IncludeWarmup ?? false;
+        var mode    = bbbMode       ?? previousCycle?.BbbMode       ?? BbbMode.None;
+        var pct     = bbbPercentage ?? previousCycle?.BbbPercentage ?? 50;
+        var warmup  = includeWarmup ?? previousCycle?.IncludeWarmup  ?? false;
+        var fivesPro = isFivesPro   ?? previousCycle?.IsFivesPro     ?? false;
+        var fsl     = includeFsl    ?? previousCycle?.IncludeFsl     ?? false;
 
-        return await CreateCycleAsync(mode, pct, warmup);
+        return await CreateCycleAsync(mode, pct, warmup, fivesPro, fsl);
     }
 
     public async Task CompleteCycleAsync(int cycleId)
@@ -182,18 +190,39 @@ public class CycleService(
                     }
                 }
 
-                var mainSets = weightCalc.GetMainSets(weekNum);
-                foreach (var (percentage, reps) in mainSets)
+                var mainSetScheme = cycle.IsFivesPro
+                    ? weightCalc.GetFivesProMainSets(weekNum)
+                    : weightCalc.GetMainSets(weekNum);
+                double firstSetWeight = 0;
+                foreach (var (percentage, reps) in mainSetScheme)
                 {
+                    var w = weightCalc.CalculateWeight(mainLift.TrainingMax, percentage);
+                    if (firstSetWeight == 0) firstSetWeight = w;
                     db.WorkoutSets.Add(new WorkoutSet
                     {
                         WorkoutId = workout.Id,
                         LiftId = mainLift.Id,
                         SetType = SetType.Main,
                         SetNumber = setNumber++,
-                        PrescribedWeight = weightCalc.CalculateWeight(mainLift.TrainingMax, percentage),
+                        PrescribedWeight = w,
                         PrescribedReps = reps
                     });
+                }
+
+                if (cycle.IncludeFsl && weekNum != WeekNumber.Week4)
+                {
+                    for (int i = 1; i <= 5; i++)
+                    {
+                        db.WorkoutSets.Add(new WorkoutSet
+                        {
+                            WorkoutId = workout.Id,
+                            LiftId = mainLift.Id,
+                            SetType = SetType.Fsl,
+                            SetNumber = i,
+                            PrescribedWeight = firstSetWeight,
+                            PrescribedReps = 5
+                        });
+                    }
                 }
 
                 if (cycle.HasBbb)

@@ -1,0 +1,315 @@
+@page "/ppl/session/{SessionId:int}"
+@rendermode InteractiveServer
+@inject IPplSessionService SessionService
+@inject IPplProgressionService Progression
+@inject IPlateCalculatorService PlateCalc
+@inject IWeightCalculator WeightCalc
+@inject NavigationManager Nav
+
+<PageTitle>PPL Session — 5/3/1 Tracker</PageTitle>
+
+@if (loading)
+{
+    <div class="loading"><div class="spinner"></div></div>
+}
+else if (session is null)
+{
+    <div class="empty-state">
+        <h3>Session not found</h3>
+        <button class="btn btn-outline mt-1" @onclick='() => Nav.NavigateTo("/")'>Back to Dashboard</button>
+    </div>
+}
+else
+{
+    @* ── Header ─────────────────────────────────────────────── *@
+    <div class="workout-header animate-fade-in">
+        <button class="btn btn-ghost btn-sm back-btn" @onclick='() => Nav.NavigateTo("/")'>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Back
+        </button>
+        <div class="workout-title-row">
+            <div>
+                <h1>@session.DayTemplate.Name</h1>
+                <div class="workout-meta-line">
+                    @session.Program.Name
+                    <span class="badge @GetStatusBadgeClass(session.Status) ml-1">@GetStatusLabel(session.Status)</span>
+                    <span class="badge @GetDayTypeBadge(session.DayTemplate.DayType) ml-1">@session.DayTemplate.DayType</span>
+                </div>
+            </div>
+            <div class="workout-actions">
+                @if (session.Status == WorkoutStatus.NotStarted)
+                {
+                    <button class="btn btn-primary" @onclick="StartSession">▶ Start</button>
+                }
+                @if (session.Status == WorkoutStatus.Completed)
+                {
+                    <button class="btn btn-outline btn-sm" @onclick="ReopenSession">↩ Reopen</button>
+                }
+            </div>
+        </div>
+    </div>
+
+    @* ── Progress bar ────────────────────────────────────────── *@
+    <div class="sets-progress mb-3 animate-fade-in">
+        <div class="flex items-center justify-between mb-1">
+            <span class="sets-progress-label">Sets Completed</span>
+            <span class="sets-progress-label">@SetsDone / @SetsTotal</span>
+        </div>
+        <div class="progress-bar-wrapper">
+            <div class="progress-bar-fill" style="width:@SetsPct%"></div>
+        </div>
+    </div>
+
+    @* ── Exercise cards ──────────────────────────────────────── *@
+    @foreach (var exercise in session.Exercises.OrderBy(e => e.OrderInSession))
+    {
+        var isCompound = exercise.ExerciseSlot.UsePercentageOfTm;
+        var shouldProgress = Progression.ShouldProgress(exercise.Sets, exercise.RepsMax);
+        var e1rm = Progression.CalculateE1Rm(exercise);
+
+        <div class="ppl-exercise-section animate-slide-up">
+            <div class="ppl-exercise-header">
+                <div>
+                    <div class="ppl-exercise-name">@exercise.ExerciseName</div>
+                    <div class="ppl-exercise-meta">
+                        <span class="badge badge-muted">@exercise.TargetSets×@exercise.RepsMin–@exercise.RepsMax</span>
+                        <span class="badge @GetMuscleGroupBadge(exercise.ExerciseSlot.MuscleGroup)">@exercise.ExerciseSlot.MuscleGroup</span>
+                        @if (isCompound) { <span class="badge badge-primary">%TM</span> }
+                    </div>
+                </div>
+                @if (shouldProgress && session.Status != WorkoutStatus.Completed)
+                {
+                    <button class="btn btn-success btn-sm" @onclick="() => ApplyProgression(exercise.PplExerciseSlotId)">
+                        ↑ +@exercise.ExerciseSlot.ProgressionIncrement lbs next session
+                    </button>
+                }
+            </div>
+
+            @foreach (var set in exercise.Sets.OrderBy(s => s.SetNumber))
+            {
+                <div class="set-card @(set.IsCompleted ? "completed-set" : "")">
+                    <div class="set-num">@set.SetNumber</div>
+                    <div class="set-info">
+                        <div class="set-weight-label">
+                            @(set.ActualWeight ?? exercise.SuggestedWeight) <span class="set-unit">lbs</span>
+                        </div>
+                        <div class="set-reps-label">× @set.TargetReps reps target</div>
+                        @if (!exercise.ExerciseSlot.IsBodyweight &&
+                             plateMap.TryGetValue(set.ActualWeight ?? exercise.SuggestedWeight, out var plates) &&
+                             plates.Count > 0)
+                        {
+                            <div class="plate-chips-inline">
+                                @foreach (var p in plates)
+                                {
+                                    @for (int i = 0; i < p.CountPerSide; i++)
+                                    {
+                                        <span class="plate-chip-sm" style="@GetPlateStyle(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="set-inputs">
+                        @if (!exercise.ExerciseSlot.IsBodyweight)
+                        {
+                            <input class="set-input" type="number" inputmode="numeric"
+                                   value="@(set.ActualWeight ?? exercise.SuggestedWeight)"
+                                   @onchange="e => OnWeightChanged(set, exercise, e)" step="2.5"
+                                   disabled="@(session.Status == WorkoutStatus.Completed)" />
+                        }
+                        <input class="set-input" type="number" inputmode="numeric"
+                               value="@(set.ActualReps ?? set.TargetReps)"
+                               @onchange="e => OnRepsChanged(set, e)" min="0"
+                               disabled="@(session.Status == WorkoutStatus.Completed)" />
+                    </div>
+                    <button class="check-btn @(set.IsCompleted ? "checked" : "")"
+                            @onclick="() => ToggleSet(set, exercise)"
+                            disabled="@(session.Status == WorkoutStatus.Completed)">
+                        @(set.IsCompleted ? "✓" : "")
+                    </button>
+                </div>
+            }
+
+            @* e1RM card for compound lifts *@
+            @if (isCompound && e1rm.HasValue)
+            {
+                <div class="e1rm-card">
+                    <span class="e1rm-label">ESTIMATED 1RM</span>
+                    <span class="e1rm-value">@e1rm lbs</span>
+                    @if (exercise.ExerciseSlot.LiftId.HasValue)
+                    {
+                        <button class="btn btn-ghost btn-sm" @onclick="() => SyncToTm(exercise.PplExerciseSlotId)"
+                                title="Update Training Max to 90% of this e1RM">
+                            ↑ Sync TM
+                        </button>
+                    }
+                </div>
+            }
+        </div>
+    }
+
+    @* ── Finish button ───────────────────────────────────────── *@
+    @if (session.Status == WorkoutStatus.InProgress)
+    {
+        <div class="sticky-action">
+            <button class="btn btn-success btn-full btn-lg" @onclick="CompleteSession">
+                ✓ Finish Session
+            </button>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int SessionId { get; set; }
+
+    private PplSession? session;
+    private bool loading = true;
+    private Dictionary<double, List<PlateLoadingResult>> plateMap = [];
+
+    private int SetsTotal => session?.Exercises.Sum(e => e.Sets.Count) ?? 0;
+    private int SetsDone  => session?.Exercises.Sum(e => e.Sets.Count(s => s.IsCompleted)) ?? 0;
+    private int SetsPct   => SetsTotal > 0 ? (int)(SetsDone * 100.0 / SetsTotal) : 0;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadSession();
+        loading = false;
+    }
+
+    private async Task LoadSession()
+    {
+        session = await SessionService.GetSessionWithDetailsAsync(SessionId);
+        if (session is not null)
+        {
+            await BuildPlateMap();
+        }
+    }
+
+    private async Task BuildPlateMap()
+    {
+        if (session is null) return;
+        var weights = session.Exercises
+            .SelectMany(e => e.Sets.Select(s => s.ActualWeight ?? e.SuggestedWeight))
+            .Concat(session.Exercises.Select(e => e.SuggestedWeight))
+            .Distinct();
+        plateMap = [];
+        foreach (var w in weights)
+            plateMap[w] = await PlateCalc.CalculatePlates(w);
+    }
+
+    private async Task StartSession()
+    {
+        await SessionService.StartSessionAsync(SessionId);
+        await LoadSession();
+    }
+
+    private async Task CompleteSession()
+    {
+        await SessionService.CompleteSessionAsync(SessionId);
+        await LoadSession();
+    }
+
+    private async Task ReopenSession()
+    {
+        await SessionService.ReopenSessionAsync(SessionId);
+        await LoadSession();
+    }
+
+    private async Task OnWeightChanged(PplSessionSet set, PplSessionExercise exercise, ChangeEventArgs e)
+    {
+        if (double.TryParse(e.Value?.ToString(), out var w))
+        {
+            set.ActualWeight = w;
+            await SessionService.UpdateSetAsync(set.Id, set.ActualWeight, set.ActualReps, set.IsCompleted);
+            await BuildPlateMap();
+            await AutoStart();
+        }
+    }
+
+    private async Task OnRepsChanged(PplSessionSet set, ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var r))
+        {
+            set.ActualReps = r;
+            await SessionService.UpdateSetAsync(set.Id, set.ActualWeight, set.ActualReps, set.IsCompleted);
+            await AutoStart();
+        }
+    }
+
+    private async Task ToggleSet(PplSessionSet set, PplSessionExercise exercise)
+    {
+        set.IsCompleted = !set.IsCompleted;
+        if (set.IsCompleted)
+        {
+            set.ActualWeight ??= exercise.SuggestedWeight;
+            set.ActualReps   ??= set.TargetReps;
+        }
+        await SessionService.UpdateSetAsync(set.Id, set.ActualWeight, set.ActualReps, set.IsCompleted);
+        await AutoStart();
+    }
+
+    private async Task ApplyProgression(int slotId)
+    {
+        await Progression.ApplyProgressionAsync(slotId);
+        await LoadSession();
+    }
+
+    private async Task SyncToTm(int slotId)
+    {
+        await Progression.SyncToTrainingMaxAsync(slotId);
+    }
+
+    private async Task AutoStart()
+    {
+        if (session?.Status == WorkoutStatus.NotStarted)
+        {
+            await SessionService.StartSessionAsync(SessionId);
+            session.Status = WorkoutStatus.InProgress;
+        }
+    }
+
+    private static string GetStatusBadgeClass(WorkoutStatus s) => s switch
+    {
+        WorkoutStatus.NotStarted => "badge-muted",
+        WorkoutStatus.InProgress => "badge-warning",
+        WorkoutStatus.Completed  => "badge-success",
+        _ => "badge-muted"
+    };
+
+    private static string GetStatusLabel(WorkoutStatus s) => s switch
+    {
+        WorkoutStatus.NotStarted => "Not Started",
+        WorkoutStatus.InProgress => "In Progress",
+        WorkoutStatus.Completed  => "Completed",
+        _ => ""
+    };
+
+    private static string GetDayTypeBadge(PplDayType t) => t switch
+    {
+        PplDayType.Push => "badge-push",
+        PplDayType.Pull => "badge-pull",
+        PplDayType.Legs => "badge-legs",
+        _ => "badge-muted"
+    };
+
+    private static string GetMuscleGroupBadge(MuscleGroup mg) => mg switch
+    {
+        MuscleGroup.Chest or MuscleGroup.Triceps or MuscleGroup.Shoulders => "badge-push",
+        MuscleGroup.Back  or MuscleGroup.Biceps  or MuscleGroup.RearDelts => "badge-pull",
+        _ => "badge-legs"
+    };
+
+    private static string FormatPlate(double w) =>
+        w == (int)w ? ((int)w).ToString() : w.ToString("0.#");
+
+    private static string GetPlateStyle(double w) => w switch
+    {
+        45   => "background:#1a1aff;color:#fff",
+        35   => "background:#2563eb;color:#fff",
+        25   => "background:#16a34a;color:#fff",
+        10   => "background:#111;color:#fff;border:1px solid #444",
+        5    => "background:#fff;color:#111",
+        2.5  => "background:#dc2626;color:#fff",
+        _    => "background:var(--color-surface-3);color:var(--color-text)"
+    };
+}

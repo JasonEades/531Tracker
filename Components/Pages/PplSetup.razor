@@ -1,0 +1,207 @@
+@page "/ppl/new"
+@rendermode InteractiveServer
+@inject IPplProgramService PplService
+@inject NavigationManager Nav
+
+<PageTitle>New PPL Program — 5/3/1 Tracker</PageTitle>
+
+<div class="ppl-setup animate-fade-in">
+    <div class="setup-header">
+        <button class="btn btn-ghost btn-sm back-btn" @onclick='() => Nav.NavigateTo("/")'>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            Back
+        </button>
+        <h1>New PPL Program</h1>
+        <p class="setup-sub">Push · Pull · Legs split — train each muscle group 1–2× per week with progressive overload.</p>
+    </div>
+
+    <div class="setup-card">
+        <div class="form-group">
+            <label class="form-label">Program Name</label>
+            <input class="form-control" type="text" @bind="programName" placeholder="e.g. PPL Hypertrophy" maxlength="100" />
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Training Days per Week</label>
+            <div class="days-picker">
+                @foreach (var opt in new[] { (3, "3 Days", "Push / Pull / Legs — once per week. Great for beginners and intermediates."),
+                                             (6, "6 Days", "Push A/B · Pull A/B · Legs A/B — each muscle twice per week. Best for intermediate/advanced lifters.") })
+                {
+                    <button class="days-option @(selectedDays == opt.Item1 ? "selected" : "")"
+                            @onclick="() => selectedDays = opt.Item1">
+                        <span class="days-label">@opt.Item2</span>
+                        <span class="days-hint">@opt.Item3</span>
+                    </button>
+                }
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label class="form-label">Notes <span style="color:var(--color-text-muted);font-weight:400">(optional)</span></label>
+            <textarea class="form-control" rows="2" @bind="notes" placeholder="Any goals or context for this program…" maxlength="500"></textarea>
+        </div>
+    </div>
+
+    @* Day preview *@
+    <div class="preview-section">
+        <div class="preview-title">Weekly Schedule Preview</div>
+        <div class="preview-days">
+            @foreach (var day in GetDayPreview())
+            {
+                <div class="preview-day @day.Css">
+                    <span class="preview-day-label">@day.Label</span>
+                    <span class="preview-day-name">@day.Name</span>
+                </div>
+            }
+        </div>
+    </div>
+
+    @* Exercise list preview *@
+    <div class="setup-card">
+        <div class="preview-title" style="margin-bottom:var(--space-4)">Default Exercises Included</div>
+        <p class="option-hint" style="margin-bottom:var(--space-4)">
+            These are evidence-based defaults. You can swap or adjust any exercise after creating the program.
+            Compound lifts marked <span class="badge badge-primary" style="font-size:0.65rem">%TM</span> auto-calculate weight from your Training Max.
+        </p>
+
+        @foreach (var group in GetExercisePreview())
+        {
+            <div class="ex-group">
+                <div class="ex-group-header @group.Css">@group.Title</div>
+                @foreach (var ex in group.Exercises)
+                {
+                    <div class="ex-row">
+                        <span class="ex-name">@ex.Name</span>
+                        <span class="ex-meta">@ex.Sets×@ex.RepsMin–@ex.RepsMax</span>
+                        @if (ex.UseTm)
+                        {
+                            <span class="badge badge-primary" style="font-size:0.65rem">%TM</span>
+                        }
+                    </div>
+                }
+            </div>
+        }
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-danger">@error</div>
+    }
+
+    <div class="flex gap-1 mt-3">
+        <button class="btn btn-primary flex-1 btn-lg" @onclick="CreateProgram" disabled="@loading">
+            @(loading ? "Creating…" : "🚀 Create Program")
+        </button>
+        <button class="btn btn-outline" @onclick='() => Nav.NavigateTo("/")'>Cancel</button>
+    </div>
+</div>
+
+@code {
+    private string programName = "My PPL Program";
+    private int selectedDays = 3;
+    private string? notes;
+    private string? error;
+    private bool loading;
+
+    private async Task CreateProgram()
+    {
+        if (string.IsNullOrWhiteSpace(programName))
+        {
+            error = "Please enter a program name.";
+            return;
+        }
+        loading = true;
+        error = null;
+        try
+        {
+            var program = await PplService.CreateProgramAsync(programName.Trim(), selectedDays, notes);
+            Nav.NavigateTo("/");
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            loading = false;
+        }
+    }
+
+    private record DayPreview(string Label, string Name, string Css);
+    private record ExercisePreview(string Name, int Sets, int RepsMin, int RepsMax, bool UseTm);
+    private record ExerciseGroup(string Title, string Css, List<ExercisePreview> Exercises);
+
+    private List<DayPreview> GetDayPreview() => selectedDays >= 6
+        ? [
+            new("Day 1", "Push A", "push"),
+            new("Day 2", "Pull A", "pull"),
+            new("Day 3", "Legs A", "legs"),
+            new("Day 4", "Push B", "push"),
+            new("Day 5", "Pull B", "pull"),
+            new("Day 6", "Legs B", "legs"),
+          ]
+        : [
+            new("Day 1", "Push", "push"),
+            new("Day 2", "Pull", "pull"),
+            new("Day 3", "Legs", "legs"),
+          ];
+
+    private List<ExerciseGroup> GetExercisePreview()
+    {
+        var groups = new List<ExerciseGroup>
+        {
+            new("Push A — Bench Focus", "push", [
+                new("Barbell Bench Press", 4, 5,  8,  true),
+                new("Incline DB Press",    3, 8,  12, false),
+                new("Overhead Press",      3, 8,  10, true),
+                new("Lateral Raise",       4, 12, 15, false),
+                new("Tricep Pushdown",     3, 10, 15, false),
+                new("Overhead Tricep Ext", 3, 10, 15, false),
+            ]),
+            new("Pull A — Deadlift Focus", "pull", [
+                new("Conventional Deadlift", 3, 5,  8,  true),
+                new("Lat Pulldown",          4, 8,  12, false),
+                new("Barbell Row",           4, 8,  10, false),
+                new("Cable Row",             3, 10, 15, false),
+                new("Dumbbell Curl",         3, 10, 15, false),
+                new("Hammer Curl",           3, 10, 15, false),
+            ]),
+            new("Legs A — Squat Focus", "legs", [
+                new("Back Squat",          4, 5,  8,  true),
+                new("Romanian Deadlift",   3, 8,  12, false),
+                new("Leg Press",           3, 10, 15, false),
+                new("Leg Curl",            3, 10, 15, false),
+                new("Standing Calf Raise", 4, 12, 20, false),
+            ]),
+        };
+
+        if (selectedDays >= 6)
+        {
+            groups.AddRange([
+                new("Push B — OHP Focus", "push", [
+                    new("Overhead Press",        4, 5,  8,  true),
+                    new("DB Shoulder Press",     3, 8,  12, false),
+                    new("Incline Barbell Bench", 3, 8,  10, false),
+                    new("Cable Fly",             3, 12, 15, false),
+                    new("Face Pulls",            3, 15, 20, false),
+                    new("Tricep Dips",           3, 8,  12, false),
+                ]),
+                new("Pull B — Row Focus", "pull", [
+                    new("Barbell Row",       4, 5,  8,  false),
+                    new("Weighted Pull-ups", 4, 6,  10, false),
+                    new("T-Bar Row",         3, 8,  12, false),
+                    new("Face Pulls",        3, 15, 20, false),
+                    new("Barbell Curl",      3, 8,  10, false),
+                    new("Incline DB Curl",   3, 10, 15, false),
+                ]),
+                new("Legs B — Hip-Hinge Focus", "legs", [
+                    new("Romanian Deadlift",     4, 6,  10, false),
+                    new("Hack Squat",            3, 8,  12, false),
+                    new("Bulgarian Split Squat", 3, 8,  12, false),
+                    new("Leg Extension",         3, 10, 15, false),
+                    new("Seated Leg Curl",       3, 10, 15, false),
+                    new("Seated Calf Raise",     4, 15, 20, false),
+                ]),
+            ]);
+        }
+
+        return groups;
+    }
+}

@@ -3,6 +3,8 @@
 @inject ICycleService CycleService
 @inject IWorkoutService WorkoutService
 @inject ILiftService LiftService
+@inject IPplProgramService PplProgramService
+@inject IPplSessionService PplSessionService
 @inject NavigationManager Nav
 
 <PageTitle>Dashboard — 5/3/1 Tracker</PageTitle>
@@ -13,15 +15,25 @@
         <div class="spinner"></div>
     </div>
 }
-else if (currentCycle is null)
+else if (currentCycle is null && activePplProgram is null)
 {
+    @* ── Combined empty / get-started state ─────────────────── *@
     <div class="empty-state animate-fade-in">
         <div class="empty-state-icon">🏋️</div>
         <h3>Ready to get strong?</h3>
-        <p>Create your first 5/3/1 training cycle to get started.</p>
-        <button class="btn btn-primary btn-lg mt-2" @onclick="() => showSetup = true">
-            + Create Cycle
-        </button>
+        <p>Choose a program to get started.</p>
+        <div class="program-choice-grid mt-3">
+            <button class="program-choice-btn" @onclick="() => showSetup = true">
+                <span class="program-choice-icon">5/3/1</span>
+                <span class="program-choice-name">5/3/1 Powerlifting</span>
+                <span class="program-choice-hint">4 barbell lifts · percentage-based · 4-week cycles</span>
+            </button>
+            <button class="program-choice-btn" @onclick='() => Nav.NavigateTo("/ppl/new")'>
+                <span class="program-choice-icon">PPL</span>
+                <span class="program-choice-name">Push / Pull / Legs</span>
+                <span class="program-choice-hint">6 muscle groups · double progression · 3 or 6 days</span>
+            </button>
+        </div>
     </div>
 
     @if (showSetup)
@@ -34,36 +46,56 @@ else if (currentCycle is null)
 
             <div class="form-group">
                 <label class="toggle-row">
-                    <span class="form-label" style="margin-bottom:0">Include BBB (5×10)</span>
+                    <span class="form-label" style="margin-bottom:0">Boring But Big — BBB (5×10)</span>
                     <input type="checkbox" @bind="enableBbb" />
                 </label>
+                <p class="option-hint">After your main sets, do <strong>5 sets of 10 reps</strong> at a lighter weight (default 50% of your Training Max). Builds serious size and work capacity. Best for intermediate lifters comfortable with the base program.</p>
             </div>
 
             <div class="form-group">
                 <label class="toggle-row">
-                    <span class="form-label" style="margin-bottom:0">Include Warmup Sets (2×5)</span>
+                    <span class="form-label" style="margin-bottom:0">Warmup Sets (2×5)</span>
                     <input type="checkbox" @bind="enableWarmup" />
                 </label>
+                <p class="option-hint">Adds two light warm-up sets (40% and 50% of your Training Max) before each main lift to get your joints and nervous system ready. Recommended for most lifters.</p>
+            </div>
+
+            <div class="form-group">
+                <label class="toggle-row">
+                    <span class="form-label" style="margin-bottom:0">5s PRO</span>
+                    <input type="checkbox" @bind="enableFivesPro" />
+                </label>
+                <p class="option-hint">All main sets are capped at <strong>5 straight reps</strong> — no max-effort sets. Normal 5/3/1 asks you to do as many reps as possible (<strong>AMRAP</strong>) on the last set; 5s PRO removes that to keep intensity lower and volume higher. Great for building a base before a heavier cycle.</p>
+            </div>
+
+            <div class="form-group">
+                <label class="toggle-row">
+                    <span class="form-label" style="margin-bottom:0">First Set Last — FSL (5×5)</span>
+                    <input type="checkbox" @bind="enableFsl" />
+                </label>
+                <p class="option-hint">After your main sets, cycle back and do <strong>5 sets of 5 reps</strong> at the weight you used for your very first main set (the lightest of the three). Lower intensity than BBB but higher rep quality. Works well paired with 5s PRO.</p>
             </div>
 
             @if (enableBbb)
             {
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="form-label">BBB Mapping</label>
+                        <label class="form-label">BBB Lift Pairing</label>
                         <select class="form-control" @bind="selectedBbbMode">
                             <option value="@BbbMode.OppositeDay">Opposite Day</option>
                             <option value="@BbbMode.SameDay">Same Day</option>
                         </select>
+                        <p class="option-hint"><strong>Opposite Day</strong> — Bench BBB on Press day, Squat BBB on Deadlift day (and vice versa). <strong>Same Day</strong> — BBB uses the same lift you just trained.</p>
                     </div>
                     <div class="form-group">
-                        <label class="form-label">BBB % of TM</label>
+                        <label class="form-label">BBB % of Training Max</label>
                         <select class="form-control" @bind="selectedBbbPct">
                             @foreach (var pct in new[] { 30, 35, 40, 45, 50, 55, 60, 65, 70 })
                             {
                                 <option value="@pct">@pct%</option>
                             }
                         </select>
+                        <p class="option-hint">The weight used for all 5×10 sets, as a percentage of your Training Max. <strong>50%</strong> is the standard starting point. Go lower if you're newer to BBB.</p>
                     </div>
                 </div>
             }
@@ -79,7 +111,38 @@ else if (currentCycle is null)
 }
 else
 {
-    @* ── Hero Card ──────────────────────────────────────── *@
+    @* -- PPL Hero -- *@
+    @if (activePplProgram is not null)
+    {
+        <div class="ppl-hero-card animate-fade-in mb-4">
+            <div class="ppl-hero-top">
+                <div>
+                    <div class="hero-subtitle">TODAYS PPL SESSION</div>
+                    @if (nextPplSession is not null)
+                    {
+                        <div class="hero-title">@nextPplSession.DayTemplate.Name</div>
+                        <div class="hero-meta">
+                            @activePplProgram.Name
+                            <span class="badge @GetDayTypeBadge(nextPplSession.DayTemplate.DayType) ml-1">@nextPplSession.DayTemplate.DayType</span>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="hero-title">Rotation complete!</div>
+                        <div class="hero-meta">@activePplProgram.Name - Start next round</div>
+                    }
+                </div>
+                <div class="ppl-hero-badge">PPL</div>
+            </div>
+            <button class="btn btn-ppl btn-full mt-3" @onclick="StartNextPplSession">
+                Start PPL Session
+            </button>
+        </div>
+    }
+
+    @* -- 531 Hero -- *@
+    @if (currentCycle is not null)
+    {
     <div class="hero-card animate-fade-in">
         <div class="flex items-center justify-between mb-2">
             <div>
@@ -206,6 +269,7 @@ else
             }
         </div>
     }
+    } @* end @if currentCycle *@
 }
 
 @code {
@@ -213,10 +277,14 @@ else
     private Workout? nextWorkout;
     private List<Lift> lifts = [];
     private List<Workout> upcomingWorkouts = [];
+    private PplProgram? activePplProgram;
+    private PplSession? nextPplSession;
     private bool loading = true;
     private bool showSetup;
     private bool enableBbb;
     private bool enableWarmup;
+    private bool enableFivesPro;
+    private bool enableFsl;
     private BbbMode selectedBbbMode = BbbMode.OppositeDay;
     private double selectedBbbPct = 50;
 
@@ -235,6 +303,12 @@ else
     {
         currentCycle = await CycleService.GetCurrentCycleAsync();
         lifts = await LiftService.GetAllLiftsAsync();
+        activePplProgram = await PplProgramService.GetActiveProgramAsync();
+        if (activePplProgram is not null)
+        {
+            try { nextPplSession = await PplProgramService.GetOrCreateNextSessionAsync(activePplProgram.Id); }
+            catch { nextPplSession = null; }
+        }
 
         if (currentCycle is not null)
         {
@@ -264,10 +338,17 @@ else
     {
         loading = true;
         var mode = enableBbb ? selectedBbbMode : BbbMode.None;
-        await CycleService.CreateCycleAsync(mode, selectedBbbPct, enableWarmup);
+        await CycleService.CreateCycleAsync(mode, selectedBbbPct, enableWarmup, enableFivesPro, enableFsl);
         showSetup = false;
         await LoadData();
         loading = false;
+    }
+
+    private async Task StartNextPplSession()
+    {
+        if (activePplProgram is null) return;
+        var session = await PplProgramService.GetOrCreateNextSessionAsync(activePplProgram.Id);
+        Nav.NavigateTo($"/ppl/session/{session.Id}");
     }
 
     private void GoToWorkout(int id) => Nav.NavigateTo("/workout/" + id);
@@ -301,5 +382,13 @@ else
         WorkoutStatus.Completed  => "status-completed",
         WorkoutStatus.InProgress => "status-in-progress",
         _                        => "status-not-started",
+    };
+
+    private static string GetDayTypeBadge(PplDayType t) => t switch
+    {
+        PplDayType.Push => "badge-push",
+        PplDayType.Pull => "badge-pull",
+        PplDayType.Legs => "badge-legs",
+        _ => "badge-muted"
     };
 }

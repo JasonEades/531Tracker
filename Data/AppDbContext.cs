@@ -5,6 +5,7 @@ namespace FiveThreeOneTracker.Data;
 
 public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
 {
+    // ── 5/3/1 ────────────────────────────────────────────────────────────────
     public DbSet<Lift> Lifts => Set<Lift>();
     public DbSet<Cycle> Cycles => Set<Cycle>();
     public DbSet<Week> Weeks => Set<Week>();
@@ -15,6 +16,14 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AccessoryHistory> AccessoryHistory => Set<AccessoryHistory>();
     public DbSet<UserEquipment> UserEquipment => Set<UserEquipment>();
     public DbSet<PlateInventory> PlateInventory => Set<PlateInventory>();
+
+    // ── PPL ──────────────────────────────────────────────────────────────────
+    public DbSet<PplProgram> PplPrograms => Set<PplProgram>();
+    public DbSet<PplDayTemplate> PplDayTemplates => Set<PplDayTemplate>();
+    public DbSet<PplExerciseSlot> PplExerciseSlots => Set<PplExerciseSlot>();
+    public DbSet<PplSession> PplSessions => Set<PplSession>();
+    public DbSet<PplSessionExercise> PplSessionExercises => Set<PplSessionExercise>();
+    public DbSet<PplSessionSet> PplSessionSets => Set<PplSessionSet>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -83,6 +92,64 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.HasMany(e => e.Plates)
                   .WithOne(p => p.UserEquipment)
                   .HasForeignKey(p => p.UserEquipmentId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        // ── PPL relationships ─────────────────────────────────────────────────
+
+        modelBuilder.Entity<PplProgram>(entity =>
+        {
+            entity.HasMany(p => p.DayTemplates)
+                  .WithOne(d => d.Program)
+                  .HasForeignKey(d => d.PplProgramId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(p => p.Sessions)
+                  .WithOne(s => s.Program)
+                  .HasForeignKey(s => s.PplProgramId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PplDayTemplate>(entity =>
+        {
+            entity.Property(e => e.DayType).HasConversion<string>();
+            entity.Property(e => e.Variant).HasConversion<string>();
+            entity.HasMany(d => d.ExerciseSlots)
+                  .WithOne(s => s.DayTemplate)
+                  .HasForeignKey(s => s.PplDayTemplateId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(d => d.Sessions)
+                  .WithOne(s => s.DayTemplate)
+                  .HasForeignKey(s => s.PplDayTemplateId)
+                  .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<PplExerciseSlot>(entity =>
+        {
+            entity.Property(e => e.MuscleGroup).HasConversion<string>();
+            entity.HasOne(e => e.Lift)
+                  .WithMany()
+                  .HasForeignKey(e => e.LiftId)
+                  .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<PplSession>(entity =>
+        {
+            entity.Property(e => e.Status).HasConversion<string>();
+            entity.HasMany(s => s.Exercises)
+                  .WithOne(e => e.Session)
+                  .HasForeignKey(e => e.PplSessionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PplSessionExercise>(entity =>
+        {
+            entity.HasOne(e => e.ExerciseSlot)
+                  .WithMany(s => s.SessionExercises)
+                  .HasForeignKey(e => e.PplExerciseSlotId)
+                  .OnDelete(DeleteBehavior.Restrict);
+            entity.HasMany(e => e.Sets)
+                  .WithOne(s => s.SessionExercise)
+                  .HasForeignKey(s => s.PplSessionExerciseId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
 

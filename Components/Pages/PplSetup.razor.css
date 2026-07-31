@@ -1,0 +1,163 @@
+/* PPL Setup page */
+
+.ppl-setup {
+    padding-bottom: calc(var(--bottom-nav-height) + var(--space-6));
+}
+
+.setup-header {
+    margin-bottom: var(--space-6);
+}
+
+.setup-sub {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    margin-top: var(--space-2);
+}
+
+.setup-card {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-5);
+    margin-bottom: var(--space-4);
+}
+
+/* Days picker */
+.days-picker {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.days-option {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+    background: var(--color-surface-2);
+    border: 2px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+    cursor: pointer;
+    text-align: left;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.days-option.selected {
+    border-color: var(--color-primary);
+    background: var(--color-primary-dim);
+}
+
+.days-label {
+    font-weight: 700;
+    color: var(--color-text);
+    font-size: var(--text-base);
+}
+
+.days-hint {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    line-height: 1.4;
+}
+
+/* Schedule preview */
+.preview-section {
+    margin-bottom: var(--space-4);
+}
+
+.preview-title {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+    margin-bottom: var(--space-3);
+}
+
+.preview-days {
+    display: flex;
+    gap: var(--space-2);
+    flex-wrap: wrap;
+}
+
+.preview-day {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2px;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-3) var(--space-4);
+    min-width: 64px;
+}
+
+.preview-day.push { border-color: rgba(94,124,255,0.4); background: rgba(94,124,255,0.08); }
+.preview-day.pull { border-color: rgba(110,231,255,0.4); background: rgba(110,231,255,0.08); }
+.preview-day.legs { border-color: rgba(61,220,132,0.4); background: rgba(61,220,132,0.08); }
+
+.preview-day-label {
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--color-text-muted);
+}
+
+.preview-day-name {
+    font-size: var(--text-sm);
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+/* Exercise preview */
+.ex-group {
+    margin-bottom: var(--space-4);
+}
+
+.ex-group:last-child {
+    margin-bottom: 0;
+}
+
+.ex-group-header {
+    font-size: var(--text-xs);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    padding: 4px 10px;
+    border-radius: var(--radius-full);
+    display: inline-block;
+    margin-bottom: var(--space-2);
+}
+
+.ex-group-header.push { background: rgba(94,124,255,0.15); color: #7690FF; }
+.ex-group-header.pull { background: rgba(110,231,255,0.15); color: #6EE7FF; }
+.ex-group-header.legs { background: rgba(61,220,132,0.15); color: #3DDC84; }
+
+.ex-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border);
+}
+
+.ex-row:last-child { border-bottom: none; }
+
+.ex-name {
+    flex: 1;
+    font-size: var(--text-sm);
+    color: var(--color-text);
+}
+
+.ex-meta {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.option-hint {
+    font-size: 0.72rem;
+    color: var(--color-text-muted);
+    line-height: 1.45;
+}

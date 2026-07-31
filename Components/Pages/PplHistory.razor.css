@@ -1,0 +1,89 @@
+/* PPL History */
+
+.history-program-strip {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+}
+
+.history-program-name {
+    font-weight: 700;
+    font-size: var(--text-base);
+    color: var(--color-text);
+}
+
+.history-program-meta {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    margin-top: 2px;
+}
+
+.history-session-card {
+    display: block;
+    width: 100%;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-lg);
+    padding: var(--space-4) var(--space-5);
+    margin-bottom: var(--space-3);
+    text-align: left;
+    cursor: pointer;
+    transition: border-color var(--transition-fast), background var(--transition-fast);
+}
+
+.history-session-card:hover {
+    border-color: var(--color-border-2);
+    background: var(--color-surface-2);
+}
+
+.history-session-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    margin-bottom: var(--space-3);
+}
+
+.history-session-name {
+    font-weight: 700;
+    font-size: var(--text-base);
+    color: var(--color-text);
+}
+
+.history-session-date {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    margin-top: 2px;
+}
+
+.history-session-stats {
+    display: flex;
+    gap: var(--space-4);
+}
+
+.history-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.history-stat-value {
+    font-size: var(--text-lg);
+    font-weight: 700;
+    color: var(--color-text);
+}
+
+.history-stat-label {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.badge-push { background: rgba(94,124,255,0.2); color: #7690FF; }
+.badge-pull { background: rgba(110,231,255,0.2); color: #6EE7FF; }
+.badge-legs { background: rgba(61,220,132,0.2); color: #3DDC84; }

@@ -27,7 +27,8 @@ public enum SetType
 {
     Main,
     Bbb,
-    Warmup
+    Warmup,
+    Fsl
 }
 
 public enum BbbMode
@@ -35,4 +36,17 @@ public enum BbbMode
     None,
     OppositeDay,
     SameDay
+}
+
+// ── PPL ──────────────────────────────────────────────────────────────────────
+
+public enum PplDayType { Push, Pull, Legs }
+
+public enum PplVariant { Single, A, B }
+
+public enum MuscleGroup
+{
+    Chest, Shoulders, Triceps,
+    Back, RearDelts, Biceps,
+    Quads, Hamstrings, Glutes, Calves, Core
 }

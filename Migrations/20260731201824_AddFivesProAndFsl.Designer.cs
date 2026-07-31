@@ -3,6 +3,7 @@ using System;
 using FiveThreeOneTracker.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 
 #nullable disable
@@ -10,9 +11,11 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace FiveThreeOneTracker.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260731201824_AddFivesProAndFsl")]
+    partial class AddFivesProAndFsl
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.5");
@@ -301,230 +304,6 @@ namespace FiveThreeOneTracker.Migrations
                     b.ToTable("PlateInventory");
                 });
 
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplDayTemplate", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("DayType")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("OrderInWeek")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("PplProgramId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Variant")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PplProgramId");
-
-                    b.ToTable("PplDayTemplates");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplExerciseSlot", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<double>("CurrentWeight")
-                        .HasColumnType("REAL");
-
-                    b.Property<string>("ExerciseName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.Property<bool>("IsBodyweight")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("LiftId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("MuscleGroup")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("OrderInDay")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("PplDayTemplateId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<double>("ProgressionIncrement")
-                        .HasColumnType("REAL");
-
-                    b.Property<int>("RepsMax")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("RepsMin")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("TargetSets")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<double>("TmPercentage")
-                        .HasColumnType("REAL");
-
-                    b.Property<bool>("UsePercentageOfTm")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("LiftId");
-
-                    b.HasIndex("PplDayTemplateId");
-
-                    b.ToTable("PplExerciseSlots");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplProgram", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("DaysPerWeek")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<bool>("IsActive")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("Name")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Notes")
-                        .HasMaxLength(500)
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.ToTable("PplPrograms");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplSession", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("CompletedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<DateTime>("CreatedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("PplDayTemplateId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("PplProgramId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<DateTime?>("StartedAt")
-                        .HasColumnType("TEXT");
-
-                    b.Property<string>("Status")
-                        .IsRequired()
-                        .HasColumnType("TEXT");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PplDayTemplateId");
-
-                    b.HasIndex("PplProgramId");
-
-                    b.ToTable("PplSessions");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplSessionExercise", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<string>("ExerciseName")
-                        .IsRequired()
-                        .HasMaxLength(100)
-                        .HasColumnType("TEXT");
-
-                    b.Property<int>("OrderInSession")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("PplExerciseSlotId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("PplSessionId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("RepsMax")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("RepsMin")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<double>("SuggestedWeight")
-                        .HasColumnType("REAL");
-
-                    b.Property<int>("TargetSets")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PplExerciseSlotId");
-
-                    b.HasIndex("PplSessionId");
-
-                    b.ToTable("PplSessionExercises");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplSessionSet", b =>
-                {
-                    b.Property<int>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int?>("ActualReps")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<double?>("ActualWeight")
-                        .HasColumnType("REAL");
-
-                    b.Property<bool>("IsCompleted")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("PplSessionExerciseId")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("SetNumber")
-                        .HasColumnType("INTEGER");
-
-                    b.Property<int>("TargetReps")
-                        .HasColumnType("INTEGER");
-
-                    b.HasKey("Id");
-
-                    b.HasIndex("PplSessionExerciseId");
-
-                    b.ToTable("PplSessionSets");
-                });
-
             modelBuilder.Entity("FiveThreeOneTracker.Models.UserEquipment", b =>
                 {
                     b.Property<int>("Id")
@@ -683,84 +462,6 @@ namespace FiveThreeOneTracker.Migrations
                     b.Navigation("UserEquipment");
                 });
 
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplDayTemplate", b =>
-                {
-                    b.HasOne("FiveThreeOneTracker.Models.PplProgram", "Program")
-                        .WithMany("DayTemplates")
-                        .HasForeignKey("PplProgramId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("Program");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplExerciseSlot", b =>
-                {
-                    b.HasOne("FiveThreeOneTracker.Models.Lift", "Lift")
-                        .WithMany()
-                        .HasForeignKey("LiftId")
-                        .OnDelete(DeleteBehavior.SetNull);
-
-                    b.HasOne("FiveThreeOneTracker.Models.PplDayTemplate", "DayTemplate")
-                        .WithMany("ExerciseSlots")
-                        .HasForeignKey("PplDayTemplateId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("DayTemplate");
-
-                    b.Navigation("Lift");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplSession", b =>
-                {
-                    b.HasOne("FiveThreeOneTracker.Models.PplDayTemplate", "DayTemplate")
-                        .WithMany("Sessions")
-                        .HasForeignKey("PplDayTemplateId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("FiveThreeOneTracker.Models.PplProgram", "Program")
-                        .WithMany("Sessions")
-                        .HasForeignKey("PplProgramId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("DayTemplate");
-
-                    b.Navigation("Program");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplSessionExercise", b =>
-                {
-                    b.HasOne("FiveThreeOneTracker.Models.PplExerciseSlot", "ExerciseSlot")
-                        .WithMany("SessionExercises")
-                        .HasForeignKey("PplExerciseSlotId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-
-                    b.HasOne("FiveThreeOneTracker.Models.PplSession", "Session")
-                        .WithMany("Exercises")
-                        .HasForeignKey("PplSessionId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("ExerciseSlot");
-
-                    b.Navigation("Session");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplSessionSet", b =>
-                {
-                    b.HasOne("FiveThreeOneTracker.Models.PplSessionExercise", "SessionExercise")
-                        .WithMany("Sets")
-                        .HasForeignKey("PplSessionExerciseId")
-                        .OnDelete(DeleteBehavior.Cascade)
-                        .IsRequired();
-
-                    b.Navigation("SessionExercise");
-                });
-
             modelBuilder.Entity("FiveThreeOneTracker.Models.Week", b =>
                 {
                     b.HasOne("FiveThreeOneTracker.Models.Cycle", "Cycle")
@@ -836,35 +537,6 @@ namespace FiveThreeOneTracker.Migrations
             modelBuilder.Entity("FiveThreeOneTracker.Models.Lift", b =>
                 {
                     b.Navigation("WorkoutSets");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplDayTemplate", b =>
-                {
-                    b.Navigation("ExerciseSlots");
-
-                    b.Navigation("Sessions");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplExerciseSlot", b =>
-                {
-                    b.Navigation("SessionExercises");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplProgram", b =>
-                {
-                    b.Navigation("DayTemplates");
-
-                    b.Navigation("Sessions");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplSession", b =>
-                {
-                    b.Navigation("Exercises");
-                });
-
-            modelBuilder.Entity("FiveThreeOneTracker.Models.PplSessionExercise", b =>
-                {
-                    b.Navigation("Sets");
                 });
 
             modelBuilder.Entity("FiveThreeOneTracker.Models.UserEquipment", b =>

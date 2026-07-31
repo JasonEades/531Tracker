@@ -4,6 +4,7 @@
 @inject IAccessoryService AccessoryService
 @inject IBbbMappingService BbbMapping
 @inject IPlateCalculatorService PlateCalc
+@inject IWeightCalculator WeightCalc
 @inject NavigationManager Nav
 
 <PageTitle>Workout — 5/3/1 Tracker</PageTitle>
@@ -119,7 +120,9 @@ else
         </div>
         @foreach (var set in mainSets)
         {
-            var isAmrap = set.SetNumber == mainSets.Count && workout.Week.WeekNumber != WeekNumber.Week4;
+            var isAmrap = !(workout.Week.Cycle.IsFivesPro)
+                && set.SetNumber == mainSets.Count
+                && workout.Week.WeekNumber != WeekNumber.Week4;
             <div class="set-card @(set.IsCompleted ? "completed-set" : "")">
                 <div class="set-num">@set.SetNumber</div>
                 <div class="set-info">
@@ -165,7 +168,68 @@ else
         }
     </div>
 
-    @* ── BBB Sets ─────────────────────────────────────── *@
+    @* ── e1RM Estimate ──────────────────────────────────────────── *@
+    @if (EstimatedOneRepMax.HasValue)
+    {
+        var topSet = mainSets.LastOrDefault();
+        <div class="exercise-section animate-slide-up" style="border-left: 3px solid var(--color-accent)">
+            <div class="flex items-center justify-between">
+                <span style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;color:var(--color-text-muted)">ESTIMATED 1RM</span>
+                <span style="font-size:1.5rem;font-weight:800;color:var(--color-accent)">@EstimatedOneRepMax lbs</span>
+            </div>
+            <div style="font-size:0.72rem;color:var(--color-text-muted);margin-top:2px">Based on @topSet!.ActualReps reps at @topSet.ActualWeight lbs (Epley formula)</div>
+        </div>
+    }
+
+    @* ── FSL Sets ───────────────────────────────────────────────── *@
+    @if (fslSets.Count > 0)
+    {
+        <div class="exercise-section animate-slide-up">
+            <div class="exercise-section-header">
+                <div class="exercise-section-title">
+                    📋 First Set Last — @GetLiftDisplayName(workout.MainLiftType)
+                </div>
+                <span class="badge badge-muted">5×5</span>
+            </div>
+            @foreach (var set in fslSets)
+            {
+                <div class="set-card @(set.IsCompleted ? "completed-set" : "")">
+                    <div class="set-num">@set.SetNumber</div>
+                    <div class="set-info">
+                        <div class="set-weight-label">@set.PrescribedWeight <span class="set-unit">lbs</span></div>
+                        <div class="set-reps-label">× @set.PrescribedReps reps</div>
+                        @if (plateMap.TryGetValue(set.PrescribedWeight, out var plates) && plates.Count > 0)
+                        {
+                            <div class="plate-chips-inline">
+                                @foreach (var p in plates)
+                                {
+                                    @for (int i = 0; i < p.CountPerSide; i++)
+                                    {
+                                        <span class="plate-chip-sm" style="@GetPlateStyle(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
+                                    }
+                                }
+                            </div>
+                        }
+                    </div>
+                    <div class="set-inputs">
+                        <input class="set-input" type="number" inputmode="numeric"
+                               value="@(set.ActualWeight ?? set.PrescribedWeight)"
+                               @onchange="e => OnWeightChanged(set, e)" step="5"
+                               disabled="@(workout.Status == WorkoutStatus.Completed)" />
+                        <input class="set-input" type="number" inputmode="numeric"
+                               value="@(set.ActualReps ?? set.PrescribedReps)"
+                               @onchange="e => OnRepsChanged(set, e)" min="0"
+                               disabled="@(workout.Status == WorkoutStatus.Completed)" />
+                    </div>
+                    <button class="check-btn @(set.IsCompleted ? "checked" : "")"
+                            @onclick="() => ToggleSet(set)"
+                            disabled="@(workout.Status == WorkoutStatus.Completed)">
+                        @(set.IsCompleted ? "✓" : "")
+                    </button>
+                </div>
+            }
+        </div>
+    }
     @if (bbbSets.Count > 0)
     {
         <div class="exercise-section animate-slide-up">
@@ -315,9 +379,24 @@ else
     private List<WorkoutSet> mainSets = [];
     private List<WorkoutSet> bbbSets = [];
     private List<WorkoutSet> warmupSets = [];
+    private List<WorkoutSet> fslSets = [];
 
-    private int SetsTotal => warmupSets.Count + mainSets.Count + bbbSets.Count;
-    private int SetsDone  => warmupSets.Concat(mainSets).Concat(bbbSets).Count(s => s.IsCompleted);
+    private int SetsTotal => warmupSets.Count + mainSets.Count + bbbSets.Count + fslSets.Count;
+    private int SetsDone  => warmupSets.Concat(mainSets).Concat(bbbSets).Concat(fslSets).Count(s => s.IsCompleted);
+
+    private double? EstimatedOneRepMax
+    {
+        get
+        {
+            if (workout is null) return null;
+            if (workout.Week.Cycle.IsFivesPro) return null;
+            if (workout.Week.WeekNumber == WeekNumber.Week4) return null;
+            var topSet = mainSets.LastOrDefault();
+            if (topSet?.IsCompleted == true && topSet.ActualReps.HasValue && topSet.ActualWeight.HasValue)
+                return WeightCalc.CalculateEstimated1RM(topSet.ActualWeight.Value, topSet.ActualReps.Value);
+            return null;
+        }
+    }
     private int SetsPct   => SetsTotal > 0 ? (int)(SetsDone * 100.0 / SetsTotal) : 0;
     private Dictionary<double, List<PlateLoadingResult>> plateMap = [];
 
@@ -344,6 +423,7 @@ else
             warmupSets  = workout.Sets.Where(s => s.SetType == SetType.Warmup).OrderBy(s => s.SetNumber).ToList();
             mainSets    = workout.Sets.Where(s => s.SetType == SetType.Main).OrderBy(s => s.SetNumber).ToList();
             bbbSets     = workout.Sets.Where(s => s.SetType == SetType.Bbb).OrderBy(s => s.SetNumber).ToList();
+            fslSets     = workout.Sets.Where(s => s.SetType == SetType.Fsl).OrderBy(s => s.SetNumber).ToList();
 
             var allWeights = warmupSets.Concat(mainSets).Concat(bbbSets)
                 .Select(s => s.PrescribedWeight).Distinct();
