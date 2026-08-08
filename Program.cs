@@ -3,6 +3,7 @@ using FiveThreeOneTracker.Data;
 using FiveThreeOneTracker.Models;
 using FiveThreeOneTracker.Services;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
@@ -15,6 +16,15 @@ var builder = WebApplication.CreateBuilder(args);
 // PORT — Digital Ocean injects a PORT env var; bind to it so traffic is routed correctly.
 var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
 builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
+// Trust the X-Forwarded-Proto header from Digital Ocean's load balancer so
+// OAuth redirect URIs are built with https:// instead of http://.
+builder.Services.Configure<ForwardedHeadersOptions>(options =>
+{
+    options.ForwardedHeaders = ForwardedHeaders.XForwardedFor | ForwardedHeaders.XForwardedProto;
+    options.KnownNetworks.Clear();
+    options.KnownProxies.Clear();
+});
 
 var adminEmail = builder.Configuration["App:AdminEmail"] ?? "";
 
@@ -130,6 +140,7 @@ using (var scope = app.Services.CreateScope())
 }
 
 // Configure the HTTP request pipeline.
+app.UseForwardedHeaders();
 if (!app.Environment.IsDevelopment())
 {
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
