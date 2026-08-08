@@ -9,6 +9,7 @@ using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using Npgsql.EntityFrameworkCore.PostgreSQL;
+using System.Security.Claims;
 
 const string AdminRole  = "Admin";
 
@@ -162,14 +163,79 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 // Auth endpoints
+
+// 1. Kick off the Google OAuth flow, storing the final destination in RedirectUri → /auth/callback
 app.MapGet("/challenge/{provider}", async (string provider, string? returnUrl, HttpContext ctx) =>
 {
     returnUrl ??= "/";
-    var props = new Microsoft.AspNetCore.Authentication.AuthenticationProperties
+    var props = new AuthenticationProperties
     {
-        RedirectUri = returnUrl
+        RedirectUri = $"/auth/callback?returnUrl={Uri.EscapeDataString(returnUrl)}"
     };
     await ctx.ChallengeAsync(provider, props);
+});
+
+// 2. Google redirects here after the user authenticates.
+//    Complete the Identity sign-in and redirect to the original destination.
+app.MapGet("/auth/callback", async (
+    string? returnUrl,
+    HttpContext ctx,
+    SignInManager<ApplicationUser> signInManager,
+    UserManager<ApplicationUser> userManager) =>
+{
+    returnUrl = string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl;
+
+    // Read the external login info that Google just provided
+    var info = await signInManager.GetExternalLoginInfoAsync();
+    if (info is null)
+    {
+        ctx.Response.Redirect("/login");
+        return;
+    }
+
+    // Try to sign in with the existing external login link
+    var existingUser = await userManager.FindByLoginAsync(info.LoginProvider, info.ProviderKey);
+    if (existingUser is not null && !existingUser.IsEnabled)
+    {
+        ctx.Response.Redirect("/login?error=disabled");
+        return;
+    }
+
+    var result = await signInManager.ExternalLoginSignInAsync(
+        info.LoginProvider, info.ProviderKey, isPersistent: true, bypassTwoFactor: true);
+
+    if (result.Succeeded)
+    {
+        ctx.Response.Redirect(returnUrl);
+        return;
+    }
+
+    // First time this Google account has logged in — create the user
+    var email = info.Principal.FindFirstValue(System.Security.Claims.ClaimTypes.Email) ?? "";
+    var name  = info.Principal.FindFirstValue(System.Security.Claims.ClaimTypes.Name) ?? email;
+    var picture = info.Principal.FindFirstValue("picture") ?? "";
+
+    var user = new ApplicationUser
+    {
+        UserName      = email,
+        Email         = email,
+        DisplayName   = name,
+        ProfilePictureUrl = picture,
+        EmailConfirmed = true,
+        IsEnabled      = true
+    };
+
+    var createResult = await userManager.CreateAsync(user);
+    if (createResult.Succeeded)
+    {
+        await userManager.AddLoginAsync(user, info);
+        await signInManager.SignInAsync(user, isPersistent: true);
+        ctx.Response.Redirect(returnUrl);
+        return;
+    }
+
+    // Creation failed — send back to login
+    ctx.Response.Redirect("/login");
 });
 
 app.MapGet("/logout", async (SignInManager<ApplicationUser> signInManager, HttpContext ctx) =>
