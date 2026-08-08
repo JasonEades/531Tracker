@@ -144,6 +144,17 @@ builder.Services.AddAuthentication()
                 log.LogInformation("[AUTH] Existing user found, IsEnabled: {Enabled}", user.IsEnabled);
             }
 
+            // Ensure Admin role is assigned if this is the admin account.
+            // Doing it here (before SignInAsync) guarantees the role claim lands in the
+            // cookie on every login — even if the startup seed ran before this user existed.
+            if (!string.IsNullOrEmpty(adminEmail) &&
+                string.Equals(email, adminEmail, StringComparison.OrdinalIgnoreCase) &&
+                !await userManager.IsInRoleAsync(user, AdminRole))
+            {
+                await userManager.AddToRoleAsync(user, AdminRole);
+                log.LogInformation("[AUTH] Admin role assigned to {Email}", email);
+            }
+
             // Sign in with Identity (issues the application cookie)
             log.LogInformation("[AUTH] Calling SignInAsync for user: {Email}", email);
             await signInManager.SignInAsync(user, isPersistent: true);
