@@ -18,12 +18,13 @@ public interface IAccessoryService
     Task RecordAccessoryHistoryAsync(int accessoryId, double weight, int reps, int sets);
 }
 
-public class AccessoryService(AppDbContext db) : IAccessoryService
+public class AccessoryService(AppDbContext db, ICurrentUserService userContext) : IAccessoryService
 {
     public async Task<List<Accessory>> GetAllAccessoriesAsync()
     {
+        var userId = await userContext.GetUserIdAsync();
         return await db.Accessories
-            .Where(a => a.IsActive)
+            .Where(a => a.IsActive && (a.UserId == null || a.UserId == userId))
             .OrderBy(a => a.Name)
             .ToListAsync();
     }
@@ -35,8 +36,10 @@ public class AccessoryService(AppDbContext db) : IAccessoryService
 
     public async Task<Accessory> CreateAccessoryAsync(string name, string? description)
     {
+        var userId = await userContext.GetUserIdAsync();
         var accessory = new Accessory
         {
+            UserId = userId,
             Name = name,
             Description = description
         };

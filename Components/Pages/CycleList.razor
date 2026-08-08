@@ -2,12 +2,13 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject ICycleService CycleService
+@inject IPplProgramService PplService
 @inject NavigationManager Nav
 
-<PageTitle>History — 5/3/1 Tracker</PageTitle>
+<PageTitle>Workouts — 5/3/1 Tracker</PageTitle>
 
 <div class="page-header animate-fade-in">
-    <h1>History</h1>
+    <h1>Workouts</h1>
     <p class="page-subtitle">All training cycles</p>
 </div>
 
@@ -152,8 +153,66 @@ else
     <button class="fab" @onclick="ShowCreateForm" title="New Cycle" aria-label="New Cycle">+</button>
 }
 
+@* ── PPL Programs ────────────────────────────────────────────────────────────────────────── *@
+<div class="page-header animate-fade-in" style="margin-top:var(--space-8)">
+    <h2 style="font-size:var(--text-lg);font-weight:600">Push-Pull-Legs Programs</h2>
+</div>
+
+@if (pplPrograms.Count == 0)
+{
+    <div class="empty-state" style="padding:var(--space-8) 0">
+        <div class="empty-state-icon">&#x1F3CB;</div>
+        <h3>No PPL Programs Yet</h3>
+        <p>Create a Push-Pull-Legs program to get started.</p>
+        <button class="btn btn-primary mt-2" @onclick='() => Nav.NavigateTo("/ppl/new")'>+ Create PPL Program</button>
+    </div>
+}
+else
+{
+    <div class="animate-fade-in">
+        @foreach (var prog in pplPrograms)
+        {
+            var completedSessions = prog.Sessions.Count(s => s.Status == WorkoutStatus.Completed);
+            var totalSessions     = prog.Sessions.Count;
+            var pplPct            = totalSessions > 0 ? (int)(completedSessions * 100.0 / totalSessions) : 0;
+            <div class="cycle-card">
+                <div class="cycle-card-header" @onclick='() => Nav.NavigateTo("/ppl/history")'>
+                    <div class="cycle-card-left">
+                        <div class="cycle-status-dot @(prog.IsActive ? "status-in-progress" : "status-completed")"></div>
+                        <div>
+                            <div class="cycle-name">@prog.Name</div>
+                            <div class="cycle-meta">
+                                @prog.DaysPerWeek-day split &middot; @completedSessions / @totalSessions sessions
+                            </div>
+                        </div>
+                    </div>
+                    <div class="cycle-card-right">
+                        @if (prog.IsActive)
+                        {
+                            <span class="badge badge-warning">Active</span>
+                        }
+                        else
+                        {
+                            <span class="badge badge-muted">Inactive</span>
+                        }
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-text-muted)"><polyline points="9 18 15 12 9 6"/></svg>
+                    </div>
+                </div>
+                <div class="cycle-progress-bar">
+                    <div class="cycle-progress-fill" style="width:@pplPct%"></div>
+                </div>
+                <div class="cycle-card-actions">
+                    <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo("/ppl/history")'>View Sessions</button>
+                </div>
+            </div>
+        }
+    </div>
+    <button class="btn btn-outline mt-3" @onclick='() => Nav.NavigateTo("/ppl/new")'>+ New PPL Program</button>
+}
+
 @code {
     private List<Cycle> cycles = [];
+    private List<PplProgram> pplPrograms = [];
     private bool loading = true;
     private bool creating;
     private bool showCreate;
@@ -165,6 +224,7 @@ else
     protected override async Task OnInitializedAsync()
     {
         cycles = await CycleService.GetAllCyclesAsync();
+        pplPrograms = await PplService.GetAllProgramsAsync();
         loading = false;
     }
 
