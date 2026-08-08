@@ -13,26 +13,33 @@ public interface ILiftService
     Task UpdateBbbPercentageAsync(int liftId, double percentage);
 }
 
-public class LiftService(AppDbContext db) : ILiftService
+public class LiftService(AppDbContext db, ICurrentUserService userContext) : ILiftService
 {
     public async Task<List<Lift>> GetAllLiftsAsync()
     {
-        return await db.Lifts.OrderBy(l => l.LiftType).ToListAsync();
+        var userId = await userContext.GetUserIdAsync();
+        return await db.Lifts
+            .Where(l => l.UserId == userId)
+            .OrderBy(l => l.LiftType)
+            .ToListAsync();
     }
 
     public async Task<Lift?> GetLiftAsync(int id)
     {
-        return await db.Lifts.FindAsync(id);
+        var userId = await userContext.GetUserIdAsync();
+        return await db.Lifts.FirstOrDefaultAsync(l => l.Id == id && l.UserId == userId);
     }
 
     public async Task<Lift?> GetLiftByTypeAsync(LiftType liftType)
     {
-        return await db.Lifts.FirstOrDefaultAsync(l => l.LiftType == liftType);
+        var userId = await userContext.GetUserIdAsync();
+        return await db.Lifts.FirstOrDefaultAsync(l => l.LiftType == liftType && l.UserId == userId);
     }
 
     public async Task UpdateTrainingMaxAsync(int liftId, double newMax)
     {
-        var lift = await db.Lifts.FindAsync(liftId);
+        var userId = await userContext.GetUserIdAsync();
+        var lift = await db.Lifts.FirstOrDefaultAsync(l => l.Id == liftId && l.UserId == userId);
         if (lift is not null)
         {
             lift.TrainingMax = newMax;
@@ -42,7 +49,8 @@ public class LiftService(AppDbContext db) : ILiftService
 
     public async Task UpdateBbbPercentageAsync(int liftId, double percentage)
     {
-        var lift = await db.Lifts.FindAsync(liftId);
+        var userId = await userContext.GetUserIdAsync();
+        var lift = await db.Lifts.FirstOrDefaultAsync(l => l.Id == liftId && l.UserId == userId);
         if (lift is not null)
         {
             lift.BbbPercentage = Math.Clamp(percentage, 30, 70);

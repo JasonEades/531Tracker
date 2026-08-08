@@ -1,0 +1,194 @@
+.admin-page {
+    max-width: 860px;
+    margin: 0 auto;
+    padding: var(--space-5);
+}
+
+.admin-header {
+    display: flex;
+    align-items: center;
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+}
+
+.admin-title {
+    font-size: var(--text-xl);
+    font-weight: 800;
+    color: var(--color-text);
+    margin: 0;
+}
+
+.admin-badge {
+    background: linear-gradient(135deg, #f59e0b, #d97706);
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    padding: 3px 8px;
+    border-radius: 999px;
+}
+
+.admin-loading,
+.admin-empty {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    padding: var(--space-5) 0;
+}
+
+.admin-table-wrap {
+    overflow-x: auto;
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-xl);
+}
+
+.admin-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--text-sm);
+}
+
+.admin-table thead th {
+    padding: 10px 14px;
+    text-align: left;
+    font-size: 0.68rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: var(--color-text-muted);
+    border-bottom: 1px solid var(--color-border);
+    background: var(--color-surface-2);
+}
+
+.admin-table tbody tr {
+    border-bottom: 1px solid var(--color-border);
+    transition: background 0.1s;
+}
+
+.admin-table tbody tr:last-child {
+    border-bottom: none;
+}
+
+.admin-table tbody tr:hover {
+    background: var(--color-surface-2);
+}
+
+.admin-table td {
+    padding: 12px 14px;
+    color: var(--color-text);
+    vertical-align: middle;
+}
+
+.row-disabled td {
+    opacity: 0.5;
+}
+
+.cell-email {
+    font-weight: 600;
+}
+
+.cell-name {
+    color: var(--color-text-muted);
+}
+
+.cell-protected {
+    color: var(--color-text-muted);
+}
+
+.badge-admin {
+    background: rgba(245, 158, 11, 0.15);
+    color: #f59e0b;
+    border: 1px solid rgba(245, 158, 11, 0.3);
+    font-size: 0.65rem;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.badge-user {
+    background: var(--color-surface-2);
+    color: var(--color-text-muted);
+    border: 1px solid var(--color-border);
+    font-size: 0.65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 2px 8px;
+    border-radius: 999px;
+}
+
+.status-chip {
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 3px 10px;
+    border-radius: 999px;
+}
+
+.status-enabled {
+    background: rgba(34, 197, 94, 0.12);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.status-disabled {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}
+
+.btn-toggle {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 5px 14px;
+    border-radius: var(--radius-md);
+    border: none;
+    cursor: pointer;
+    transition: filter 0.15s;
+}
+
+.btn-toggle:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.btn-disable {
+    background: rgba(239, 68, 68, 0.12);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.3);
+}
+
+.btn-disable:hover:not(:disabled) {
+    background: rgba(239, 68, 68, 0.2);
+}
+
+.btn-enable {
+    background: rgba(34, 197, 94, 0.12);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.3);
+}
+
+.btn-enable:hover:not(:disabled) {
+    background: rgba(34, 197, 94, 0.2);
+}
+
+.admin-toast {
+    margin-top: var(--space-4);
+    padding: 10px 16px;
+    border-radius: var(--radius-lg);
+    font-size: var(--text-sm);
+    font-weight: 500;
+}
+
+.toast-success {
+    background: rgba(34, 197, 94, 0.1);
+    color: #22c55e;
+    border: 1px solid rgba(34, 197, 94, 0.25);
+}
+
+.toast-error {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+    border: 1px solid rgba(239, 68, 68, 0.25);
+}

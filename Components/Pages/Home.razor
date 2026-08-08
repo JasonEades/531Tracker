@@ -1,10 +1,13 @@
 @page "/"
+@attribute [Authorize]
 @rendermode InteractiveServer
 @inject ICycleService CycleService
 @inject IWorkoutService WorkoutService
 @inject ILiftService LiftService
 @inject IPplProgramService PplProgramService
 @inject IPplSessionService PplSessionService
+@inject IUserInitService UserInitService
+@inject ICurrentUserService UserContext
 @inject NavigationManager Nav
 
 <PageTitle>Dashboard — 5/3/1 Tracker</PageTitle>
@@ -295,6 +298,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        var userId = await UserContext.GetUserIdOrNullAsync();
+        if (userId is not null)
+            await UserInitService.EnsureUserInitializedAsync(userId);
         await LoadData();
         loading = false;
     }

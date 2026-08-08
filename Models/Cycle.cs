@@ -6,6 +6,9 @@ public class Cycle
 {
     public int Id { get; set; }
 
+    /// <summary>Owner user ID (Identity).</summary>
+    public string? UserId { get; set; }
+
     public int CycleNumber { get; set; }
 
     [Required]

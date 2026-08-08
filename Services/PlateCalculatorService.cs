@@ -18,7 +18,7 @@ public class PlateLoadingResult
     public int CountPerSide { get; set; }
 }
 
-public class PlateCalculatorService(AppDbContext db) : IPlateCalculatorService
+public class PlateCalculatorService(AppDbContext db, ICurrentUserService userContext) : IPlateCalculatorService
 {
     private static readonly double[] DefaultPlateSizes = [45, 35, 25, 15, 10, 5, 2.5];
     private static readonly Dictionary<double, int> DefaultPairs = new()
@@ -28,13 +28,14 @@ public class PlateCalculatorService(AppDbContext db) : IPlateCalculatorService
 
     public async Task<UserEquipment> GetEquipmentAsync()
     {
+        var userId = await userContext.GetUserIdAsync();
         var equipment = await db.UserEquipment
             .Include(e => e.Plates.OrderByDescending(p => p.Weight))
-            .FirstOrDefaultAsync();
+            .FirstOrDefaultAsync(e => e.UserId == userId);
 
         if (equipment is null)
         {
-            equipment = new UserEquipment { BarWeight = 45 };
+            equipment = new UserEquipment { UserId = userId, BarWeight = 45 };
             db.UserEquipment.Add(equipment);
             await db.SaveChangesAsync();
 
@@ -77,7 +78,8 @@ public class PlateCalculatorService(AppDbContext db) : IPlateCalculatorService
 
     public async Task UpdateBarWeightAsync(double barWeight)
     {
-        var equipment = await db.UserEquipment.FirstOrDefaultAsync();
+        var userId = await userContext.GetUserIdAsync();
+        var equipment = await db.UserEquipment.FirstOrDefaultAsync(e => e.UserId == userId);
         if (equipment is not null)
         {
             equipment.BarWeight = barWeight;

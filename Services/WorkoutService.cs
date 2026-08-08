@@ -14,7 +14,7 @@ public interface IWorkoutService
     Task<Workout?> GetNextIncompleteWorkoutAsync();
 }
 
-public class WorkoutService(AppDbContext db) : IWorkoutService
+public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : IWorkoutService
 {
     public async Task<Workout?> GetWorkoutWithDetailsAsync(int workoutId)
     {
@@ -74,10 +74,13 @@ public class WorkoutService(AppDbContext db) : IWorkoutService
 
     public async Task<Workout?> GetNextIncompleteWorkoutAsync()
     {
+        var userId = await userContext.GetUserIdAsync();
         return await db.Workouts
             .Include(w => w.Week)
                 .ThenInclude(wk => wk.Cycle)
-            .Where(w => w.Status != WorkoutStatus.Completed && !w.Week.Cycle.IsCompleted)
+            .Where(w => w.Status != WorkoutStatus.Completed
+                     && !w.Week.Cycle.IsCompleted
+                     && w.Week.Cycle.UserId == userId)
             .OrderBy(w => w.Week.Cycle.CycleNumber)
             .ThenBy(w => w.Week.WeekNumber)
             .ThenBy(w => w.MainLiftType)

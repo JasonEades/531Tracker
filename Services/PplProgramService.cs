@@ -15,31 +15,43 @@ public interface IPplProgramService
     Task<PplSession> GetOrCreateNextSessionAsync(int programId);
 }
 
-public class PplProgramService(AppDbContext db, ILiftService liftService) : IPplProgramService
+public class PplProgramService(AppDbContext db, ILiftService liftService, ICurrentUserService userContext) : IPplProgramService
 {
     public async Task<PplProgram?> GetActiveProgramAsync()
-        => await db.PplPrograms.FirstOrDefaultAsync(p => p.IsActive);
+    {
+        var userId = await userContext.GetUserIdAsync();
+        return await db.PplPrograms.FirstOrDefaultAsync(p => p.IsActive && p.UserId == userId);
+    }
 
     public async Task<List<PplProgram>> GetAllProgramsAsync()
-        => await db.PplPrograms
+    {
+        var userId = await userContext.GetUserIdAsync();
+        return await db.PplPrograms
             .Include(p => p.Sessions)
+            .Where(p => p.UserId == userId)
             .OrderByDescending(p => p.CreatedAt)
             .ToListAsync();
+    }
 
     public async Task<PplProgram?> GetProgramWithDetailsAsync(int programId)
-        => await db.PplPrograms
+    {
+        var userId = await userContext.GetUserIdAsync();
+        return await db.PplPrograms
             .Include(p => p.DayTemplates.OrderBy(d => d.OrderInWeek))
                 .ThenInclude(d => d.ExerciseSlots.OrderBy(s => s.OrderInDay))
                     .ThenInclude(s => s.Lift)
-            .FirstOrDefaultAsync(p => p.Id == programId);
+            .FirstOrDefaultAsync(p => p.Id == programId && p.UserId == userId);
+    }
 
     public async Task<PplProgram> CreateProgramAsync(string name, int daysPerWeek, string? notes = null)
     {
+        var userId = await userContext.GetUserIdAsync();
         var lifts = await liftService.GetAllLiftsAsync();
         var liftDict = lifts.ToDictionary(l => l.LiftType);
 
         var program = new PplProgram
         {
+            UserId = userId,
             Name = name,
             DaysPerWeek = daysPerWeek,
             Notes = notes,
@@ -47,8 +59,8 @@ public class PplProgramService(AppDbContext db, ILiftService liftService) : IPpl
             CreatedAt = DateTime.UtcNow
         };
 
-        // Deactivate any existing PPL programs
-        await db.PplPrograms.Where(p => p.IsActive).ExecuteUpdateAsync(s => s.SetProperty(p => p.IsActive, false));
+        // Deactivate any existing PPL programs for this user
+        await db.PplPrograms.Where(p => p.IsActive && p.UserId == userId).ExecuteUpdateAsync(s => s.SetProperty(p => p.IsActive, false));
 
         db.PplPrograms.Add(program);
         await db.SaveChangesAsync();
@@ -65,8 +77,9 @@ public class PplProgramService(AppDbContext db, ILiftService liftService) : IPpl
 
     public async Task SetActiveProgramAsync(int programId)
     {
-        await db.PplPrograms.ExecuteUpdateAsync(s => s.SetProperty(p => p.IsActive, false));
-        var program = await db.PplPrograms.FindAsync(programId);
+        var userId = await userContext.GetUserIdAsync();
+        await db.PplPrograms.Where(p => p.UserId == userId).ExecuteUpdateAsync(s => s.SetProperty(p => p.IsActive, false));
+        var program = await db.PplPrograms.FirstOrDefaultAsync(p => p.Id == programId && p.UserId == userId);
         if (program is not null)
         {
             program.IsActive = true;
@@ -76,7 +89,8 @@ public class PplProgramService(AppDbContext db, ILiftService liftService) : IPpl
 
     public async Task DeleteProgramAsync(int programId)
     {
-        var program = await db.PplPrograms.FindAsync(programId);
+        var userId = await userContext.GetUserIdAsync();
+        var program = await db.PplPrograms.FirstOrDefaultAsync(p => p.Id == programId && p.UserId == userId);
         if (program is not null)
         {
             db.PplPrograms.Remove(program);

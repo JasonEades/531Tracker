@@ -1,4 +1,5 @@
 @page "/ppl/session/{SessionId:int}"
+@attribute [Authorize]
 @rendermode InteractiveServer
 @inject IPplSessionService SessionService
 @inject IPplProgressionService Progression

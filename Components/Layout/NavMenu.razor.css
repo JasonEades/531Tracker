@@ -6,3 +6,65 @@
 .nav-item.active {
     color: var(--color-primary);
 }
+
+.nav-item-admin {
+    color: #f59e0b;
+    opacity: 0.85;
+}
+
+.nav-item-admin:hover,
+.nav-item-admin.active {
+    color: #f59e0b;
+    opacity: 1;
+}
+
+/* User strip above the nav */
+.nav-user-strip {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--color-border);
+    margin-bottom: 4px;
+}
+
+.nav-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    object-fit: cover;
+    flex-shrink: 0;
+}
+
+.nav-avatar-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: var(--color-surface-2);
+    font-size: 0.9rem;
+}
+
+.nav-user-name {
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--color-text);
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.nav-logout-btn {
+    color: var(--color-text-muted);
+    display: flex;
+    align-items: center;
+    text-decoration: none;
+    flex-shrink: 0;
+    padding: 4px;
+    border-radius: 4px;
+    transition: color 0.15s;
+}
+
+.nav-logout-btn:hover {
+    color: var(--color-text);
+}

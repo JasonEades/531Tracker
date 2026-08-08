@@ -6,6 +6,9 @@ public class Lift
 {
     public int Id { get; set; }
 
+    /// <summary>Owner user ID (Identity). Null for legacy/seed rows.</summary>
+    public string? UserId { get; set; }
+
     public LiftType LiftType { get; set; }
 
     [Required]

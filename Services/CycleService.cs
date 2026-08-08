@@ -22,10 +22,12 @@ public class CycleService(
     AppDbContext db,
     ILiftService liftService,
     IBbbMappingService bbbMapping,
-    IWeightCalculator weightCalc) : ICycleService
+    IWeightCalculator weightCalc,
+    ICurrentUserService userContext) : ICycleService
 {
     public async Task<Cycle?> GetCurrentCycleAsync()
     {
+        var userId = await userContext.GetUserIdAsync();
         return await db.Cycles
             .Include(c => c.Weeks)
                 .ThenInclude(w => w.Workouts)
@@ -34,13 +36,14 @@ public class CycleService(
                 .ThenInclude(w => w.Workouts)
                     .ThenInclude(wo => wo.WorkoutAccessories)
                         .ThenInclude(wa => wa.Accessory)
-            .Where(c => !c.IsCompleted)
+            .Where(c => !c.IsCompleted && c.UserId == userId)
             .OrderByDescending(c => c.CycleNumber)
             .FirstOrDefaultAsync();
     }
 
     public async Task<Cycle?> GetCycleWithDetailsAsync(int cycleId)
     {
+        var userId = await userContext.GetUserIdAsync();
         return await db.Cycles
             .Include(c => c.Weeks)
                 .ThenInclude(w => w.Workouts)
@@ -50,14 +53,16 @@ public class CycleService(
                 .ThenInclude(w => w.Workouts)
                     .ThenInclude(wo => wo.WorkoutAccessories)
                         .ThenInclude(wa => wa.Accessory)
-            .FirstOrDefaultAsync(c => c.Id == cycleId);
+            .FirstOrDefaultAsync(c => c.Id == cycleId && c.UserId == userId);
     }
 
     public async Task<List<Cycle>> GetAllCyclesAsync()
     {
+        var userId = await userContext.GetUserIdAsync();
         return await db.Cycles
             .Include(c => c.Weeks)
                 .ThenInclude(w => w.Workouts)
+            .Where(c => c.UserId == userId)
             .OrderByDescending(c => c.CycleNumber)
             .ToListAsync();
     }
@@ -65,11 +70,16 @@ public class CycleService(
     public async Task<Cycle> CreateCycleAsync(BbbMode bbbMode = BbbMode.None, double bbbPercentage = 50, bool includeWarmup = false,
         bool isFivesPro = false, bool includeFsl = false)
     {
-        var lastCycle = await db.Cycles.OrderByDescending(c => c.CycleNumber).FirstOrDefaultAsync();
+        var userId = await userContext.GetUserIdAsync();
+        var lastCycle = await db.Cycles
+            .Where(c => c.UserId == userId)
+            .OrderByDescending(c => c.CycleNumber)
+            .FirstOrDefaultAsync();
         var cycleNumber = (lastCycle?.CycleNumber ?? 0) + 1;
 
         var cycle = new Cycle
         {
+            UserId = userId,
             CycleNumber = cycleNumber,
             Name = $"Cycle {cycleNumber}",
             CreatedAt = DateTime.UtcNow,
@@ -119,7 +129,8 @@ public class CycleService(
 
     public async Task CompleteCycleAsync(int cycleId)
     {
-        var cycle = await db.Cycles.FindAsync(cycleId);
+        var userId = await userContext.GetUserIdAsync();
+        var cycle = await db.Cycles.FirstOrDefaultAsync(c => c.Id == cycleId && c.UserId == userId);
         if (cycle is not null)
         {
             cycle.IsCompleted = true;
@@ -129,6 +140,7 @@ public class CycleService(
 
     public async Task DeleteCycleAsync(int cycleId)
     {
+        var userId = await userContext.GetUserIdAsync();
         var cycle = await db.Cycles
             .Include(c => c.Weeks)
                 .ThenInclude(w => w.Workouts)
@@ -136,7 +148,7 @@ public class CycleService(
             .Include(c => c.Weeks)
                 .ThenInclude(w => w.Workouts)
                     .ThenInclude(wo => wo.WorkoutAccessories)
-            .FirstOrDefaultAsync(c => c.Id == cycleId);
+            .FirstOrDefaultAsync(c => c.Id == cycleId && c.UserId == userId);
 
         if (cycle is not null)
         {

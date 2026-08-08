@@ -1,0 +1,131 @@
+@page "/admin/users"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@inject IAdminService AdminService
+
+<PageTitle>User Management — Admin</PageTitle>
+
+<div class="admin-page">
+    <div class="admin-header">
+        <h2 class="admin-title">👥 User Management</h2>
+        <span class="admin-badge">Admin</span>
+    </div>
+
+    @if (loading)
+    {
+        <div class="admin-loading">Loading users…</div>
+    }
+    else if (users.Count == 0)
+    {
+        <div class="admin-empty">No users found.</div>
+    }
+    else
+    {
+        <div class="admin-table-wrap">
+            <table class="admin-table">
+                <thead>
+                    <tr>
+                        <th>Email</th>
+                        <th>Display Name</th>
+                        <th>Role</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var user in users)
+                    {
+                        <tr class="@(user.IsEnabled ? "" : "row-disabled")">
+                            <td class="cell-email">@user.Email</td>
+                            <td class="cell-name">@(user.DisplayName ?? "—")</td>
+                            <td>
+                                @if (user.IsAdmin)
+                                {
+                                    <span class="badge badge-admin">Admin</span>
+                                }
+                                else
+                                {
+                                    <span class="badge badge-user">User</span>
+                                }
+                            </td>
+                            <td>
+                                @if (user.IsEnabled)
+                                {
+                                    <span class="status-chip status-enabled">Enabled</span>
+                                }
+                                else
+                                {
+                                    <span class="status-chip status-disabled">Disabled</span>
+                                }
+                            </td>
+                            <td>
+                                @if (!user.IsAdmin)
+                                {
+                                    <button class="btn-toggle @(user.IsEnabled ? "btn-disable" : "btn-enable")"
+                                            disabled="@(busy == user.Id)"
+                                            @onclick="() => ToggleUser(user)">
+                                        @if (busy == user.Id)
+                                        {
+                                            <span>…</span>
+                                        }
+                                        else
+                                        {
+                                            @(user.IsEnabled ? "Disable" : "Enable")
+                                        }
+                                    </button>
+                                }
+                                else
+                                {
+                                    <span class="cell-protected" title="Admin accounts cannot be disabled">—</span>
+                                }
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (!string.IsNullOrEmpty(message))
+    {
+        <div class="admin-toast @(messageError ? "toast-error" : "toast-success")">@message</div>
+    }
+</div>
+
+@code {
+    private List<AdminUserDto> users = [];
+    private bool loading = true;
+    private string? busy;
+    private string? message;
+    private bool messageError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        users = await AdminService.GetAllUsersAsync();
+        loading = false;
+    }
+
+    private async Task ToggleUser(AdminUserDto user)
+    {
+        busy = user.Id;
+        message = null;
+        StateHasChanged();
+
+        var ok = await AdminService.SetUserEnabledAsync(user.Id, !user.IsEnabled);
+
+        if (ok)
+        {
+            // Refresh the list to reflect change
+            users = await AdminService.GetAllUsersAsync();
+            message = $"{user.Email} has been {(user.IsEnabled ? "disabled" : "enabled")}.";
+            messageError = false;
+        }
+        else
+        {
+            message = $"Failed to update {user.Email}.";
+            messageError = true;
+        }
+
+        busy = null;
+    }
+}

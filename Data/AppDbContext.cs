@@ -1,9 +1,10 @@
 using FiveThreeOneTracker.Models;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace FiveThreeOneTracker.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<ApplicationUser>(options)
 {
     // ── 5/3/1 ────────────────────────────────────────────────────────────────
     public DbSet<Lift> Lifts => Set<Lift>();
@@ -31,12 +32,13 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<Lift>(entity =>
         {
-            entity.HasIndex(e => e.LiftType).IsUnique();
+            entity.HasIndex(e => new { e.UserId, e.LiftType }).IsUnique();
             entity.Property(e => e.LiftType).HasConversion<string>();
         });
 
         modelBuilder.Entity<Cycle>(entity =>
         {
+            entity.HasIndex(e => e.UserId);
             entity.Property(e => e.BbbMode).HasConversion<string>();
             entity.HasMany(c => c.Weeks)
                   .WithOne(w => w.Cycle)
@@ -99,6 +101,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.Entity<PplProgram>(entity =>
         {
+            entity.HasIndex(e => e.UserId);
             entity.HasMany(p => p.DayTemplates)
                   .WithOne(d => d.Program)
                   .HasForeignKey(d => d.PplProgramId)
@@ -158,13 +161,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     private static void SeedData(ModelBuilder modelBuilder)
     {
-        modelBuilder.Entity<Lift>().HasData(
-            new Lift { Id = 1, LiftType = LiftType.Squat, Name = "Squat", TrainingMax = 315, BbbPercentage = 50 },
-            new Lift { Id = 2, LiftType = LiftType.BenchPress, Name = "Bench Press", TrainingMax = 225, BbbPercentage = 50 },
-            new Lift { Id = 3, LiftType = LiftType.Deadlift, Name = "Deadlift", TrainingMax = 365, BbbPercentage = 50 },
-            new Lift { Id = 4, LiftType = LiftType.OverheadPress, Name = "Overhead Press", TrainingMax = 145, BbbPercentage = 50 }
-        );
-
         modelBuilder.Entity<Accessory>().HasData(
             new Accessory { Id = 1, Name = "Barbell Row", Description = "Bent-over barbell row" },
             new Accessory { Id = 2, Name = "Dumbbell Row", Description = "Single-arm dumbbell row" },

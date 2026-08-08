@@ -6,6 +6,9 @@ public class PplProgram
 {
     public int Id { get; set; }
 
+    /// <summary>Owner user ID (Identity).</summary>
+    public string? UserId { get; set; }
+
     [Required]
     [StringLength(100)]
     public string Name { get; set; } = string.Empty;
