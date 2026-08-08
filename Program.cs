@@ -73,20 +73,87 @@ builder.Services.AddAuthentication()
         options.ClientId     = builder.Configuration["Authentication:Google:ClientId"]     ?? "";
         options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "";
 
-        // Block disabled users immediately after Google validates the ticket
+        options.Events.OnRedirectToAuthorizationEndpoint = ctx =>
+        {
+            var log = ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Auth.Google");
+            log.LogInformation("[AUTH] Redirecting to Google authorization endpoint: {Uri}", ctx.RedirectUri);
+            ctx.Response.Redirect(ctx.RedirectUri);
+            return Task.CompletedTask;
+        };
+
         options.Events.OnTicketReceived = async ctx =>
         {
-            var userManager = ctx.HttpContext.RequestServices
-                .GetRequiredService<UserManager<ApplicationUser>>();
-            var email = ctx.Principal?.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value;
-            if (email is not null)
+            var log = ctx.HttpContext.RequestServices.GetRequiredService<ILoggerFactory>().CreateLogger("Auth.Google");
+            log.LogInformation("[AUTH] OnTicketReceived fired");
+
+            var userManager   = ctx.HttpContext.RequestServices.GetRequiredService<UserManager<ApplicationUser>>();
+            var signInManager = ctx.HttpContext.RequestServices.GetRequiredService<SignInManager<ApplicationUser>>();
+
+            var email       = ctx.Principal?.FindFirstValue(ClaimTypes.Email) ?? "";
+            var name        = ctx.Principal?.FindFirstValue(ClaimTypes.Name) ?? email;
+            var picture     = ctx.Principal?.FindFirstValue("picture") ?? "";
+            var providerKey = ctx.Principal?.FindFirstValue(ClaimTypes.NameIdentifier) ?? "";
+
+            log.LogInformation("[AUTH] Google claims — email: {Email}, name: {Name}, providerKey: {Key}",
+                string.IsNullOrEmpty(email) ? "(empty)" : email,
+                string.IsNullOrEmpty(name)  ? "(empty)" : name,
+                string.IsNullOrEmpty(providerKey) ? "(empty)" : providerKey);
+
+            if (string.IsNullOrEmpty(email))
             {
-                var user = await userManager.FindByEmailAsync(email);
-                if (user is not null && !user.IsEnabled)
-                {
-                    ctx.Fail("Your account has been disabled. Contact the administrator.");
-                }
+                log.LogWarning("[AUTH] No email in Google principal — aborting sign-in");
+                ctx.Fail("No email returned from Google.");
+                return;
             }
+
+            // Find or create the user
+            var user = await userManager.FindByEmailAsync(email);
+            log.LogInformation("[AUTH] FindByEmail result: {Found}", user is null ? "not found — will create" : $"found id={user.Id}");
+            if (user is null)
+            {
+                log.LogInformation("[AUTH] Creating new user for email: {Email}", email);
+                user = new ApplicationUser
+                {
+                    UserName          = email,
+                    Email             = email,
+                    DisplayName       = name,
+                    ProfilePictureUrl = picture,
+                    EmailConfirmed    = true,
+                    IsEnabled         = true
+                };
+                var createResult = await userManager.CreateAsync(user);
+                if (!createResult.Succeeded)
+                {
+                    var errors = string.Join(", ", createResult.Errors.Select(e => e.Description));
+                    log.LogError("[AUTH] Failed to create user: {Errors}", errors);
+                    ctx.Fail("Failed to create user account.");
+                    return;
+                }
+                log.LogInformation("[AUTH] User created successfully, id: {Id}", user.Id);
+                var loginResult = await userManager.AddLoginAsync(user, new UserLoginInfo("Google", providerKey, "Google"));
+                log.LogInformation("[AUTH] AddLoginAsync succeeded: {Ok}", loginResult.Succeeded);
+            }
+            else if (!user.IsEnabled)
+            {
+                log.LogWarning("[AUTH] User {Email} is disabled — sign-in refused", email);
+                ctx.Fail("Your account has been disabled. Contact the administrator.");
+                return;
+            }
+            else
+            {
+                log.LogInformation("[AUTH] Existing user found, IsEnabled: {Enabled}", user.IsEnabled);
+            }
+
+            // Sign in with Identity (issues the application cookie)
+            log.LogInformation("[AUTH] Calling SignInAsync for user: {Email}", email);
+            await signInManager.SignInAsync(user, isPersistent: true);
+            log.LogInformation("[AUTH] SignInAsync completed");
+
+            // We've handled this — redirect to the return URL
+            var redirectUri = ctx.Properties?.RedirectUri ?? "/";
+            log.LogInformation("[AUTH] Calling HandleResponse and redirecting to: {Uri}", redirectUri);
+            ctx.HandleResponse();
+            ctx.Response.Redirect(redirectUri);
         };
     });
 
@@ -164,78 +231,16 @@ app.MapRazorComponents<App>()
 
 // Auth endpoints
 
-// 1. Kick off the Google OAuth flow, storing the final destination in RedirectUri → /auth/callback
-app.MapGet("/challenge/{provider}", async (string provider, string? returnUrl, HttpContext ctx) =>
+// Kick off the Google OAuth flow — sign-in completion is handled inside OnTicketReceived
+app.MapGet("/challenge/{provider}", async (string provider, string? returnUrl, HttpContext ctx, ILoggerFactory lf) =>
 {
+    var log = lf.CreateLogger("Auth.Challenge");
     returnUrl ??= "/";
-    var props = new AuthenticationProperties
-    {
-        RedirectUri = $"/auth/callback?returnUrl={Uri.EscapeDataString(returnUrl)}"
-    };
+    log.LogInformation("[AUTH] /challenge/{Provider} called, returnUrl={ReturnUrl}, scheme={Scheme}",
+        provider, returnUrl, ctx.Request.Scheme);
+    var props = new AuthenticationProperties { RedirectUri = returnUrl };
     await ctx.ChallengeAsync(provider, props);
-});
-
-// 2. Google redirects here after the user authenticates.
-//    Complete the Identity sign-in and redirect to the original destination.
-app.MapGet("/auth/callback", async (
-    string? returnUrl,
-    HttpContext ctx,
-    SignInManager<ApplicationUser> signInManager,
-    UserManager<ApplicationUser> userManager) =>
-{
-    returnUrl = string.IsNullOrEmpty(returnUrl) ? "/" : returnUrl;
-
-    // Read the external login info that Google just provided
-    var info = await signInManager.GetExternalLoginInfoAsync();
-    if (info is null)
-    {
-        ctx.Response.Redirect("/login");
-        return;
-    }
-
-    // Try to sign in with the existing external login link
-    var existingUser = await userManager.FindByLoginAsync(info.LoginProvider, info.ProviderKey);
-    if (existingUser is not null && !existingUser.IsEnabled)
-    {
-        ctx.Response.Redirect("/login?error=disabled");
-        return;
-    }
-
-    var result = await signInManager.ExternalLoginSignInAsync(
-        info.LoginProvider, info.ProviderKey, isPersistent: true, bypassTwoFactor: true);
-
-    if (result.Succeeded)
-    {
-        ctx.Response.Redirect(returnUrl);
-        return;
-    }
-
-    // First time this Google account has logged in — create the user
-    var email = info.Principal.FindFirstValue(System.Security.Claims.ClaimTypes.Email) ?? "";
-    var name  = info.Principal.FindFirstValue(System.Security.Claims.ClaimTypes.Name) ?? email;
-    var picture = info.Principal.FindFirstValue("picture") ?? "";
-
-    var user = new ApplicationUser
-    {
-        UserName      = email,
-        Email         = email,
-        DisplayName   = name,
-        ProfilePictureUrl = picture,
-        EmailConfirmed = true,
-        IsEnabled      = true
-    };
-
-    var createResult = await userManager.CreateAsync(user);
-    if (createResult.Succeeded)
-    {
-        await userManager.AddLoginAsync(user, info);
-        await signInManager.SignInAsync(user, isPersistent: true);
-        ctx.Response.Redirect(returnUrl);
-        return;
-    }
-
-    // Creation failed — send back to login
-    ctx.Response.Redirect("/login");
+    log.LogInformation("[AUTH] ChallengeAsync issued, response status: {Status}", ctx.Response.StatusCode);
 });
 
 app.MapGet("/logout", async (SignInManager<ApplicationUser> signInManager, HttpContext ctx) =>
