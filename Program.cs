@@ -5,25 +5,39 @@ using FiveThreeOneTracker.Services;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
+using Npgsql.EntityFrameworkCore.PostgreSQL;
 
 const string AdminRole  = "Admin";
 
 var builder = WebApplication.CreateBuilder(args);
 
+// PORT — Digital Ocean injects a PORT env var; bind to it so traffic is routed correctly.
+var port = Environment.GetEnvironmentVariable("PORT") ?? "8080";
+builder.WebHost.UseUrls($"http://0.0.0.0:{port}");
+
 var adminEmail = builder.Configuration["App:AdminEmail"] ?? "";
 
-// Database — resolve to an absolute path so deployments never overwrite the file.
-var dbPath = Environment.GetEnvironmentVariable("DB_PATH")
-    ?? Path.Combine(builder.Environment.ContentRootPath, "fivethreeone.db");
-
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection")
-    ?? $"Data Source={dbPath}";
-
-if (connectionString.Contains("Data Source=fivethreeone.db"))
-    connectionString = $"Data Source={dbPath}";
+// Database — use PostgreSQL when DATABASE_URL is set (production / Digital Ocean),
+// otherwise fall back to SQLite for local development.
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
-    options.UseSqlite(connectionString));
+{
+    if (!string.IsNullOrEmpty(databaseUrl))
+    {
+        var pgConnection = FiveThreeOneTracker.Data.AppDbContextFactory.ConvertDatabaseUrl(databaseUrl);
+        options.UseNpgsql(pgConnection);
+    }
+    else
+    {
+        var dbPath = Path.Combine(builder.Environment.ContentRootPath, "fivethreeone.db");
+        var sqliteConnection = builder.Configuration.GetConnectionString("DefaultConnection")
+            ?? $"Data Source={dbPath}";
+        if (sqliteConnection == "Data Source=fivethreeone.db")
+            sqliteConnection = $"Data Source={dbPath}";
+        options.UseSqlite(sqliteConnection);
+    }
+});
 
 // Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
