@@ -2,6 +2,7 @@ using FiveThreeOneTracker.Components;
 using FiveThreeOneTracker.Data;
 using FiveThreeOneTracker.Models;
 using FiveThreeOneTracker.Services;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
@@ -143,6 +144,16 @@ app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
 // Auth endpoints
+app.MapGet("/challenge/{provider}", async (string provider, string? returnUrl, HttpContext ctx) =>
+{
+    returnUrl ??= "/";
+    var props = new Microsoft.AspNetCore.Authentication.AuthenticationProperties
+    {
+        RedirectUri = returnUrl
+    };
+    await ctx.ChallengeAsync(provider, props);
+});
+
 app.MapGet("/logout", async (SignInManager<ApplicationUser> signInManager, HttpContext ctx) =>
 {
     await signInManager.SignOutAsync();
