@@ -1,11 +1,15 @@
 using FiveThreeOneTracker.Models;
+using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 
 namespace FiveThreeOneTracker.Data;
 
-public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<ApplicationUser>(options)
+public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbContext<ApplicationUser>(options), IDataProtectionKeyContext
 {
+    // Data Protection keys — persisted to DB so keys survive container restarts
+    public DbSet<DataProtectionKey> DataProtectionKeys => Set<DataProtectionKey>();
+
     // ── 5/3/1 ────────────────────────────────────────────────────────────────
     public DbSet<Lift> Lifts => Set<Lift>();
     public DbSet<Cycle> Cycles => Set<Cycle>();

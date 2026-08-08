@@ -3,6 +3,7 @@ using FiveThreeOneTracker.Data;
 using FiveThreeOneTracker.Models;
 using FiveThreeOneTracker.Services;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
@@ -49,6 +50,12 @@ builder.Services.AddDbContext<AppDbContext>(options =>
         options.UseSqlite(sqliteConnection);
     }
 });
+
+// Data Protection \u2014 persist keys to DB so they survive container restarts on DO App Platform.
+// Without this, every redeploy generates new keys and invalidates all auth cookies/OAuth state.
+builder.Services.AddDataProtection()
+    .PersistKeysToDbContext<AppDbContext>()
+    .SetApplicationName("FiveThreeOneTracker");
 
 // Identity
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>(options =>
