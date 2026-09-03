@@ -12,6 +12,7 @@ public interface IWorkoutService
     Task CompleteWorkoutAsync(int workoutId);
     Task ReopenWorkoutAsync(int workoutId);
     Task<Workout?> GetNextIncompleteWorkoutAsync();
+    Task UpdateWorkoutBarAsync(int workoutId, int? barId);
 }
 
 public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : IWorkoutService
@@ -25,6 +26,7 @@ public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : 
                 .ThenInclude(s => s.Lift)
             .Include(w => w.WorkoutAccessories)
                 .ThenInclude(wa => wa.Accessory)
+            .Include(w => w.Bar)
             .FirstOrDefaultAsync(w => w.Id == workoutId);
     }
 
@@ -85,5 +87,21 @@ public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : 
             .ThenBy(w => w.Week.WeekNumber)
             .ThenBy(w => w.MainLiftType)
             .FirstOrDefaultAsync();
+    }
+
+    public async Task UpdateWorkoutBarAsync(int workoutId, int? barId)
+    {
+        var workout = await db.Workouts.FindAsync(workoutId);
+        if (workout is null) return;
+
+        if (barId.HasValue)
+        {
+            var userId = await userContext.GetUserIdAsync();
+            var barOwnedByUser = await db.Bars.AnyAsync(b => b.Id == barId.Value && b.UserId == userId);
+            if (!barOwnedByUser) return;
+        }
+
+        workout.BarId = barId;
+        await db.SaveChangesAsync();
     }
 }

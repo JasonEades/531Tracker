@@ -4,6 +4,21 @@
     margin-left: auto;
 }
 
+/* User strip shown in the mobile/tablet top bar, to the right of the brand */
+.top-bar-user {
+    margin-left: auto;
+}
+
+.top-bar-user :deep(.nav-user-strip) {
+    padding: 0;
+    border-bottom: none;
+    margin-bottom: 0;
+}
+
+.top-bar-user :deep(.nav-user-name) {
+    max-width: 160px;
+}
+
 @media (min-width: 768px) {
     .sidebar-inline {
         display: flex;

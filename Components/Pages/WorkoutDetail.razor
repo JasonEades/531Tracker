@@ -50,6 +50,26 @@ else
         </div>
     </div>
 
+    @* ── Bar Selector ─────────────────────────────────── *@
+    <div class="bar-selector-row animate-fade-in">
+        @if (showBarPicker)
+        {
+            <select class="form-control" style="max-width:260px" value="@(workout.BarId ?? 0)" @onchange="OnBarSelected">
+                <option value="0">Default — @(defaultBar?.Name ?? "Bar") (@FormatPlate(defaultBar?.Weight ?? 45) lbs)</option>
+                @foreach (var bar in bars.Where(b => !b.IsDefault))
+                {
+                    <option value="@bar.Id">@bar.Name (@FormatPlate(bar.Weight) lbs)</option>
+                }
+            </select>
+            <button class="btn btn-sm btn-outline" @onclick="() => showBarPicker = false">Done</button>
+        }
+        else
+        {
+            <span class="bar-selector-label">🏋️ Bar: <strong>@CurrentBarName</strong> (@FormatPlate(CurrentBarWeight) lbs)</span>
+            <button class="btn btn-sm btn-outline" @onclick="() => showBarPicker = true">Change Bar</button>
+        }
+    </div>
+
     @* ── Progress bar ─────────────────────────────────── *@
     <div class="sets-progress mb-3 animate-fade-in">
         <div class="flex items-center justify-between mb-1">
@@ -401,6 +421,13 @@ else
     private int SetsPct   => SetsTotal > 0 ? (int)(SetsDone * 100.0 / SetsTotal) : 0;
     private Dictionary<double, List<PlateLoadingResult>> plateMap = [];
 
+    private List<Bar> bars = [];
+    private Bar? defaultBar;
+    private bool showBarPicker;
+
+    private string CurrentBarName => workout?.Bar?.Name ?? defaultBar?.Name ?? "Bar";
+    private double CurrentBarWeight => workout?.Bar?.Weight ?? defaultBar?.Weight ?? 45;
+
     private List<Accessory> availableAccessories = [];
     private bool showAddAccessory;
     private int selectedAccessoryId;
@@ -411,6 +438,8 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        bars = await PlateCalc.GetBarsAsync();
+        defaultBar = bars.FirstOrDefault(b => b.IsDefault) ?? bars.FirstOrDefault();
         await LoadWorkout();
         availableAccessories = await AccessoryService.GetAllAccessoriesAsync();
         loading = false;
@@ -430,7 +459,18 @@ else
                 .Select(s => s.PrescribedWeight).Distinct();
             plateMap = [];
             foreach (var w in allWeights)
-                plateMap[w] = await PlateCalc.CalculatePlates(w);
+                plateMap[w] = await PlateCalc.CalculatePlates(w, CurrentBarWeight);
+        }
+    }
+
+    private async Task OnBarSelected(ChangeEventArgs e)
+    {
+        if (workout is null) return;
+        if (int.TryParse(e.Value?.ToString(), out var barId))
+        {
+            await WorkoutService.UpdateWorkoutBarAsync(WorkoutId, barId == 0 ? null : barId);
+            await LoadWorkout();
+            showBarPicker = false;
         }
     }
 

@@ -3,6 +3,7 @@ using FiveThreeOneTracker.Data;
 using FiveThreeOneTracker.Models;
 using FiveThreeOneTracker.Services;
 using Microsoft.AspNetCore.Authentication;
+using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.AspNetCore.Identity;
@@ -195,7 +196,16 @@ builder.Services.AddScoped<IPplSessionService, PplSessionService>();
 builder.Services.AddScoped<IPplProgressionService, PplProgressionService>();
 
 builder.Services.AddRazorComponents()
-    .AddInteractiveServerComponents();
+    .AddInteractiveServerComponents(options =>
+    {
+        // DetailedErrors surfaces the real exception message/stack in circuit logs instead
+        // of the generic "An unhandled error has occurred" message. Gate behind an env var
+        // so it can be toggled on in production temporarily for diagnosis without a code change.
+        options.DetailedErrors = builder.Environment.IsDevelopment()
+            || Environment.GetEnvironmentVariable("BLAZOR_DETAILED_ERRORS") == "true";
+    });
+
+builder.Services.AddScoped<CircuitHandler, LoggingCircuitHandler>();
 
 builder.Services.AddMudServices();
 
@@ -260,4 +270,19 @@ app.MapGet("/logout", async (SignInManager<ApplicationUser> signInManager, HttpC
     ctx.Response.Redirect("/login");
 });
 
+// Client-side error reporting — mobile browsers have no accessible console, so JS errors
+// (window.onerror / unhandledrejection) are POSTed here and logged server-side.
+app.MapPost("/api/client-log", (ClientLogEntry entry, HttpContext ctx, ILoggerFactory lf) =>
+{
+    var log = lf.CreateLogger("Client.Error");
+    var ua = ctx.Request.Headers.UserAgent.ToString();
+    log.LogError(
+        "[CLIENT] {Message} | Source={Source} Line={Line}:{Col} | Url={Url} | UA={UserAgent} | Stack={Stack}",
+        entry.Message, entry.Source, entry.Line, entry.Column, entry.Url, ua, entry.Stack);
+    return Results.Ok();
+});
+
 app.Run();
+
+record ClientLogEntry(string Message, string? Source, int? Line, int? Column, string? Url, string? Stack);
+

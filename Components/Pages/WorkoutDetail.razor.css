@@ -36,6 +36,23 @@
     flex-shrink: 0;
 }
 
+.bar-selector-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-4);
+    flex-wrap: wrap;
+}
+
+.bar-selector-label {
+    font-size: var(--text-sm);
+    color: var(--color-text-muted);
+}
+
+.bar-selector-label strong {
+    color: var(--color-text);
+}
+
 .sets-progress {
     background: var(--color-surface);
     border: 1px solid var(--color-border);

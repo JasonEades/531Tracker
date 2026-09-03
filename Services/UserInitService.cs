@@ -65,7 +65,7 @@ public class UserInitService(AppDbContext db) : IUserInitService
             }
             else
             {
-                var equipment = new UserEquipment { UserId = userId, BarWeight = 45 };
+                var equipment = new UserEquipment { UserId = userId };
                 equipment.Plates.Add(new PlateInventory { Weight = 45,  PairsAvailable = 2 });
                 equipment.Plates.Add(new PlateInventory { Weight = 35,  PairsAvailable = 2 });
                 equipment.Plates.Add(new PlateInventory { Weight = 25,  PairsAvailable = 2 });
@@ -73,6 +73,21 @@ public class UserInitService(AppDbContext db) : IUserInitService
                 equipment.Plates.Add(new PlateInventory { Weight = 5,   PairsAvailable = 4 });
                 equipment.Plates.Add(new PlateInventory { Weight = 2.5, PairsAvailable = 4 });
                 db.UserEquipment.Add(equipment);
+            }
+        }
+
+        var hasBars = await db.Bars.AnyAsync(b => b.UserId == userId);
+        if (!hasBars)
+        {
+            var orphanedBars = await db.Bars.Where(b => b.UserId == null).ToListAsync();
+            if (orphanedBars.Count > 0)
+            {
+                foreach (var bar in orphanedBars)
+                    bar.UserId = userId;
+            }
+            else
+            {
+                db.Bars.Add(new Bar { UserId = userId, Name = "Standard Olympic", Weight = 45, IsDefault = true });
             }
         }
 

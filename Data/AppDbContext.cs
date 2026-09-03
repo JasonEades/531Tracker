@@ -21,6 +21,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<AccessoryHistory> AccessoryHistory => Set<AccessoryHistory>();
     public DbSet<UserEquipment> UserEquipment => Set<UserEquipment>();
     public DbSet<PlateInventory> PlateInventory => Set<PlateInventory>();
+    public DbSet<Bar> Bars => Set<Bar>();
 
     // ── PPL ──────────────────────────────────────────────────────────────────
     public DbSet<PplProgram> PplPrograms => Set<PplProgram>();
@@ -71,6 +72,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
                   .WithOne(wa => wa.Workout)
                   .HasForeignKey(wa => wa.WorkoutId)
                   .OnDelete(DeleteBehavior.Cascade);
+            entity.HasOne(w => w.Bar)
+                  .WithMany()
+                  .HasForeignKey(w => w.BarId)
+                  .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<WorkoutSet>(entity =>
@@ -99,6 +104,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
                   .WithOne(p => p.UserEquipment)
                   .HasForeignKey(p => p.UserEquipmentId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<Bar>(entity =>
+        {
+            entity.HasIndex(e => e.UserId);
         });
 
         // ── PPL relationships ─────────────────────────────────────────────────

@@ -16,21 +16,61 @@
 }
 else if (equipment is not null)
 {
-    @* ── Bar Weight ───────────────────────────────────────── *@
+    @* ── Bars ─────────────────────────────────────────────── *@
     <div class="settings-section animate-fade-in">
-        <div class="settings-section-label">Bar Weight</div>
+        <div class="settings-section-label">Your Bars</div>
+        <p class="text-muted mb-3" style="font-size:var(--text-sm)">Add every bar you train with. The <strong style="color:var(--color-text-2)">default</strong> bar is used unless a workout overrides it.</p>
         <div class="card">
-            <div class="card-body">
-                <div class="form-group mb-0">
-                    <label class="form-label">Select Bar</label>
-                    <select class="form-control" value="@equipment.BarWeight"
-                            @onchange="OnBarWeightChanged">
-                        <option value="45">45 lbs — Standard Olympic</option>
-                        <option value="35">35 lbs — Women's Olympic</option>
-                        <option value="33">33 lbs — 15 kg</option>
-                        <option value="25">25 lbs — Short Bar</option>
-                        <option value="15">15 lbs — EZ Curl</option>
-                    </select>
+            <div class="card-body" style="padding:0">
+                @foreach (var bar in bars)
+                {
+                    <div class="plate-row">
+                        <div class="plate-visual-wrap">
+                            <span class="plate-visual-badge" style="background:rgba(94,124,255,0.15);color:#5E7CFF;border-color:#5E7CFF;">
+                                @FormatPlateWeight(bar.Weight)
+                            </span>
+                            @if (editingBarId == bar.Id)
+                            {
+                                <div style="display:flex;gap:var(--space-2);flex:1">
+                                    <input class="form-control" style="flex:1" @bind="editBarName" placeholder="Bar name" />
+                                    <input class="form-control" type="number" style="width:90px" @bind="editBarWeight" step="0.5" />
+                                </div>
+                            }
+                            else
+                            {
+                                <div>
+                                    <div class="plate-weight-label">@bar.Name</div>
+                                    <div class="text-muted" style="font-size:var(--text-xs)">@FormatPlateWeight(bar.Weight) lbs @(bar.IsDefault ? "· Default" : "")</div>
+                                </div>
+                            }
+                        </div>
+                        <div style="display:flex;gap:var(--space-2);align-items:center">
+                            @if (editingBarId == bar.Id)
+                            {
+                                <button class="btn btn-sm btn-primary" @onclick="SaveBarEdit">Save</button>
+                                <button class="btn btn-sm btn-outline" @onclick="CancelBarEdit">Cancel</button>
+                            }
+                            else
+                            {
+                                @if (!bar.IsDefault)
+                                {
+                                    <button class="btn btn-sm btn-outline" @onclick="() => SetDefaultBar(bar.Id)">Set Default</button>
+                                }
+                                <button class="btn btn-sm btn-outline" @onclick="() => StartBarEdit(bar)">Edit</button>
+                                @if (bars.Count > 1)
+                                {
+                                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteBar(bar.Id)">✕</button>
+                                }
+                            }
+                        </div>
+                    </div>
+                }
+                <div class="plate-row">
+                    <div class="plate-visual-wrap" style="flex:1">
+                        <input class="form-control" style="flex:1" @bind="newBarName" placeholder="New bar name (e.g. Trap Bar)" />
+                        <input class="form-control" type="number" style="width:100px" @bind="newBarWeight" step="0.5" placeholder="Weight" />
+                    </div>
+                    <button class="btn btn-sm btn-primary" @onclick="AddBar" disabled="@(string.IsNullOrWhiteSpace(newBarName))">+ Add Bar</button>
                 </div>
             </div>
         </div>
@@ -71,6 +111,15 @@ else if (equipment is not null)
             <div class="card-body">
                 <div class="calc-input-row">
                     <div class="form-group mb-0" style="flex:1">
+                        <label class="form-label">Bar</label>
+                        <select class="form-control" @bind="testBarId">
+                            @foreach (var bar in bars)
+                            {
+                                <option value="@bar.Id">@bar.Name (@FormatPlateWeight(bar.Weight) lbs)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="form-group mb-0" style="flex:1">
                         <label class="form-label">Target Weight (lbs)</label>
                         <input type="number" class="form-control" inputmode="numeric"
                                @bind="testWeight" step="5" />
@@ -80,11 +129,11 @@ else if (equipment is not null)
 
                 @if (testResults is not null)
                 {
-                    @if (testWeight <= equipment.BarWeight)
+                    @if (testWeight <= TestBarWeight)
                     {
                         <div class="calc-result mt-3">
                             <span class="calc-result-label">Just the bar</span>
-                            <span class="text-muted" style="font-size:var(--text-sm)">@equipment.BarWeight lbs — no plates needed</span>
+                            <span class="text-muted" style="font-size:var(--text-sm)">@TestBarWeight lbs — no plates needed</span>
                         </div>
                     }
                     else if (testResults.Count == 0)
@@ -108,7 +157,7 @@ else if (equipment is not null)
                                         }
                                     }
                                 </div>
-                                <div class="calc-bar-center">│ @equipment.BarWeight lb bar │</div>
+                                <div class="calc-bar-center">│ @TestBarWeight lb bar │</div>
                                 <div class="calc-plates-right">
                                     @foreach (var result in testResults)
                                     {
@@ -146,28 +195,31 @@ else if (equipment is not null)
 
 @code {
     private UserEquipment? equipment;
+    private List<Bar> bars = [];
     private bool loading = true;
     private double testWeight = 135;
+    private int testBarId;
     private List<PlateLoadingResult>? testResults;
 
-    private double ActualTotal => equipment is null || testResults is null
+    private int? editingBarId;
+    private string editBarName = "";
+    private double editBarWeight;
+
+    private string newBarName = "";
+    private double newBarWeight = 45;
+
+    private double TestBarWeight => bars.FirstOrDefault(b => b.Id == testBarId)?.Weight ?? 45;
+
+    private double ActualTotal => testResults is null
         ? 0
-        : equipment.BarWeight + testResults.Sum(r => r.PlateWeight * r.CountPerSide * 2);
+        : TestBarWeight + testResults.Sum(r => r.PlateWeight * r.CountPerSide * 2);
 
     protected override async Task OnInitializedAsync()
     {
         equipment = await PlateCalc.GetEquipmentAsync();
+        bars = await PlateCalc.GetBarsAsync();
+        testBarId = bars.FirstOrDefault(b => b.IsDefault)?.Id ?? bars.FirstOrDefault()?.Id ?? 0;
         loading = false;
-    }
-
-    private async Task OnBarWeightChanged(ChangeEventArgs e)
-    {
-        if (double.TryParse(e.Value?.ToString(), out var weight))
-        {
-            await PlateCalc.UpdateBarWeightAsync(weight);
-            equipment    = await PlateCalc.GetEquipmentAsync();
-            testResults  = null;
-        }
     }
 
     private async Task AdjustPlate(int plateId, int newPairs)
@@ -177,9 +229,54 @@ else if (equipment is not null)
         testResults = null;
     }
 
+    private async Task AddBar()
+    {
+        if (string.IsNullOrWhiteSpace(newBarName)) return;
+        await PlateCalc.AddBarAsync(newBarName.Trim(), newBarWeight);
+        bars = await PlateCalc.GetBarsAsync();
+        newBarName = "";
+        newBarWeight = 45;
+    }
+
+    private void StartBarEdit(Bar bar)
+    {
+        editingBarId = bar.Id;
+        editBarName = bar.Name;
+        editBarWeight = bar.Weight;
+    }
+
+    private void CancelBarEdit()
+    {
+        editingBarId = null;
+    }
+
+    private async Task SaveBarEdit()
+    {
+        if (editingBarId is int id && !string.IsNullOrWhiteSpace(editBarName))
+        {
+            await PlateCalc.UpdateBarAsync(id, editBarName.Trim(), editBarWeight);
+            bars = await PlateCalc.GetBarsAsync();
+        }
+        editingBarId = null;
+    }
+
+    private async Task DeleteBar(int barId)
+    {
+        await PlateCalc.DeleteBarAsync(barId);
+        bars = await PlateCalc.GetBarsAsync();
+        if (testBarId == barId)
+            testBarId = bars.FirstOrDefault(b => b.IsDefault)?.Id ?? bars.FirstOrDefault()?.Id ?? 0;
+    }
+
+    private async Task SetDefaultBar(int barId)
+    {
+        await PlateCalc.SetDefaultBarAsync(barId);
+        bars = await PlateCalc.GetBarsAsync();
+    }
+
     private async Task TestCalculate()
     {
-        testResults = await PlateCalc.CalculatePlates(testWeight);
+        testResults = await PlateCalc.CalculatePlates(testWeight, TestBarWeight);
     }
 
     private static string FormatPlateWeight(double w) =>

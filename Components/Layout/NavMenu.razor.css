@@ -28,6 +28,12 @@
     margin-bottom: 4px;
 }
 
+/* The bottom tab bar (mobile) only shows nav links — the user strip
+   is shown in the top bar instead so it doesn't crowd the tab icons. */
+.bottom-tab-bar .nav-user-strip {
+    display: none;
+}
+
 .nav-avatar {
     width: 28px;
     height: 28px;
