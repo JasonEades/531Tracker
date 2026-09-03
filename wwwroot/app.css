@@ -243,6 +243,24 @@ input, select, textarea, button { font-family: inherit; }
     z-index: var(--z-nav);
     display: flex;
     align-items: stretch;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+}
+
+.bottom-tab-bar::-webkit-scrollbar {
+    display: none;
+}
+
+.bottom-tab-bar .nav-menu {
+    width: max-content;
+    min-width: 100%;
+}
+
+.bottom-tab-bar .nav-item {
+    flex: 0 0 auto;
+    min-width: 68px;
 }
 
 .nav-menu {

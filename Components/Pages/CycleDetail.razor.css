@@ -54,7 +54,11 @@
 
 /* Week sections */
 .week-section {
-    /* structural wrapper */
+    margin-top: var(--space-5);
+}
+
+.week-section:first-child {
+    margin-top: 0;
 }
 
 .week-section-header {
