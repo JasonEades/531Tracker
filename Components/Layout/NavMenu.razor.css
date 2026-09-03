@@ -23,9 +23,10 @@
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 8px 12px;
+    padding: 10px 12px;
     border-bottom: 1px solid var(--color-border);
     margin-bottom: 4px;
+    min-width: 0;
 }
 
 /* The bottom tab bar (mobile) only shows nav links — the user strip
@@ -51,10 +52,11 @@
 }
 
 .nav-user-name {
-    font-size: 0.75rem;
+    font-size: 0.8rem;
     font-weight: 600;
     color: var(--color-text);
-    flex: 1;
+    flex: 1 1 auto;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -64,13 +66,16 @@
     color: var(--color-text-muted);
     display: flex;
     align-items: center;
+    justify-content: center;
     text-decoration: none;
     flex-shrink: 0;
-    padding: 4px;
+    width: 24px;
+    height: 24px;
     border-radius: 4px;
-    transition: color 0.15s;
+    transition: color 0.15s, background-color 0.15s;
 }
 
 .nav-logout-btn:hover {
     color: var(--color-text);
+    background-color: var(--color-surface-2);
 }

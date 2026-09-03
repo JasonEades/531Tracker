@@ -11,7 +11,7 @@
             {
                 <div class="nav-avatar nav-avatar-placeholder">👤</div>
             }
-            <span class="nav-user-name">@(context.User.Identity?.Name ?? context.User.FindFirst("name")?.Value ?? "You")</span>
+            <span class="nav-user-name">@GetDisplayName(context.User)</span>
             <a href="/logout" class="nav-logout-btn" title="Sign out">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16">
                     <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
@@ -22,3 +22,32 @@
         </div>
     </Authorized>
 </AuthorizeView>
+
+@code {
+    private static string GetDisplayName(System.Security.Claims.ClaimsPrincipal user)
+    {
+        // Prefer an explicit "given_name" (Google) so we show a friendly first name
+        // instead of the email address, which some IdPs use as the Name claim.
+        var givenName = user.FindFirst("given_name")?.Value;
+        if (!string.IsNullOrWhiteSpace(givenName))
+        {
+            return givenName;
+        }
+
+        var name = user.FindFirst("name")?.Value ?? user.Identity?.Name;
+        if (!string.IsNullOrWhiteSpace(name) && !name.Contains('@'))
+        {
+            return name;
+        }
+
+        // Fall back to the portion of the email before the @ so we never show
+        // the raw email address in the UI.
+        var email = user.FindFirst(System.Security.Claims.ClaimTypes.Email)?.Value ?? name;
+        if (!string.IsNullOrWhiteSpace(email) && email.Contains('@'))
+        {
+            return email[..email.IndexOf('@')];
+        }
+
+        return "You";
+    }
+}
