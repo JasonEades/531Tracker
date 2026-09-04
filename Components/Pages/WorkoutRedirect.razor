@@ -1,17 +1,17 @@
 @page "/workout"
 @attribute [Authorize]
 @rendermode InteractiveServer
-@inject IWorkoutService WorkoutService
+@inject ICycleService CycleService
 @inject NavigationManager Nav
 
-@* Redirect page: navigates to the next incomplete workout, or cycles list if none. *@
+@* Redirect page: navigates to the current cycle, or cycles list if none exists. *@
 
 @code {
     protected override async Task OnInitializedAsync()
     {
-        var next = await WorkoutService.GetNextIncompleteWorkoutAsync();
-        if (next is not null)
-            Nav.NavigateTo($"/workout/{next.Id}", replace: true);
+        var currentCycle = await CycleService.GetCurrentCycleAsync();
+        if (currentCycle is not null)
+            Nav.NavigateTo($"/cycles/{currentCycle.Id}", replace: true);
         else
             Nav.NavigateTo("/cycles", replace: true);
     }
