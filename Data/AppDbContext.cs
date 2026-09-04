@@ -22,6 +22,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<UserEquipment> UserEquipment => Set<UserEquipment>();
     public DbSet<PlateInventory> PlateInventory => Set<PlateInventory>();
     public DbSet<Bar> Bars => Set<Bar>();
+    public DbSet<UserProtocol> UserProtocols => Set<UserProtocol>();
 
     // ── PPL ──────────────────────────────────────────────────────────────────
     public DbSet<PplProgram> PplPrograms => Set<PplProgram>();
@@ -111,6 +112,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         modelBuilder.Entity<Bar>(entity =>
         {
             entity.HasIndex(e => e.UserId);
+        });
+
+        modelBuilder.Entity<UserProtocol>(entity =>
+        {
+            entity.HasIndex(e => e.UserId).IsUnique();
         });
 
         // ── PPL relationships ─────────────────────────────────────────────────

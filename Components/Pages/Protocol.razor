@@ -1,0 +1,89 @@
+@page "/protocol"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Markdig
+@inject IProtocolService ProtocolService
+
+<PageTitle>Protocol — 5/3/1 Tracker</PageTitle>
+
+<div class="page-header animate-fade-in">
+    <div>
+        <h1>Protocol</h1>
+        <p class="page-subtitle">Write and maintain your personal workout protocol in Markdown.</p>
+    </div>
+    <div class="flex gap-2">
+        <button class="btn @(isPreview ? "btn-outline" : "btn-primary")" @onclick="() => isPreview = false">Edit</button>
+        <button class="btn @(isPreview ? "btn-primary" : "btn-outline")" @onclick="() => isPreview = true">Preview</button>
+    </div>
+</div>
+
+@if (loading)
+{
+    <div class="loading"><div class="spinner"></div></div>
+}
+else
+{
+    <div class="card animate-fade-in">
+        <div class="card-body">
+            @if (isPreview)
+            {
+                @if (string.IsNullOrWhiteSpace(markdown))
+                {
+                    <p class="text-muted">Your protocol is empty. Select Edit to start writing.</p>
+                }
+                else
+                {
+                    <div class="protocol-preview">@((MarkupString)RenderedMarkdown)</div>
+                }
+            }
+            else
+            {
+                <textarea class="form-control protocol-editor" @bind="markdown"
+                          placeholder="# My Workout Protocol&#10;&#10;Add your training principles, warm-up instructions, or weekly structure here..."></textarea>
+                <div class="flex items-center justify-between mt-3">
+                    <span class="text-muted" style="font-size:var(--text-sm)">
+                        Markdown is supported. Raw HTML is disabled.
+                    </span>
+                    <button class="btn btn-primary" @onclick="Save" disabled="@saving">
+                        @(saving ? "Saving..." : "Save Protocol")
+                    </button>
+                </div>
+                @if (saved)
+                {
+                    <p class="text-success mt-2" style="font-size:var(--text-sm)">Protocol saved.</p>
+                }
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly MarkdownPipeline MarkdownPipeline = new MarkdownPipelineBuilder()
+        .UseAdvancedExtensions()
+        .DisableHtml()
+        .Build();
+
+    private string markdown = string.Empty;
+    private bool loading = true;
+    private bool saving;
+    private bool saved;
+    private bool isPreview;
+
+    private string RenderedMarkdown => Markdown.ToHtml(markdown, MarkdownPipeline);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var protocol = await ProtocolService.GetAsync();
+        markdown = protocol.Markdown;
+        loading = false;
+    }
+
+    private async Task Save()
+    {
+        saving = true;
+        saved = false;
+        await ProtocolService.SaveAsync(markdown);
+        saving = false;
+        saved = true;
+    }
+}

@@ -189,6 +189,7 @@ builder.Services.AddScoped<IBbbMappingService, BbbMappingService>();
 builder.Services.AddScoped<IWeightCalculator, WeightCalculator>();
 builder.Services.AddScoped<ICycleService, CycleService>();
 builder.Services.AddScoped<IWorkoutService, WorkoutService>();
+builder.Services.AddScoped<IProtocolService, ProtocolService>();
 builder.Services.AddScoped<IAccessoryService, AccessoryService>();
 builder.Services.AddScoped<ILiftService, LiftService>();
 builder.Services.AddScoped<IPlateCalculatorService, PlateCalculatorService>();
