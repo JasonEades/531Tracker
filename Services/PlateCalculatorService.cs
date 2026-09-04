@@ -84,7 +84,10 @@ public class PlateCalculatorService(AppDbContext db, ICurrentUserService userCon
 
     public async Task UpdatePlateAsync(int plateId, int pairs)
     {
-        var plate = await db.PlateInventory.FindAsync(plateId);
+        var userId = await userContext.GetUserIdAsync();
+        var plate = await db.PlateInventory
+            .Include(p => p.UserEquipment)
+            .FirstOrDefaultAsync(p => p.Id == plateId && p.UserEquipment.UserId == userId);
         if (plate is not null)
         {
             plate.PairsAvailable = Math.Max(0, pairs);
@@ -126,7 +129,9 @@ public class PlateCalculatorService(AppDbContext db, ICurrentUserService userCon
 
     public async Task UpdateBarAsync(int barId, string name, double weight)
     {
-        var bar = await db.Bars.FindAsync(barId);
+        var userId = await userContext.GetUserIdAsync();
+        var bar = await db.Bars
+            .FirstOrDefaultAsync(b => b.Id == barId && b.UserId == userId);
         if (bar is not null)
         {
             bar.Name = name;
@@ -138,7 +143,8 @@ public class PlateCalculatorService(AppDbContext db, ICurrentUserService userCon
     public async Task DeleteBarAsync(int barId)
     {
         var userId = await userContext.GetUserIdAsync();
-        var bar = await db.Bars.FindAsync(barId);
+        var bar = await db.Bars
+            .FirstOrDefaultAsync(b => b.Id == barId && b.UserId == userId);
         if (bar is null) return;
 
         var wasDefault = bar.IsDefault;

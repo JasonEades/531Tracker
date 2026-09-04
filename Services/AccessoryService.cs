@@ -14,7 +14,7 @@ public interface IAccessoryService
     Task<WorkoutAccessory> AddAccessoryToWorkoutAsync(int workoutId, int accessoryId, double weight, int reps, int sets);
     Task UpdateWorkoutAccessoryAsync(int id, double weight, int reps, int sets, bool isCompleted);
     Task RemoveWorkoutAccessoryAsync(int id);
-    Task<double?> GetSuggestedWeightAsync(int accessoryId);
+    Task<AccessoryHistory?> GetSuggestedUsageAsync(int accessoryId);
     Task RecordAccessoryHistoryAsync(int accessoryId, double weight, int reps, int sets);
 }
 
@@ -31,7 +31,9 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
 
     public async Task<Accessory?> GetAccessoryAsync(int id)
     {
-        return await db.Accessories.FindAsync(id);
+        var userId = await userContext.GetUserIdAsync();
+        return await db.Accessories
+            .FirstOrDefaultAsync(a => a.Id == id && (a.UserId == null || a.UserId == userId));
     }
 
     public async Task<Accessory> CreateAccessoryAsync(string name, string? description)
@@ -50,7 +52,9 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
 
     public async Task UpdateAccessoryAsync(int id, string name, string? description, bool isActive)
     {
-        var accessory = await db.Accessories.FindAsync(id);
+        var userId = await userContext.GetUserIdAsync();
+        var accessory = await db.Accessories
+            .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId);
         if (accessory is not null)
         {
             accessory.Name = name;
@@ -62,7 +66,9 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
 
     public async Task DeleteAccessoryAsync(int id)
     {
-        var accessory = await db.Accessories.FindAsync(id);
+        var userId = await userContext.GetUserIdAsync();
+        var accessory = await db.Accessories
+            .FirstOrDefaultAsync(a => a.Id == id && a.UserId == userId);
         if (accessory is not null)
         {
             accessory.IsActive = false;
@@ -72,6 +78,15 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
 
     public async Task<WorkoutAccessory> AddAccessoryToWorkoutAsync(int workoutId, int accessoryId, double weight, int reps, int sets)
     {
+        var userId = await userContext.GetUserIdAsync();
+        var ownsWorkout = await db.Workouts
+            .AnyAsync(w => w.Id == workoutId && w.Week.Cycle.UserId == userId);
+        var canUseAccessory = await db.Accessories
+            .AnyAsync(a => a.Id == accessoryId && a.IsActive && (a.UserId == null || a.UserId == userId));
+
+        if (!ownsWorkout || !canUseAccessory)
+            throw new InvalidOperationException("The workout or accessory is not available to the current user.");
+
         var wa = new WorkoutAccessory
         {
             WorkoutId = workoutId,
@@ -90,9 +105,15 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
 
     public async Task UpdateWorkoutAccessoryAsync(int id, double weight, int reps, int sets, bool isCompleted)
     {
+        var userId = await userContext.GetUserIdAsync();
         var wa = await db.WorkoutAccessories
             .Include(w => w.Accessory)
-            .FirstOrDefaultAsync(w => w.Id == id);
+            .Include(w => w.Workout)
+                .ThenInclude(w => w.Week)
+                    .ThenInclude(w => w.Cycle)
+            .FirstOrDefaultAsync(w => w.Id == id
+                && w.Workout.Week.Cycle.UserId == userId
+                && (w.Accessory.UserId == null || w.Accessory.UserId == userId));
         if (wa is not null)
         {
             wa.Weight = weight;
@@ -110,7 +131,12 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
 
     public async Task RemoveWorkoutAccessoryAsync(int id)
     {
-        var wa = await db.WorkoutAccessories.FindAsync(id);
+        var userId = await userContext.GetUserIdAsync();
+        var wa = await db.WorkoutAccessories
+            .Include(w => w.Workout)
+                .ThenInclude(w => w.Week)
+                    .ThenInclude(w => w.Cycle)
+            .FirstOrDefaultAsync(w => w.Id == id && w.Workout.Week.Cycle.UserId == userId);
         if (wa is not null)
         {
             db.WorkoutAccessories.Remove(wa);
@@ -118,21 +144,22 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
         }
     }
 
-    public async Task<double?> GetSuggestedWeightAsync(int accessoryId)
+    public async Task<AccessoryHistory?> GetSuggestedUsageAsync(int accessoryId)
     {
-        var lastEntry = await db.AccessoryHistory
-            .Where(h => h.AccessoryId == accessoryId)
+        var userId = await userContext.GetUserIdAsync();
+        return await db.AccessoryHistory
+            .Where(h => h.AccessoryId == accessoryId && h.UserId == userId)
             .OrderByDescending(h => h.RecordedAt)
             .FirstOrDefaultAsync();
-
-        return lastEntry?.Weight;
     }
 
     public async Task RecordAccessoryHistoryAsync(int accessoryId, double weight, int reps, int sets)
     {
+        var userId = await userContext.GetUserIdAsync();
         db.AccessoryHistory.Add(new AccessoryHistory
         {
             AccessoryId = accessoryId,
+            UserId = userId,
             Weight = weight,
             Reps = reps,
             Sets = sets,

@@ -144,9 +144,9 @@ else
         lastWeights.Clear();
         foreach (var acc in accessories)
         {
-            var suggested = await AccessoryService.GetSuggestedWeightAsync(acc.Id);
-            if (suggested.HasValue)
-                lastWeights[acc.Id] = suggested.Value;
+            var suggested = await AccessoryService.GetSuggestedUsageAsync(acc.Id);
+            if (suggested is not null)
+                lastWeights[acc.Id] = suggested.Weight;
         }
     }
 

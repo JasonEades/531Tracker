@@ -325,9 +325,9 @@ else
                         }
                     </select>
                 </div>
-                @if (suggestedWeight.HasValue)
+                @if (suggestedUsage is not null)
                 {
-                    <p class="text-muted mb-1" style="font-size:var(--text-sm)">💡 Last used: @suggestedWeight.Value lbs</p>
+                    <p class="text-muted mb-1" style="font-size:var(--text-sm)">💡 Last used: @suggestedUsage.Weight lbs · @suggestedUsage.Sets × @suggestedUsage.Reps</p>
                 }
                 <div class="acc-inputs-row">
                     <div class="form-group">
@@ -361,19 +361,39 @@ else
                 {
                     <div class="accessory-card @(wa.IsCompleted ? "completed-acc" : "")">
                         <div class="accessory-name">@wa.Accessory.Name</div>
-                        <div class="accessory-scheme">@wa.Sets × @wa.Reps reps · @wa.Weight lbs</div>
-                        <div class="acc-card-actions">
-                            <button class="check-btn @(wa.IsCompleted ? "checked" : "")" style="width:40px;height:40px;"
-                                    @onclick="() => ToggleAccessory(wa)"
-                                    disabled="@(workout.Status == WorkoutStatus.Completed)">
-                                @(wa.IsCompleted ? "✓" : "")
-                            </button>
-                            @if (workout.Status != WorkoutStatus.Completed)
-                            {
-                                <button class="btn btn-sm btn-danger" style="width:40px;height:40px;padding:0;"
-                                        @onclick="() => RemoveAccessory(wa.Id)">✕</button>
-                            }
-                        </div>
+                        @if (editingAccessoryId == wa.Id)
+                        {
+                            <div class="accessory-edit-form">
+                                <input type="number" class="form-control form-control-sm" inputmode="numeric"
+                                       @bind="editAccessoryWeight" min="0" step="5" aria-label="Accessory weight" />
+                                <input type="number" class="form-control form-control-sm" inputmode="numeric"
+                                       @bind="editAccessoryReps" min="1" aria-label="Accessory reps" />
+                                <input type="number" class="form-control form-control-sm" inputmode="numeric"
+                                       @bind="editAccessorySets" min="1" aria-label="Accessory sets" />
+                                <div class="accessory-edit-actions">
+                                    <button class="btn btn-sm btn-primary" @onclick="() => SaveAccessoryEdit(wa)">Save</button>
+                                    <button class="btn btn-sm btn-outline" @onclick="CancelAccessoryEdit">Cancel</button>
+                                </div>
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="accessory-scheme">@wa.Sets × @wa.Reps reps · @wa.Weight lbs</div>
+                            <div class="acc-card-actions">
+                                <button class="check-btn @(wa.IsCompleted ? "checked" : "")" style="width:40px;height:40px;"
+                                        @onclick="() => ToggleAccessory(wa)"
+                                        disabled="@(workout.Status == WorkoutStatus.Completed)">
+                                    @(wa.IsCompleted ? "✓" : "")
+                                </button>
+                                @if (workout.Status != WorkoutStatus.Completed)
+                                {
+                                    <button class="btn btn-sm btn-outline" style="height:40px;padding:0 var(--space-3);"
+                                            @onclick="() => BeginEditAccessory(wa)">Edit</button>
+                                    <button class="btn btn-sm btn-danger" style="width:40px;height:40px;padding:0;"
+                                            @onclick="() => RemoveAccessory(wa.Id)">✕</button>
+                                }
+                            </div>
+                        }
                     </div>
                 }
             </div>
@@ -434,7 +454,11 @@ else
     private double newAccWeight;
     private int newAccReps = 10;
     private int newAccSets = 3;
-    private double? suggestedWeight;
+    private AccessoryHistory? suggestedUsage;
+    private int editingAccessoryId;
+    private double editAccessoryWeight;
+    private int editAccessoryReps;
+    private int editAccessorySets;
 
     protected override async Task OnInitializedAsync()
     {
@@ -536,14 +560,18 @@ else
         if (int.TryParse(e.Value?.ToString(), out var id) && id > 0)
         {
             selectedAccessoryId = id;
-            suggestedWeight = await AccessoryService.GetSuggestedWeightAsync(id);
-            if (suggestedWeight.HasValue)
-                newAccWeight = suggestedWeight.Value;
+            suggestedUsage = await AccessoryService.GetSuggestedUsageAsync(id);
+            if (suggestedUsage is not null)
+            {
+                newAccWeight = suggestedUsage.Weight;
+                newAccReps = suggestedUsage.Reps;
+                newAccSets = suggestedUsage.Sets;
+            }
         }
         else
         {
             selectedAccessoryId = 0;
-            suggestedWeight = null;
+            suggestedUsage = null;
         }
     }
 
@@ -557,7 +585,7 @@ else
         newAccWeight  = 0;
         newAccReps    = 10;
         newAccSets    = 3;
-        suggestedWeight = null;
+        suggestedUsage = null;
         showAddAccessory = false;
     }
 
@@ -566,6 +594,29 @@ else
         await AccessoryService.RemoveWorkoutAccessoryAsync(waId);
         await LoadWorkout();
     }
+
+    private void BeginEditAccessory(WorkoutAccessory wa)
+    {
+        editingAccessoryId = wa.Id;
+        editAccessoryWeight = wa.Weight;
+        editAccessoryReps = wa.Reps;
+        editAccessorySets = wa.Sets;
+    }
+
+    private async Task SaveAccessoryEdit(WorkoutAccessory wa)
+    {
+        if (editAccessoryWeight < 0 || editAccessoryReps < 1 || editAccessorySets < 1)
+            return;
+
+        await AccessoryService.UpdateWorkoutAccessoryAsync(
+            wa.Id, editAccessoryWeight, editAccessoryReps, editAccessorySets, wa.IsCompleted);
+        wa.Weight = editAccessoryWeight;
+        wa.Reps = editAccessoryReps;
+        wa.Sets = editAccessorySets;
+        editingAccessoryId = 0;
+    }
+
+    private void CancelAccessoryEdit() => editingAccessoryId = 0;
 
     private async Task AutoStartIfNeeded()
     {

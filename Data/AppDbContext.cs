@@ -92,6 +92,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
 
         modelBuilder.Entity<AccessoryHistory>(entity =>
         {
+            entity.HasIndex(ah => new { ah.UserId, ah.AccessoryId, ah.RecordedAt });
             entity.HasOne(ah => ah.Accessory)
                   .WithMany(a => a.History)
                   .HasForeignKey(ah => ah.AccessoryId)
@@ -100,6 +101,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
 
         modelBuilder.Entity<UserEquipment>(entity =>
         {
+            entity.HasIndex(e => e.UserId).IsUnique();
             entity.HasMany(e => e.Plates)
                   .WithOne(p => p.UserEquipment)
                   .HasForeignKey(p => p.UserEquipmentId)
