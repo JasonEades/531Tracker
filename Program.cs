@@ -33,7 +33,8 @@ var adminEmail = builder.Configuration["App:AdminEmail"] ?? "";
 
 // Database — use PostgreSQL when DATABASE_URL is set (production / Digital Ocean),
 // otherwise fall back to SQLite for local development.
-var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL");
+var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL")
+    ?? builder.Configuration.GetConnectionString("Postgres");
 
 builder.Services.AddDbContext<AppDbContext>(options =>
 {

@@ -11,10 +11,16 @@ public class AppDbContextFactory : IDesignTimeDbContextFactory<AppDbContext>
 {
     public AppDbContext CreateDbContext(string[] args)
     {
+        var configuration = new ConfigurationBuilder()
+            .AddUserSecrets<AppDbContextFactory>(optional: true)
+            .Build();
+
         // Read DATABASE_URL from the environment if present (same as runtime),
-        // otherwise fall back to a local placeholder so scaffolding still works.
+        // otherwise use the local developer secret for scaffolding.
         var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL")
-            ?? "Host=localhost;Database=fivethreeone_dev;Username=postgres;Password=postgres";
+            ?? configuration.GetConnectionString("Postgres")
+            ?? throw new InvalidOperationException(
+                "Set DATABASE_URL or the ConnectionStrings:Postgres user secret before using EF tooling.");
 
         var connectionString = ConvertDatabaseUrl(databaseUrl);
 
