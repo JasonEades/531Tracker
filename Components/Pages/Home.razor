@@ -2,7 +2,6 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject ICycleService CycleService
-@inject IWorkoutService WorkoutService
 @inject ILiftService LiftService
 @inject IPplProgramService PplProgramService
 @inject IPplSessionService PplSessionService
@@ -149,20 +148,9 @@ else
     <div class="hero-card animate-fade-in">
         <div class="flex items-center justify-between mb-2">
             <div>
-                <div class="hero-subtitle">TODAY'S WORKOUT</div>
-                @if (nextWorkout is not null)
-                {
-                    <div class="hero-title">@GetLiftDisplayName(nextWorkout.MainLiftType) Day</div>
-                    <div class="hero-meta">
-                        @currentCycle.Name · Week @((int)nextWorkout.Week.WeekNumber)
-                        <span class="badge badge-primary ml-1">@GetWeekLabel(nextWorkout.Week.WeekNumber)</span>
-                    </div>
-                }
-                else
-                {
-                    <div class="hero-title">Cycle Complete 🎉</div>
-                    <div class="hero-meta">@currentCycle.Name · All workouts done</div>
-                }
+                <div class="hero-subtitle">CURRENT CYCLE</div>
+                <div class="hero-title">@currentCycle.Name</div>
+                <div class="hero-meta">@currentWeekDisplay · @completedWorkouts of @totalWorkouts workouts complete</div>
             </div>
             <div class="progress-ring-wrap">
                 <svg class="progress-ring-svg" width="72" height="72" viewBox="0 0 72 72">
@@ -185,18 +173,9 @@ else
             </div>
         </div>
 
-        @if (nextWorkout is not null)
-        {
-            <button class="btn btn-primary btn-full mt-3" @onclick="() => GoToWorkout(nextWorkout.Id)">
-                ▶ Start Workout
-            </button>
-        }
-        else
-        {
-            <button class="btn btn-success btn-full mt-3" @onclick="GoToCycle">
-                View Cycle Summary
-            </button>
-        }
+        <button class="btn btn-primary btn-full mt-3" @onclick="GoToCycle">
+            View Current Cycle
+        </button>
     </div>
 
     @* ── Progress strip ─────────────────────────────────── *@
@@ -277,7 +256,6 @@ else
 
 @code {
     private Cycle? currentCycle;
-    private Workout? nextWorkout;
     private List<Lift> lifts = [];
     private List<Workout> upcomingWorkouts = [];
     private PplProgram? activePplProgram;
@@ -329,8 +307,6 @@ else
             currentWeekDisplay = activeWeek is not null
                 ? $"Week {(int)activeWeek.WeekNumber}"
                 : "Done";
-
-            nextWorkout = await WorkoutService.GetNextIncompleteWorkoutAsync();
 
             upcomingWorkouts = allWorkouts
                 .Where(w => w.Status != WorkoutStatus.Completed)
