@@ -16,6 +16,18 @@
 }
 else if (equipment is not null)
 {
+    @* ── Account ──────────────────────────────────────────── *@
+    <div class="settings-section animate-fade-in">
+        <div class="settings-section-label">Account</div>
+        <div class="card">
+            <div class="card-body">
+                <a class="btn btn-danger btn-full" href="/logout">
+                    Sign out
+                </a>
+            </div>
+        </div>
+    </div>
+
     @* ── Bars ─────────────────────────────────────────────── *@
     <div class="settings-section animate-fade-in">
         <div class="settings-section-label">Your Bars</div>
@@ -64,6 +76,7 @@ else if (equipment is not null)
                             }
                         </div>
                     </div>
+
                 }
                 <div class="plate-row">
                     <div class="plate-visual-wrap" style="flex:1">
