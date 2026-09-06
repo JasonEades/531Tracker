@@ -40,8 +40,14 @@ else
                 </div>
             </div>
             <div class="workout-actions">
-                <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportFormat.Markdown)" disabled="@exporting">Export Markdown</button>
-                <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportFormat.Pdf)" disabled="@exporting">Export PDF</button>
+                <button class="btn btn-outline btn-sm export-icon-button" title="Export Markdown" aria-label="Export Markdown"
+                        @onclick="() => Export(WorkoutExportFormat.Markdown)" disabled="@exporting">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>
+                </button>
+                <button class="btn btn-outline btn-sm export-icon-button" title="Export PDF" aria-label="Export PDF"
+                        @onclick="() => Export(WorkoutExportFormat.Pdf)" disabled="@exporting">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 15h2a1.5 1.5 0 0 0 0-3H8v5m5-5h1a2 2 0 0 1 0 4h-1v-4m4 0h3m-3 0v5"/></svg>
+                </button>
                 @if (workout.Status == WorkoutStatus.NotStarted)
                 {
                     <button class="btn btn-primary" @onclick="StartWorkout">▶ Start</button>
@@ -57,6 +63,14 @@ else
     {
         <div class="alert alert-danger mt-2">@exportError</div>
     }
+    </div>
+
+    <div class="session-date-row animate-fade-in">
+        <label for="workout-date">Workout date</label>
+        <input id="workout-date" class="form-control form-control-sm" type="date" @bind="workoutDate" />
+        <button class="btn btn-outline btn-sm" @onclick="SaveWorkoutDate" disabled="@savingWorkoutDate">
+            @(savingWorkoutDate ? "Saving…" : "Save Date")
+        </button>
     </div>
 
     @* ── Bar Selector ─────────────────────────────────── *@
@@ -222,66 +236,68 @@ else
                 <button class="btn btn-sm btn-primary" @onclick="BeginAdditionalSet">+ Add Set</button>
             }
         </div>
-        @if (additionalSets.Count == 0 && !showAdditionalSetForm)
-        {
-            <p class="section-subtitle">Record extra work without changing the programmed sets.</p>
-        }
-        @foreach (var set in additionalSets)
-        {
-            @if (editingAdditionalSetId == set.Id)
+        <div class="additional-sets-scroll">
+            @if (additionalSets.Count == 0 && !showAdditionalSetForm)
+            {
+                <p class="section-subtitle additional-sets-empty">Record extra work without changing the programmed sets.</p>
+            }
+            @foreach (var set in additionalSets)
+            {
+                @if (editingAdditionalSetId == set.Id)
+                {
+                    <div class="set-card">
+                        <div class="set-num">@set.Sequence</div>
+                        <div class="set-inputs" style="flex:1;flex-wrap:wrap">
+                            <select class="form-control" @bind="editAdditionalType">
+                                @foreach (var type in Enum.GetValues<AdditionalSetType>()) { <option value="@type">@GetAdditionalSetTypeLabel(type)</option> }
+                            </select>
+                            <input class="set-input" type="number" min="0" step="0.5" @bind="editAdditionalWeight" />
+                            <input class="set-input" type="number" min="1" @bind="editAdditionalReps" />
+                            <input class="set-input" type="number" min="0" max="10" step="0.5" placeholder="RPE" @bind="editAdditionalRpe" />
+                            <input class="set-input" type="number" min="0" step="0.5" placeholder="RIR" @bind="editAdditionalRir" />
+                            <input class="form-control" placeholder="Set notes" @bind="editAdditionalNotes" />
+                        </div>
+                        <button class="btn btn-sm btn-primary" @onclick="() => SaveAdditionalSetEdit(set)">Save</button>
+                        <button class="btn btn-sm btn-outline" @onclick="CancelAdditionalSetEdit">Cancel</button>
+                    </div>
+                }
+                else
+                {
+                    <div class="set-card completed-set">
+                        <div class="set-num">@set.Sequence</div>
+                        <div class="set-info">
+                            <div class="set-weight-label">@FormatPlate(set.ActualWeight ?? set.PrescribedWeight) <span class="set-unit">lbs</span></div>
+                            <div class="set-reps-label">× @(set.ActualReps ?? set.PrescribedReps) reps · @GetAdditionalSetTypeLabel(set.AdditionalSetType)</div>
+                            @if (set.Rpe.HasValue || set.Rir.HasValue || !string.IsNullOrWhiteSpace(set.Notes))
+                            {
+                                <div class="section-subtitle">@(set.Rpe.HasValue ? $"RPE {set.Rpe:0.#}" : "")@(set.Rir.HasValue ? $" · RIR {set.Rir:0.#}" : "")@(string.IsNullOrWhiteSpace(set.Notes) ? "" : $" · {set.Notes}")</div>
+                            }
+                        </div>
+                        <button class="btn btn-sm btn-outline" @onclick="() => BeginAdditionalSetEdit(set)">Edit</button>
+                        <button class="btn btn-sm btn-danger" @onclick="() => DeleteAdditionalSet(set.Id)">✕</button>
+                    </div>
+                }
+            }
+            @if (showAdditionalSetForm)
             {
                 <div class="set-card">
-                    <div class="set-num">@set.Sequence</div>
+                    <div class="set-num">@(additionalSets.Count + 1)</div>
                     <div class="set-inputs" style="flex:1;flex-wrap:wrap">
-                        <select class="form-control" @bind="editAdditionalType">
+                        <select class="form-control" @bind="newAdditionalType">
                             @foreach (var type in Enum.GetValues<AdditionalSetType>()) { <option value="@type">@GetAdditionalSetTypeLabel(type)</option> }
                         </select>
-                        <input class="set-input" type="number" min="0" step="0.5" @bind="editAdditionalWeight" />
-                        <input class="set-input" type="number" min="1" @bind="editAdditionalReps" />
-                        <input class="set-input" type="number" min="0" max="10" step="0.5" placeholder="RPE" @bind="editAdditionalRpe" />
-                        <input class="set-input" type="number" min="0" step="0.5" placeholder="RIR" @bind="editAdditionalRir" />
-                        <input class="form-control" placeholder="Set notes" @bind="editAdditionalNotes" />
+                        <input class="set-input" type="number" min="0" step="0.5" placeholder="Weight" @bind="newAdditionalWeight" />
+                        <input class="set-input" type="number" min="1" placeholder="Reps" @bind="newAdditionalReps" />
+                        <input class="set-input" type="number" min="0" max="10" step="0.5" placeholder="RPE" @bind="newAdditionalRpe" />
+                        <input class="set-input" type="number" min="0" step="0.5" placeholder="RIR" @bind="newAdditionalRir" />
+                        <input class="form-control" placeholder="Set notes" @bind="newAdditionalNotes" />
                     </div>
-                    <button class="btn btn-sm btn-primary" @onclick="() => SaveAdditionalSetEdit(set)">Save</button>
-                    <button class="btn btn-sm btn-outline" @onclick="CancelAdditionalSetEdit">Cancel</button>
+                    <button class="btn btn-sm btn-primary" @onclick="() => SaveAdditionalSet(true)">Save &amp; Add Another</button>
+                    <button class="btn btn-sm btn-success" @onclick="() => SaveAdditionalSet(false)">Save</button>
+                    <button class="btn btn-sm btn-outline" @onclick="CancelAdditionalSet">Done</button>
                 </div>
             }
-            else
-            {
-                <div class="set-card completed-set">
-                    <div class="set-num">@set.Sequence</div>
-                    <div class="set-info">
-                        <div class="set-weight-label">@FormatPlate(set.ActualWeight ?? set.PrescribedWeight) <span class="set-unit">lbs</span></div>
-                        <div class="set-reps-label">× @(set.ActualReps ?? set.PrescribedReps) reps · @GetAdditionalSetTypeLabel(set.AdditionalSetType)</div>
-                        @if (set.Rpe.HasValue || set.Rir.HasValue || !string.IsNullOrWhiteSpace(set.Notes))
-                        {
-                            <div class="section-subtitle">@(set.Rpe.HasValue ? $"RPE {set.Rpe:0.#}" : "")@(set.Rir.HasValue ? $" · RIR {set.Rir:0.#}" : "")@(string.IsNullOrWhiteSpace(set.Notes) ? "" : $" · {set.Notes}")</div>
-                        }
-                    </div>
-                    <button class="btn btn-sm btn-outline" @onclick="() => BeginAdditionalSetEdit(set)">Edit</button>
-                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteAdditionalSet(set.Id)">✕</button>
-                </div>
-            }
-        }
-        @if (showAdditionalSetForm)
-        {
-            <div class="set-card">
-                <div class="set-num">@(additionalSets.Count + 1)</div>
-                <div class="set-inputs" style="flex:1;flex-wrap:wrap">
-                    <select class="form-control" @bind="newAdditionalType">
-                        @foreach (var type in Enum.GetValues<AdditionalSetType>()) { <option value="@type">@GetAdditionalSetTypeLabel(type)</option> }
-                    </select>
-                    <input class="set-input" type="number" min="0" step="0.5" placeholder="Weight" @bind="newAdditionalWeight" />
-                    <input class="set-input" type="number" min="1" placeholder="Reps" @bind="newAdditionalReps" />
-                    <input class="set-input" type="number" min="0" max="10" step="0.5" placeholder="RPE" @bind="newAdditionalRpe" />
-                    <input class="set-input" type="number" min="0" step="0.5" placeholder="RIR" @bind="newAdditionalRir" />
-                    <input class="form-control" placeholder="Set notes" @bind="newAdditionalNotes" />
-                </div>
-                <button class="btn btn-sm btn-primary" @onclick="() => SaveAdditionalSet(true)">Save &amp; Add Another</button>
-                <button class="btn btn-sm btn-success" @onclick="() => SaveAdditionalSet(false)">Save</button>
-                <button class="btn btn-sm btn-outline" @onclick="CancelAdditionalSet">Done</button>
-            </div>
-        }
+        </div>
     </div>
 
     @* ── e1RM Estimate ──────────────────────────────────────────── *@
@@ -289,11 +305,11 @@ else
     {
         var topSet = mainSets.LastOrDefault();
         <div class="exercise-section animate-slide-up" style="border-left: 3px solid var(--color-accent)">
-            <div class="flex items-center justify-between">
+            <div class="flex items-center justify-between metric-card-content">
                 <span style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;color:var(--color-text-muted)">ESTIMATED 1RM</span>
                 <span style="font-size:1.5rem;font-weight:800;color:var(--color-accent)">@EstimatedOneRepMax lbs</span>
             </div>
-            <div style="font-size:0.72rem;color:var(--color-text-muted);margin-top:2px">Based on @topSet!.ActualReps reps at @topSet.ActualWeight lbs (Epley formula)</div>
+            <div class="metric-card-detail">Based on @topSet!.ActualReps reps at @topSet.ActualWeight lbs (Epley formula)</div>
         </div>
     }
 
@@ -438,6 +454,11 @@ else
                         <input type="number" class="form-control" inputmode="numeric" @bind="newAccSets" min="1" />
                     </div>
                 </div>
+                <div class="form-group">
+                    <label class="form-label" for="new-accessory-notes">Notes</label>
+                    <textarea id="new-accessory-notes" class="form-control" rows="2" @bind="newAccNotes"
+                              placeholder="Optional notes for this accessory"></textarea>
+                </div>
                 <button class="btn btn-primary btn-full" @onclick="AddAccessory"
                         disabled="@(selectedAccessoryId == 0)">
                     Add to Workout
@@ -465,6 +486,9 @@ else
                                        @bind="editAccessoryReps" min="1" aria-label="Accessory reps" />
                                 <input type="number" class="form-control form-control-sm" inputmode="numeric"
                                        @bind="editAccessorySets" min="1" aria-label="Accessory sets" />
+                                <textarea class="form-control form-control-sm accessory-notes-input" rows="2"
+                                          @bind="editAccessoryNotes" aria-label="Accessory notes"
+                                          placeholder="Optional notes"></textarea>
                                 <div class="accessory-edit-actions">
                                     <button class="btn btn-sm btn-primary" @onclick="() => SaveAccessoryEdit(wa)">Save</button>
                                     <button class="btn btn-sm btn-outline" @onclick="CancelAccessoryEdit">Cancel</button>
@@ -474,6 +498,10 @@ else
                         else
                         {
                             <div class="accessory-scheme">@wa.Sets × @wa.Reps reps · @wa.Weight lbs</div>
+                            @if (!string.IsNullOrWhiteSpace(wa.Notes))
+                            {
+                                <div class="accessory-notes">@wa.Notes</div>
+                            }
                             <div class="acc-card-actions">
                                 <button class="check-btn @(wa.IsCompleted ? "checked" : "")" style="width:40px;height:40px;"
                                         @onclick="() => ToggleAccessory(wa)"
@@ -498,7 +526,7 @@ else
     @* ── Sticky Finish / Complete Button ───────────────── *@
     @if (workout.Status == WorkoutStatus.InProgress)
     {
-        <div class="sticky-action">
+        <div class="sticky-action workout-finish-action">
             <button class="btn btn-success btn-full btn-lg" @onclick="CompleteWorkout">
                 ✓ Finish Workout
             </button>
@@ -513,7 +541,9 @@ else
     private bool loading = true;
     private bool exporting;
     private bool savingWorkoutNotes;
+    private bool savingWorkoutDate;
     private string? exportError;
+    private DateTime workoutDate = DateTime.Today;
 
     private List<WorkoutSet> mainSets = [];
     private List<WorkoutSet> bbbSets = [];
@@ -591,11 +621,13 @@ else
     private double newAccWeight;
     private int newAccReps = 10;
     private int newAccSets = 3;
+    private string? newAccNotes;
     private AccessoryHistory? suggestedUsage;
     private int editingAccessoryId;
     private double editAccessoryWeight;
     private int editAccessoryReps;
     private int editAccessorySets;
+    private string? editAccessoryNotes;
 
     protected override async Task OnInitializedAsync()
     {
@@ -611,6 +643,7 @@ else
         workout = await WorkoutService.GetWorkoutWithDetailsAsync(WorkoutId);
         if (workout is not null)
         {
+            workoutDate = workout.OccurredOn.ToLocalTime().Date;
             warmupSets  = workout.Sets.Where(s => s.SetType == SetType.Warmup).OrderBy(s => s.SetNumber).ToList();
             mainSets    = workout.Sets.Where(s => !s.IsAdditional && s.SetType == SetType.Main).OrderBy(s => s.SetNumber).ToList();
             bbbSets     = workout.Sets.Where(s => s.SetType == SetType.Bbb).OrderBy(s => s.SetNumber).ToList();
@@ -622,6 +655,22 @@ else
             plateMap = [];
             foreach (var w in allWeights)
                 plateMap[w] = await PlateCalc.CalculatePlates(w, CurrentBarWeight);
+        }
+    }
+
+    private async Task SaveWorkoutDate()
+    {
+        if (workout is null) return;
+
+        savingWorkoutDate = true;
+        try
+        {
+            await WorkoutService.UpdateWorkoutDateAsync(workout.Id, workoutDate);
+            await LoadWorkout();
+        }
+        finally
+        {
+            savingWorkoutDate = false;
         }
     }
 
@@ -751,7 +800,7 @@ else
     private async Task ToggleAccessory(WorkoutAccessory wa)
     {
         wa.IsCompleted = !wa.IsCompleted;
-        await AccessoryService.UpdateWorkoutAccessoryAsync(wa.Id, wa.Weight, wa.Reps, wa.Sets, wa.IsCompleted);
+        await AccessoryService.UpdateWorkoutAccessoryAsync(wa.Id, wa.Weight, wa.Reps, wa.Sets, wa.Notes, wa.IsCompleted);
         await AutoStartIfNeeded();
     }
 
@@ -779,12 +828,13 @@ else
     {
         if (selectedAccessoryId == 0 || workout is null) return;
         await AccessoryService.AddAccessoryToWorkoutAsync(
-            workout.Id, selectedAccessoryId, newAccWeight, newAccReps, newAccSets);
+            workout.Id, selectedAccessoryId, newAccWeight, newAccReps, newAccSets, newAccNotes);
         await LoadWorkout();
         selectedAccessoryId = 0;
         newAccWeight  = 0;
         newAccReps    = 10;
         newAccSets    = 3;
+        newAccNotes = null;
         suggestedUsage = null;
         showAddAccessory = false;
     }
@@ -801,6 +851,7 @@ else
         editAccessoryWeight = wa.Weight;
         editAccessoryReps = wa.Reps;
         editAccessorySets = wa.Sets;
+        editAccessoryNotes = wa.Notes;
     }
 
     private async Task SaveAccessoryEdit(WorkoutAccessory wa)
@@ -809,10 +860,11 @@ else
             return;
 
         await AccessoryService.UpdateWorkoutAccessoryAsync(
-            wa.Id, editAccessoryWeight, editAccessoryReps, editAccessorySets, wa.IsCompleted);
+            wa.Id, editAccessoryWeight, editAccessoryReps, editAccessorySets, editAccessoryNotes, wa.IsCompleted);
         wa.Weight = editAccessoryWeight;
         wa.Reps = editAccessoryReps;
         wa.Sets = editAccessorySets;
+        wa.Notes = editAccessoryNotes;
         editingAccessoryId = 0;
     }
 

@@ -11,8 +11,8 @@ public interface IAccessoryService
     Task<Accessory> CreateAccessoryAsync(string name, string? description);
     Task UpdateAccessoryAsync(int id, string name, string? description, bool isActive);
     Task DeleteAccessoryAsync(int id);
-    Task<WorkoutAccessory> AddAccessoryToWorkoutAsync(int workoutId, int accessoryId, double weight, int reps, int sets);
-    Task UpdateWorkoutAccessoryAsync(int id, double weight, int reps, int sets, bool isCompleted);
+    Task<WorkoutAccessory> AddAccessoryToWorkoutAsync(int workoutId, int accessoryId, double weight, int reps, int sets, string? notes);
+    Task UpdateWorkoutAccessoryAsync(int id, double weight, int reps, int sets, string? notes, bool isCompleted);
     Task RemoveWorkoutAccessoryAsync(int id);
     Task<AccessoryHistory?> GetSuggestedUsageAsync(int accessoryId);
     Task RecordAccessoryHistoryAsync(int accessoryId, double weight, int reps, int sets);
@@ -76,7 +76,7 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
         }
     }
 
-    public async Task<WorkoutAccessory> AddAccessoryToWorkoutAsync(int workoutId, int accessoryId, double weight, int reps, int sets)
+    public async Task<WorkoutAccessory> AddAccessoryToWorkoutAsync(int workoutId, int accessoryId, double weight, int reps, int sets, string? notes)
     {
         var userId = await userContext.GetUserIdAsync();
         var ownsWorkout = await db.Workouts
@@ -93,7 +93,8 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
             AccessoryId = accessoryId,
             Weight = weight,
             Reps = reps,
-            Sets = sets
+            Sets = sets,
+            Notes = NormalizeNotes(notes)
         };
         db.WorkoutAccessories.Add(wa);
         await db.SaveChangesAsync();
@@ -103,7 +104,7 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
         return wa;
     }
 
-    public async Task UpdateWorkoutAccessoryAsync(int id, double weight, int reps, int sets, bool isCompleted)
+    public async Task UpdateWorkoutAccessoryAsync(int id, double weight, int reps, int sets, string? notes, bool isCompleted)
     {
         var userId = await userContext.GetUserIdAsync();
         var wa = await db.WorkoutAccessories
@@ -119,6 +120,7 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
             wa.Weight = weight;
             wa.Reps = reps;
             wa.Sets = sets;
+            wa.Notes = NormalizeNotes(notes);
             wa.IsCompleted = isCompleted;
             await db.SaveChangesAsync();
 
@@ -143,6 +145,9 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
             await db.SaveChangesAsync();
         }
     }
+
+    private static string? NormalizeNotes(string? notes) =>
+        string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
 
     public async Task<AccessoryHistory?> GetSuggestedUsageAsync(int accessoryId)
     {

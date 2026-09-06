@@ -33,6 +33,7 @@ public sealed class CycleExportModel
     public DateTime CreatedAt { get; init; }
     public bool IsCompleted { get; init; }
     public string? Notes { get; init; }
+    public List<AdditionalSessionExportModel> AdditionalSessions { get; init; } = [];
     public List<WeekExportModel> Weeks { get; init; } = [];
     public ExportSummaryModel Summary { get; init; } = new();
 }

@@ -45,6 +45,13 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
         RenderNote(builder, "Cycle Notes", cycle.Notes);
         RenderSummary(builder, "Cycle Summary", cycle.Summary);
 
+        foreach (var session in cycle.AdditionalSessions)
+        {
+            builder.AppendLine("---");
+            builder.AppendLine();
+            RenderAdditionalSession(builder, session, 1);
+        }
+
         foreach (var week in cycle.Weeks)
         {
             builder.AppendLine("---");

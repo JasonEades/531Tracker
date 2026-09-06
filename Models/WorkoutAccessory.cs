@@ -16,5 +16,7 @@ public class WorkoutAccessory
 
     public int Sets { get; set; }
 
+    public string? Notes { get; set; }
+
     public bool IsCompleted { get; set; }
 }

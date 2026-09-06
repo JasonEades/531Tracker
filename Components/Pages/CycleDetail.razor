@@ -52,8 +52,14 @@ else
                 </div>
             </div>
             <div class="workout-actions">
-                <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportScope.Cycle, CycleId, WorkoutExportFormat.Markdown)" disabled="@exporting">Export Markdown</button>
-                <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportScope.Cycle, CycleId, WorkoutExportFormat.Pdf)" disabled="@exporting">Export PDF</button>
+                <button class="btn btn-outline btn-sm export-icon-button" title="Export Markdown" aria-label="Export Markdown"
+                        @onclick="() => Export(WorkoutExportScope.Cycle, CycleId, WorkoutExportFormat.Markdown)" disabled="@exporting">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>
+                </button>
+                <button class="btn btn-outline btn-sm export-icon-button" title="Export PDF" aria-label="Export PDF"
+                        @onclick="() => Export(WorkoutExportScope.Cycle, CycleId, WorkoutExportFormat.Pdf)" disabled="@exporting">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 15h2a1.5 1.5 0 0 0 0-3H8v5m5-5h1a2 2 0 0 1 0 4h-1v-4m4 0h3m-3 0v5"/></svg>
+                </button>
                 @if (!cycle.IsCompleted && AllWorkoutsCompleted)
                 {
                     <button class="btn btn-success btn-sm" @onclick="ShowCompletion">✓ Complete</button>
@@ -174,6 +180,35 @@ else
         </div>
     }
 
+    @* ── Cycle-level activity ─────────────────────────────── *@
+    @if (cycle.AdditionalSessions.Count > 0 || !cycle.IsCompleted)
+    {
+        <div class="week-section mb-4">
+            <div class="week-section-header">
+                <div class="week-section-title">Cycle-Level Cardio</div>
+                @if (!cycle.IsCompleted)
+                {
+                    <button class="btn btn-primary btn-sm" @onclick="AddCycleCardio">+ Add Cardio</button>
+                }
+            </div>
+            @if (cycle.AdditionalSessions.Count > 0)
+            {
+                <div class="week-grid mt-2">
+                    @foreach (var session in cycle.AdditionalSessions.OrderBy(s => s.OccurredOn).ThenBy(s => s.CreatedAt))
+                    {
+                        <div class="workout-item">
+                            <div>
+                                <div class="workout-name">@session.Name</div>
+                                <div class="workout-meta">@session.OccurredOn.ToString("MMM d, yyyy") · @session.CardioEntries.Count entr@(session.CardioEntries.Count == 1 ? "y" : "ies")</div>
+                            </div>
+                            <span class="badge badge-info">Cardio</span>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
     @* ── Week / Workout list ───────────────────────────────── *@
     <div class="animate-fade-in">
         @foreach (var week in cycle.Weeks.OrderBy(w => w.WeekNumber))
@@ -197,8 +232,14 @@ else
                         <span class="badge badge-muted">@wCompleted / @wTotal</span>
                     }
                     <div class="flex gap-1">
-                        <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportScope.Week, week.Id, WorkoutExportFormat.Markdown)" disabled="@exporting">Export Week MD</button>
-                        <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportScope.Week, week.Id, WorkoutExportFormat.Pdf)" disabled="@exporting">Export Week PDF</button>
+                        <button class="btn btn-outline btn-sm export-icon-button" title="Export week as Markdown" aria-label="Export week as Markdown"
+                                @onclick="() => Export(WorkoutExportScope.Week, week.Id, WorkoutExportFormat.Markdown)" disabled="@exporting">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>
+                        </button>
+                        <button class="btn btn-outline btn-sm export-icon-button" title="Export week as PDF" aria-label="Export week as PDF"
+                                @onclick="() => Export(WorkoutExportScope.Week, week.Id, WorkoutExportFormat.Pdf)" disabled="@exporting">
+                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 15h2a1.5 1.5 0 0 0 0-3H8v5m5-5h1a2 2 0 0 1 0 4h-1v-4m4 0h3m-3 0v5"/></svg>
+                        </button>
                         <button class="btn btn-primary btn-sm" @onclick="() => AddSession(week.Id)">+ Add Session</button>
                     </div>
                 @if (week.AdditionalSessions.Count > 0)
@@ -249,6 +290,8 @@ else
     private bool loading = true;
     private bool exporting;
     private string? exportError;
+
+    private void AddCycleCardio() => Nav.NavigateTo($"/sessions/add/cycle/{CycleId}");
 
     private int CycleTotal => cycle?.Weeks.SelectMany(w => w.Workouts).Count() ?? 0;
     private int CycleDone  => cycle?.Weeks.SelectMany(w => w.Workouts).Count(w => w.Status == WorkoutStatus.Completed) ?? 0;

@@ -116,11 +116,15 @@ public sealed class WorkoutExportService(
         .Include(c => c.Weeks).ThenInclude(w => w.Workouts).ThenInclude(wo => wo.Sets).ThenInclude(s => s.Lift)
         .Include(c => c.Weeks).ThenInclude(w => w.Workouts).ThenInclude(wo => wo.WorkoutAccessories).ThenInclude(wa => wa.Accessory)
         .Include(c => c.Weeks).ThenInclude(w => w.AdditionalSessions).ThenInclude(s => s.StrengthExercises).ThenInclude(e => e.Sets)
-        .Include(c => c.Weeks).ThenInclude(w => w.AdditionalSessions).ThenInclude(s => s.CardioEntries).ThenInclude(e => e.Accessory);
+        .Include(c => c.Weeks).ThenInclude(w => w.AdditionalSessions).ThenInclude(s => s.CardioEntries).ThenInclude(e => e.Accessory)
+        .Include(c => c.AdditionalSessions).ThenInclude(s => s.StrengthExercises).ThenInclude(e => e.Sets)
+        .Include(c => c.AdditionalSessions).ThenInclude(s => s.CardioEntries).ThenInclude(e => e.Accessory);
+
 
     private static CycleExportModel MapCycle(Cycle cycle)
     {
         var weeks = cycle.Weeks.OrderBy(w => w.WeekNumber).Select(MapWeek).ToList();
+        var additional = cycle.AdditionalSessions.OrderBy(s => s.OccurredOn).ThenBy(s => s.CreatedAt).Select(MapAdditionalSession).ToList();
         return new CycleExportModel
         {
             Id = cycle.Id,
@@ -129,6 +133,7 @@ public sealed class WorkoutExportService(
             CreatedAt = cycle.CreatedAt,
             IsCompleted = cycle.IsCompleted,
             Notes = cycle.Notes,
+            AdditionalSessions = additional,
             Weeks = weeks,
             Summary = Summarize(weeks)
         };
@@ -178,6 +183,7 @@ public sealed class WorkoutExportService(
             Sets = wa.Sets,
             Reps = wa.Reps,
             Weight = wa.Weight,
+            Notes = wa.Notes,
             IsCompleted = wa.IsCompleted
         }).ToList();
 

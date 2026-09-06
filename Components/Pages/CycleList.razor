@@ -203,6 +203,8 @@ else
                 </div>
                 <div class="cycle-card-actions">
                     <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo("/ppl/history")'>View Sessions</button>
+                    <button class="btn btn-sm" style="color:var(--color-danger);background:var(--color-danger-dim);"
+                            @onclick="() => DeletePplProgram(prog.Id)">Delete</button>
                 </div>
             </div>
         }
@@ -249,6 +251,12 @@ else
     {
         await CycleService.DeleteCycleAsync(id);
         cycles = await CycleService.GetAllCyclesAsync();
+    }
+
+    private async Task DeletePplProgram(int id)
+    {
+        await PplService.DeleteProgramAsync(id);
+        pplPrograms = await PplService.GetAllProgramsAsync();
     }
 
     private void GoToCycle(int id) => Nav.NavigateTo("/cycles/" + id);

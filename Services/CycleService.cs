@@ -38,6 +38,7 @@ public class CycleService(
                         .ThenInclude(wa => wa.Accessory)
             .Include(c => c.Weeks)
                 .ThenInclude(w => w.AdditionalSessions)
+            .Include(c => c.AdditionalSessions)
             .Where(c => !c.IsCompleted && c.UserId == userId)
             .OrderByDescending(c => c.CycleNumber)
             .FirstOrDefaultAsync();
@@ -59,6 +60,9 @@ public class CycleService(
                 .ThenInclude(w => w.AdditionalSessions)
                     .ThenInclude(s => s.CardioEntries)
                         .ThenInclude(e => e.Accessory)
+            .Include(c => c.AdditionalSessions)
+                .ThenInclude(s => s.CardioEntries)
+                    .ThenInclude(e => e.Accessory)
             .FirstOrDefaultAsync(c => c.Id == cycleId && c.UserId == userId);
     }
 

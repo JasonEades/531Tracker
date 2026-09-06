@@ -7,6 +7,8 @@ public class AdditionalSession
     public int Id { get; set; }
     public int? WeekId { get; set; }
     public Week? Week { get; set; }
+    public int? CycleId { get; set; }
+    public Cycle? Cycle { get; set; }
     public int? PplWeekId { get; set; }
     public PplWeek? PplWeek { get; set; }
     public SessionType SessionType { get; set; }

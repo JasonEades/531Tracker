@@ -1,4 +1,5 @@
 @page "/sessions/add/{WeekId:int}"
+@page "/sessions/add/cycle/{CycleId:int}"
 @page "/sessions/add/ppl/{PplWeekId:int}"
 @attribute [Authorize]
 @rendermode InteractiveServer
@@ -75,6 +76,7 @@
 
 @code {
     [Parameter] public int WeekId { get; set; }
+    [Parameter] public int CycleId { get; set; }
     [Parameter] public int PplWeekId { get; set; }
     private SessionType type = SessionType.CustomStrength;
     private DateTime date = DateTime.Today;
@@ -88,6 +90,8 @@
 
     protected override async Task OnInitializedAsync()
     {
+        if (CycleId > 0)
+            type = SessionType.Cardio;
         cardioAccessories = await SessionService.GetCardioAccessoriesAsync();
         AddCardioRow();
         AddStrengthRow();
@@ -103,9 +107,11 @@
         if (type == SessionType.Cardio && (cardioEntries.Count == 0 || cardioEntries.Any(e => e.AccessoryId == 0 || e.Quantity <= 0)))
         { error = "Select a cardio exercise and enter a quantity greater than zero for each entry."; return; }
         saving = true;
-        var session = WeekId > 0
-            ? await SessionService.CreateForWeekAsync(WeekId, type, date, name, notes)
-            : await SessionService.CreateForPplWeekAsync(PplWeekId, type, date, name, notes);
+        var session = CycleId > 0
+            ? await SessionService.CreateForCycleAsync(CycleId, type, date, name, notes)
+            : WeekId > 0
+                ? await SessionService.CreateForWeekAsync(WeekId, type, date, name, notes)
+                : await SessionService.CreateForPplWeekAsync(PplWeekId, type, date, name, notes);
         foreach (var entry in cardioEntries.Where(e => e.AccessoryId > 0 && e.Quantity > 0))
             await SessionService.AddCardioEntryAsync(session.Id, entry.AccessoryId, entry.Quantity, entry.Unit, entry.Notes);
         foreach (var exercise in strengthEntries.Where(e => !string.IsNullOrWhiteSpace(e.Name)))
@@ -118,7 +124,7 @@
         NavBack();
     }
 
-    private void NavBack() => Nav.NavigateTo(WeekId > 0 ? "/" : "/ppl/history");
+    private void NavBack() => Nav.NavigateTo(CycleId > 0 ? $"/cycles/{CycleId}" : WeekId > 0 ? "/" : "/ppl/history");
     private sealed class CardioDraft { public int AccessoryId { get; set; } public double Quantity { get; set; } public CardioUnit Unit { get; set; } = CardioUnit.Minutes; public string? Notes { get; set; } }
     private sealed class StrengthDraft { public string Name { get; set; } = string.Empty; public double Weight { get; set; } public int Reps { get; set; } }
 }

@@ -33,7 +33,11 @@
                 <div class="history-program-name">@program.Name</div>
                 <div class="history-program-meta">@program.DaysPerWeek-day split · @sessions.Count(s => s.Status == WorkoutStatus.Completed) sessions completed</div>
             </div>
-            <span class="badge @(program.IsActive ? "badge-success" : "badge-muted")">@(program.IsActive ? "Active" : "Inactive")</span>
+            <div class="flex items-center gap-2">
+                <span class="badge @(program.IsActive ? "badge-success" : "badge-muted")">@(program.IsActive ? "Active" : "Inactive")</span>
+                <button class="btn btn-sm" style="color:var(--color-danger);background:var(--color-danger-dim);"
+                        @onclick="DeleteProgram">Delete</button>
+            </div>
         </div>
 
         @if (!sessions.Any(s => s.Status == WorkoutStatus.Completed))
@@ -55,7 +59,7 @@
                     <div class="history-session-header">
                         <div>
                             <div class="history-session-name">@s.DayTemplate.Name</div>
-                            <div class="history-session-date">@s.CompletedAt?.ToLocalTime().ToString("ddd, MMM d")</div>
+                            <div class="history-session-date">@s.OccurredOn.ToLocalTime().ToString("ddd, MMM d")</div>
                         </div>
                         <span class="badge @GetDayTypeBadge(s.DayTemplate.DayType)">@s.DayTemplate.DayType</span>
                     </div>
@@ -106,4 +110,13 @@
 
     private void GoToSession(int id) => Nav.NavigateTo($"/ppl/session/{id}");
     private void AddSession(int weekId) => Nav.NavigateTo("/sessions/add/ppl/" + weekId);
+
+    private async Task DeleteProgram()
+    {
+        if (program is null) return;
+
+        await PplService.DeleteProgramAsync(program.Id);
+        program = null;
+        sessions = [];
+    }
 }

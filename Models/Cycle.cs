@@ -34,4 +34,5 @@ public class Cycle
     public bool IncludeFsl { get; set; }
 
     public ICollection<Week> Weeks { get; set; } = [];
+    public ICollection<AdditionalSession> AdditionalSessions { get; set; } = [];
 }

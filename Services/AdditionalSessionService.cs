@@ -9,6 +9,7 @@ public interface IAdditionalSessionService
     Task<List<Accessory>> GetCardioAccessoriesAsync();
     Task<AdditionalSession?> GetAsync(int id);
     Task<AdditionalSession> CreateForWeekAsync(int weekId, SessionType type, DateTime occurredOn, string? name, string? notes);
+    Task<AdditionalSession> CreateForCycleAsync(int cycleId, SessionType type, DateTime occurredOn, string? name, string? notes);
     Task<AdditionalSession> CreateForPplWeekAsync(int pplWeekId, SessionType type, DateTime occurredOn, string? name, string? notes);
     Task UpdateAsync(int id, DateTime occurredOn, string? name, string? notes);
     Task DeleteAsync(int id);
@@ -35,6 +36,9 @@ public sealed class AdditionalSessionService(AppDbContext db, ICurrentUserServic
 
     public Task<AdditionalSession> CreateForWeekAsync(int weekId, SessionType type, DateTime occurredOn, string? name, string? notes)
         => CreateAsync(new AdditionalSession { WeekId = weekId }, type, occurredOn, name, notes);
+
+    public Task<AdditionalSession> CreateForCycleAsync(int cycleId, SessionType type, DateTime occurredOn, string? name, string? notes)
+        => CreateAsync(new AdditionalSession { CycleId = cycleId }, type, occurredOn, name, notes);
 
     public Task<AdditionalSession> CreateForPplWeekAsync(int pplWeekId, SessionType type, DateTime occurredOn, string? name, string? notes)
         => CreateAsync(new AdditionalSession { PplWeekId = pplWeekId }, type, occurredOn, name, notes);
@@ -119,6 +123,7 @@ public sealed class AdditionalSessionService(AppDbContext db, ICurrentUserServic
     {
         return db.AdditionalSessions.Where(s =>
             (s.WeekId != null && s.Week!.Cycle.UserId == userId) ||
+            (s.CycleId != null && s.Cycle!.UserId == userId) ||
             (s.PplWeekId != null && s.PplWeek!.Program.UserId == userId));
     }
 }

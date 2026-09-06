@@ -69,6 +69,11 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
             Metadata(column.Item(), $"Cycle {cycle.CycleNumber}  |  Created {cycle.CreatedAt:yyyy-MM-dd}  |  {(cycle.IsCompleted ? "Completed" : "In progress")}");
             Note(column.Item(), "Cycle Notes", cycle.Notes);
             Summary(column.Item(), "Cycle Summary", cycle.Summary);
+            foreach (var session in cycle.AdditionalSessions)
+            {
+                column.Item().PaddingTop(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
+                RenderAdditionalSession(column.Item().PaddingTop(8), session);
+            }
             foreach (var week in cycle.Weeks)
             {
                 column.Item().PaddingTop(14).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
@@ -163,8 +168,8 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
                 column.Item().PaddingTop(8).Text("Accessories").Bold().FontSize(11);
                 column.Item().Table(table =>
                 {
-                    table.ColumnsDefinition(columns => { columns.RelativeColumn(3); columns.ConstantColumn(40); columns.ConstantColumn(40); columns.ConstantColumn(55); columns.ConstantColumn(55); });
-                    Header(table, "Exercise", "Sets", "Reps", "Weight", "Done");
+                    table.ColumnsDefinition(columns => { columns.RelativeColumn(3); columns.ConstantColumn(40); columns.ConstantColumn(40); columns.ConstantColumn(55); columns.ConstantColumn(55); columns.RelativeColumn(3); });
+                    Header(table, "Exercise", "Sets", "Reps", "Weight", "Done", "Notes");
                     foreach (var accessory in workout.Accessories)
                     {
                         table.Cell().Element(Cell).Text(text => text.Span($"{accessory.Name}{(string.IsNullOrWhiteSpace(accessory.Description) ? "" : $" — {accessory.Description}")}"));
@@ -172,6 +177,7 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
                         table.Cell().Element(Cell).Text(accessory.Reps.ToString());
                         table.Cell().Element(Cell).Text(Weight(accessory.Weight));
                         table.Cell().Element(Cell).Text(accessory.IsCompleted ? "Yes" : "No");
+                        table.Cell().Element(Cell).Text(accessory.Notes ?? "");
                     }
                 });
             }

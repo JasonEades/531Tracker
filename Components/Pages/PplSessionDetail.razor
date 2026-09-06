@@ -49,6 +49,14 @@ else
         </div>
     </div>
 
+    <div class="session-date-row animate-fade-in">
+        <label for="ppl-session-date">Session date</label>
+        <input id="ppl-session-date" class="form-control form-control-sm" type="date" @bind="sessionDate" />
+        <button class="btn btn-outline btn-sm" @onclick="SaveSessionDate" disabled="@savingSessionDate">
+            @(savingSessionDate ? "Saving…" : "Save Date")
+        </button>
+    </div>
+
     @* ── Progress bar ────────────────────────────────────────── *@
     <div class="sets-progress mb-3 animate-fade-in">
         <div class="flex items-center justify-between mb-1">
@@ -152,6 +160,8 @@ else
 
     private PplSession? session;
     private bool loading = true;
+    private bool savingSessionDate;
+    private DateTime sessionDate = DateTime.Today;
     private Dictionary<double, List<PlateLoadingResult>> plateMap = [];
 
     private int SetsTotal => session?.Exercises.Sum(e => e.Sets.Count) ?? 0;
@@ -169,6 +179,7 @@ else
         session = await SessionService.GetSessionWithDetailsAsync(SessionId);
         if (session is not null)
         {
+            sessionDate = session.OccurredOn.ToLocalTime().Date;
             await BuildPlateMap();
         }
     }
@@ -191,6 +202,22 @@ else
     {
         await SessionService.StartSessionAsync(SessionId);
         await LoadSession();
+    }
+
+    private async Task SaveSessionDate()
+    {
+        if (session is null) return;
+
+        savingSessionDate = true;
+        try
+        {
+            await SessionService.UpdateSessionDateAsync(session.Id, sessionDate);
+            await LoadSession();
+        }
+        finally
+        {
+            savingSessionDate = false;
+        }
     }
 
     private async Task CompleteSession()

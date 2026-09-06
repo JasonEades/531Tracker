@@ -55,6 +55,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
                   .WithOne(w => w.Cycle)
                   .HasForeignKey(w => w.CycleId)
                   .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(c => c.AdditionalSessions)
+                  .WithOne(s => s.Cycle)
+                  .HasForeignKey(s => s.CycleId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Week>(entity =>

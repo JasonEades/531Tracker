@@ -3,6 +3,7 @@ using System;
 using FiveThreeOneTracker.Data;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace FiveThreeOneTracker.Migrations
 {
     [DbContext(typeof(AppDbContext))]
-    partial class AppDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260906224512_AddWorkoutAccessoryNotes")]
+    partial class AddWorkoutAccessoryNotes
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -292,9 +295,6 @@ namespace FiveThreeOneTracker.Migrations
                     b.Property<DateTime>("CreatedAt")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<int?>("CycleId")
-                        .HasColumnType("integer");
-
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -321,8 +321,6 @@ namespace FiveThreeOneTracker.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
-
-                    b.HasIndex("CycleId");
 
                     b.HasIndex("PplWeekId", "OccurredOn");
 
@@ -1287,11 +1285,6 @@ namespace FiveThreeOneTracker.Migrations
 
             modelBuilder.Entity("FiveThreeOneTracker.Models.AdditionalSession", b =>
                 {
-                    b.HasOne("FiveThreeOneTracker.Models.Cycle", "Cycle")
-                        .WithMany("AdditionalSessions")
-                        .HasForeignKey("CycleId")
-                        .OnDelete(DeleteBehavior.Cascade);
-
                     b.HasOne("FiveThreeOneTracker.Models.PplWeek", "PplWeek")
                         .WithMany("AdditionalSessions")
                         .HasForeignKey("PplWeekId")
@@ -1301,8 +1294,6 @@ namespace FiveThreeOneTracker.Migrations
                         .WithMany("AdditionalSessions")
                         .HasForeignKey("WeekId")
                         .OnDelete(DeleteBehavior.Cascade);
-
-                    b.Navigation("Cycle");
 
                     b.Navigation("PplWeek");
 
@@ -1596,8 +1587,6 @@ namespace FiveThreeOneTracker.Migrations
 
             modelBuilder.Entity("FiveThreeOneTracker.Models.Cycle", b =>
                 {
-                    b.Navigation("AdditionalSessions");
-
                     b.Navigation("Weeks");
                 });
 

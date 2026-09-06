@@ -138,3 +138,32 @@
     padding-left: var(--space-5);
     padding-right: var(--space-5);
 }
+
+.workout-finish-action {
+    position: static;
+    padding-bottom: calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
+}
+
+.additional-sets-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+    -webkit-overflow-scrolling: touch;
+}
+
+.additional-sets-scroll > .set-card {
+    min-width: 680px;
+}
+
+.additional-sets-empty {
+    padding: var(--space-3) var(--space-5) var(--space-4);
+}
+
+.metric-card-content {
+    padding: var(--space-4) var(--space-5) 0;
+}
+
+.metric-card-detail {
+    padding: var(--space-2) var(--space-5) var(--space-4);
+    color: var(--color-text-muted);
+    font-size: 0.72rem;
+}

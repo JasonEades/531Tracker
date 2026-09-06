@@ -17,6 +17,7 @@ public interface IWorkoutService
     Task<Workout?> GetNextIncompleteWorkoutAsync();
     Task UpdateWorkoutBarAsync(int workoutId, int? barId);
     Task UpdateWorkoutNotesAsync(int workoutId, string? notes);
+    Task UpdateWorkoutDateAsync(int workoutId, DateTime occurredOn);
 }
 
 public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : IWorkoutService
@@ -44,6 +45,15 @@ public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : 
             set.IsCompleted = isCompleted;
             await db.SaveChangesAsync();
         }
+    }
+
+    public async Task UpdateWorkoutDateAsync(int workoutId, DateTime occurredOn)
+    {
+        var workout = await GetOwnedWorkoutAsync(workoutId);
+        if (workout is null) return;
+
+        workout.OccurredOn = DateTime.SpecifyKind(occurredOn.Date, DateTimeKind.Utc);
+        await db.SaveChangesAsync();
     }
 
     public async Task<WorkoutSet?> AddAdditionalSetAsync(int workoutId, double weight, int reps, AdditionalSetType type, double? rpe, double? rir, string? notes)
