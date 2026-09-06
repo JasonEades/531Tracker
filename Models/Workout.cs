@@ -13,6 +13,8 @@ public class Workout
 
     public DateTime? CompletedAt { get; set; }
 
+    public string? Notes { get; set; }
+
     /// <summary>Optional bar override for this workout's plate calculations. Null = use the user's default bar.</summary>
     public int? BarId { get; set; }
     public Bar? Bar { get; set; }

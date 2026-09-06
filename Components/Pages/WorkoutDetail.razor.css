@@ -68,6 +68,38 @@
     letter-spacing: 0.06em;
 }
 
+.workout-notes-section {
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius-md);
+    padding: var(--space-4) var(--space-5);
+    margin-bottom: var(--space-5);
+}
+
+.section-heading-row {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-3);
+}
+
+.section-heading {
+    margin: 0;
+    font-size: var(--text-lg);
+}
+
+.section-subtitle {
+    margin: 4px 0 0;
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+}
+
+.workout-notes-input {
+    min-height: 120px;
+    resize: vertical;
+}
+
 .set-unit {
     font-size: var(--text-sm);
     font-weight: 400;

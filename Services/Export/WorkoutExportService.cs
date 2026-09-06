@@ -123,6 +123,7 @@ public sealed class WorkoutExportService(
             Name = cycle.Name,
             CreatedAt = cycle.CreatedAt,
             IsCompleted = cycle.IsCompleted,
+            Notes = cycle.Notes,
             Weeks = weeks,
             Summary = Summarize(weeks)
         };
@@ -136,6 +137,7 @@ public sealed class WorkoutExportService(
             Id = week.Id,
             WeekNumber = (int)week.WeekNumber,
             CycleNumber = week.Cycle.CycleNumber,
+            Notes = week.Notes,
             Workouts = workouts,
             Summary = Summarize(workouts)
         };
@@ -183,6 +185,7 @@ public sealed class WorkoutExportService(
             WorkoutType = workout.MainLiftType.ToString(),
             WorkoutDate = workout.CompletedAt,
             Status = workout.Status.ToString(),
+            Notes = workout.Notes,
             Exercises = exercises,
             Accessories = accessories,
             Summary = Summarize(exercises, accessories)

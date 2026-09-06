@@ -90,6 +90,21 @@ else
         </div>
     </div>
 
+    @* ── Workout Notes ─────────────────────────────────── *@
+    <div class="workout-notes-section animate-slide-up">
+        <div class="section-heading-row">
+            <div>
+                <h2 class="section-heading">Workout Notes</h2>
+                <p class="section-subtitle">Optional notes for this workout session only.</p>
+            </div>
+            <button class="btn btn-sm btn-primary" @onclick="SaveWorkoutNotes" disabled="@savingWorkoutNotes">
+                @(savingWorkoutNotes ? "Saving…" : "Save Notes")
+            </button>
+        </div>
+        <textarea class="form-control workout-notes-input" rows="5" @bind="workout.Notes"
+                  placeholder="How did this workout feel? Record energy, recovery, changes, or anything unusual."></textarea>
+    </div>
+
     @* ── Warmup Sets ──────────────────────────────────── *@
     @if (warmupSets.Count > 0)
     {
@@ -426,6 +441,7 @@ else
     private Workout? workout;
     private bool loading = true;
     private bool exporting;
+    private bool savingWorkoutNotes;
     private string? exportError;
 
     private List<WorkoutSet> mainSets = [];
@@ -537,6 +553,22 @@ else
     {
         await WorkoutService.StartWorkoutAsync(WorkoutId);
         await LoadWorkout();
+    }
+
+    private async Task SaveWorkoutNotes()
+    {
+        if (workout is null) return;
+
+        savingWorkoutNotes = true;
+        try
+        {
+            await WorkoutService.UpdateWorkoutNotesAsync(workout.Id, workout.Notes);
+            await LoadWorkout();
+        }
+        finally
+        {
+            savingWorkoutNotes = false;
+        }
     }
 
     private async Task CompleteWorkout()

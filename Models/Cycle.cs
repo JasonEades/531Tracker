@@ -19,6 +19,8 @@ public class Cycle
 
     public bool IsCompleted { get; set; }
 
+    public string? Notes { get; set; }
+
     public BbbMode BbbMode { get; set; } = BbbMode.None;
 
     public double BbbPercentage { get; set; } = 50;

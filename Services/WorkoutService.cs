@@ -13,6 +13,7 @@ public interface IWorkoutService
     Task ReopenWorkoutAsync(int workoutId);
     Task<Workout?> GetNextIncompleteWorkoutAsync();
     Task UpdateWorkoutBarAsync(int workoutId, int? barId);
+    Task UpdateWorkoutNotesAsync(int workoutId, string? notes);
 }
 
 public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : IWorkoutService
@@ -40,6 +41,15 @@ public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : 
             set.IsCompleted = isCompleted;
             await db.SaveChangesAsync();
         }
+    }
+
+    public async Task UpdateWorkoutNotesAsync(int workoutId, string? notes)
+    {
+        var workout = await db.Workouts.FindAsync(workoutId);
+        if (workout is null) return;
+
+        workout.Notes = string.IsNullOrWhiteSpace(notes) ? null : notes;
+        await db.SaveChangesAsync();
     }
 
     public async Task StartWorkoutAsync(int workoutId)
