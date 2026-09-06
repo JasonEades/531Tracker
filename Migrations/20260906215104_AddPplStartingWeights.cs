@@ -41,7 +41,14 @@ namespace FiveThreeOneTracker.Migrations
                 migrationBuilder.Sql("UPDATE \"PplExerciseSlots\" AS S SET \"CurrentWeight\" = ROUND((L.\"TrainingMax\" * S.\"TmPercentage\") / 5.0) * 5.0 FROM \"Lifts\" AS L WHERE L.\"Id\" = S.\"LiftId\" AND S.\"CurrentWeight\" = 0 AND S.\"UsePercentageOfTm\" = TRUE AND S.\"LiftId\" IS NOT NULL;");
             }
 
-            migrationBuilder.Sql("UPDATE PplExerciseSlots SET StartingWeight = CurrentWeight WHERE CurrentWeight IS NOT NULL AND CurrentWeight > 0;");
+            if (migrationBuilder.ActiveProvider.Contains("Sqlite", StringComparison.OrdinalIgnoreCase))
+            {
+                migrationBuilder.Sql("UPDATE PplExerciseSlots SET StartingWeight = CurrentWeight WHERE CurrentWeight IS NOT NULL AND CurrentWeight > 0;");
+            }
+            else
+            {
+                migrationBuilder.Sql("UPDATE \"PplExerciseSlots\" SET \"StartingWeight\" = \"CurrentWeight\" WHERE \"CurrentWeight\" IS NOT NULL AND \"CurrentWeight\" > 0;");
+            }
         }
 
         /// <inheritdoc />

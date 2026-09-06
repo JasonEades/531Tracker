@@ -80,6 +80,7 @@ builder.Services.AddAuthentication()
     {
         options.ClientId     = builder.Configuration["Authentication:Google:ClientId"]     ?? "";
         options.ClientSecret = builder.Configuration["Authentication:Google:ClientSecret"] ?? "";
+        options.CallbackPath = "/signin-google";
 
         options.Events.OnRedirectToAuthorizationEndpoint = ctx =>
         {

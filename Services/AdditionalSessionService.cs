@@ -47,7 +47,7 @@ public sealed class AdditionalSessionService(AppDbContext db, ICurrentUserServic
     {
         var session = await OwnedQuery(await userContext.GetUserIdAsync()).SingleOrDefaultAsync(s => s.Id == id);
         if (session is null) return;
-        session.OccurredOn = occurredOn;
+        session.OccurredOn = DateTime.SpecifyKind(occurredOn.Date, DateTimeKind.Utc);
         session.Name = string.IsNullOrWhiteSpace(name) ? session.SessionType switch
         {
             SessionType.Cardio => "Cardio Session",
@@ -110,7 +110,7 @@ public sealed class AdditionalSessionService(AppDbContext db, ICurrentUserServic
     {
         if (type == SessionType.ProgrammedWorkout) throw new ArgumentException("Additional sessions must be custom strength or cardio.", nameof(type));
         session.SessionType = type;
-        session.OccurredOn = occurredOn.Date;
+        session.OccurredOn = DateTime.SpecifyKind(occurredOn.Date, DateTimeKind.Utc);
         session.CreatedAt = DateTime.UtcNow;
         session.Name = string.IsNullOrWhiteSpace(name) ? type == SessionType.Cardio ? "Cardio Session" : "Custom Workout" : name.Trim();
         session.Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
