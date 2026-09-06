@@ -1,3 +1,4 @@
 <Solution>
   <Project Path="FiveThreeOneTracker.csproj" />
+  <Project Path="Tests\WorkoutExportTests.csproj" />
 </Solution>

@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
     <TargetFramework>net10.0</TargetFramework>
@@ -9,7 +9,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <Compile Remove="Tests\**" />
+    <None Remove="Tests\**" />
+    <Content Remove="Tests\**" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include=".do\app.yaml" />
+    <None Include="Tests\WorkoutExportTests.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -23,6 +30,7 @@
     </PackageReference>
     <PackageReference Include="MudBlazor" Version="9.7.0" />
     <PackageReference Include="Markdig" Version="0.38.0" />
+    <PackageReference Include="QuestPDF" Version="2025.7.0" />
     <PackageReference Include="Npgsql.EntityFrameworkCore.PostgreSQL" Version="10.0.2" />
     <PackageReference Include="SQLitePCLRaw.lib.e_sqlite3" Version="2.1.12" />
   </ItemGroup>

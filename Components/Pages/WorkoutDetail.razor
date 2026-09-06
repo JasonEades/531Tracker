@@ -6,6 +6,8 @@
 @inject IBbbMappingService BbbMapping
 @inject IPlateCalculatorService PlateCalc
 @inject IWeightCalculator WeightCalc
+@inject IWorkoutExportService ExportService
+@inject IJSRuntime JS
 @inject NavigationManager Nav
 
 <PageTitle>Workout — 5/3/1 Tracker</PageTitle>
@@ -38,6 +40,8 @@ else
                 </div>
             </div>
             <div class="workout-actions">
+                <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportFormat.Markdown)" disabled="@exporting">Export Markdown</button>
+                <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportFormat.Pdf)" disabled="@exporting">Export PDF</button>
                 @if (workout.Status == WorkoutStatus.NotStarted)
                 {
                     <button class="btn btn-primary" @onclick="StartWorkout">▶ Start</button>
@@ -48,6 +52,11 @@ else
                 }
             </div>
         </div>
+
+    @if (!string.IsNullOrWhiteSpace(exportError))
+    {
+        <div class="alert alert-danger mt-2">@exportError</div>
+    }
     </div>
 
     @* ── Bar Selector ─────────────────────────────────── *@
@@ -416,6 +425,8 @@ else
 
     private Workout? workout;
     private bool loading = true;
+    private bool exporting;
+    private string? exportError;
 
     private List<WorkoutSet> mainSets = [];
     private List<WorkoutSet> bbbSets = [];
@@ -437,6 +448,30 @@ else
                 return WeightCalc.CalculateEstimated1RM(topSet.ActualWeight.Value, topSet.ActualReps.Value);
             return null;
         }
+    }
+
+    private async Task Export(WorkoutExportFormat format)
+    {
+        exporting = true;
+        exportError = null;
+        try
+        {
+            var result = await ExportService.ExportAsync(new WorkoutExportRequest
+            {
+                Scope = WorkoutExportScope.Day,
+                Format = format,
+                Id = WorkoutId
+            });
+            await JS.InvokeVoidAsync("workoutExport.download", result.FileName, result.ContentType, Convert.ToBase64String(result.Content));
+        }
+        catch (WorkoutExportException ex)
+        {
+            exportError = ex.Message;
+        }
+        finally
+        {
+            exporting = false;
+    }
     }
     private int SetsPct   => SetsTotal > 0 ? (int)(SetsDone * 100.0 / SetsTotal) : 0;
     private Dictionary<double, List<PlateLoadingResult>> plateMap = [];

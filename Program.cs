@@ -2,6 +2,7 @@ using FiveThreeOneTracker.Components;
 using FiveThreeOneTracker.Data;
 using FiveThreeOneTracker.Models;
 using FiveThreeOneTracker.Services;
+using FiveThreeOneTracker.Services.Export;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Components.Server.Circuits;
 using Microsoft.AspNetCore.DataProtection;
@@ -28,6 +29,10 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
     options.KnownNetworks.Clear();
     options.KnownProxies.Clear();
 });
+
+builder.Services.AddScoped<IWorkoutExportService, WorkoutExportService>();
+builder.Services.AddScoped<IWorkoutExportRenderer, MarkdownWorkoutExporter>();
+builder.Services.AddScoped<IWorkoutExportRenderer, PdfWorkoutExporter>();
 
 var adminEmail = builder.Configuration["App:AdminEmail"] ?? "";
 

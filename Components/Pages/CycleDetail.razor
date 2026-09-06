@@ -3,6 +3,8 @@
 @rendermode InteractiveServer
 @inject ICycleService CycleService
 @inject ILiftService LiftService
+@inject IWorkoutExportService ExportService
+@inject IJSRuntime JS
 @inject NavigationManager Nav
 
 <PageTitle>Cycle Details — 5/3/1 Tracker</PageTitle>
@@ -50,6 +52,8 @@ else
                 </div>
             </div>
             <div class="workout-actions">
+                <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportScope.Cycle, CycleId, WorkoutExportFormat.Markdown)" disabled="@exporting">Export Markdown</button>
+                <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportScope.Cycle, CycleId, WorkoutExportFormat.Pdf)" disabled="@exporting">Export PDF</button>
                 @if (!cycle.IsCompleted && AllWorkoutsCompleted)
                 {
                     <button class="btn btn-success btn-sm" @onclick="ShowCompletion">✓ Complete</button>
@@ -62,6 +66,11 @@ else
                         @onclick="DeleteCycle">Delete</button>
             </div>
         </div>
+
+    @if (!string.IsNullOrWhiteSpace(exportError))
+    {
+        <div class="alert alert-danger mt-2">@exportError</div>
+    }
     </div>
 
     @* ── Overall progress ─────────────────────────────────── *@
@@ -187,6 +196,10 @@ else
                     {
                         <span class="badge badge-muted">@wCompleted / @wTotal</span>
                     }
+                    <div class="flex gap-1">
+                        <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportScope.Week, week.Id, WorkoutExportFormat.Markdown)" disabled="@exporting">Export Week MD</button>
+                        <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportScope.Week, week.Id, WorkoutExportFormat.Pdf)" disabled="@exporting">Export Week PDF</button>
+                    </div>
                 </div>
                 <div class="week-grid">
                     @foreach (var wo in weekWorkouts.OrderBy(w => w.MainLiftType))
@@ -218,6 +231,8 @@ else
 
     private Cycle? cycle;
     private bool loading = true;
+    private bool exporting;
+    private string? exportError;
 
     private int CycleTotal => cycle?.Weeks.SelectMany(w => w.Workouts).Count() ?? 0;
     private int CycleDone  => cycle?.Weeks.SelectMany(w => w.Workouts).Count(w => w.Status == WorkoutStatus.Completed) ?? 0;
@@ -322,6 +337,25 @@ else
     }
 
     private void GoToWorkout(int id) => Nav.NavigateTo("/workout/" + id);
+
+    private async Task Export(WorkoutExportScope scope, int id, WorkoutExportFormat format)
+    {
+        exporting = true;
+        exportError = null;
+        try
+        {
+            var result = await ExportService.ExportAsync(new WorkoutExportRequest { Scope = scope, Format = format, Id = id });
+            await JS.InvokeVoidAsync("workoutExport.download", result.FileName, result.ContentType, Convert.ToBase64String(result.Content));
+        }
+        catch (WorkoutExportException ex)
+        {
+            exportError = ex.Message;
+        }
+        finally
+        {
+            exporting = false;
+        }
+    }
 
     private static string GetWeekLabel(WeekNumber wn) => wn switch
     {
