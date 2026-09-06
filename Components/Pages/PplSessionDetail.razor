@@ -4,7 +4,6 @@
 @inject IPplSessionService SessionService
 @inject IPplProgressionService Progression
 @inject IPlateCalculatorService PlateCalc
-@inject IWeightCalculator WeightCalc
 @inject NavigationManager Nav
 
 <PageTitle>PPL Session — 5/3/1 Tracker</PageTitle>
@@ -64,9 +63,8 @@ else
     @* ── Exercise cards ──────────────────────────────────────── *@
     @foreach (var exercise in session.Exercises.OrderBy(e => e.OrderInSession))
     {
-        var isCompound = exercise.ExerciseSlot.UsePercentageOfTm;
+        var displayWeight = exercise.Sets.Select(s => s.ActualWeight).FirstOrDefault(w => w.HasValue) ?? exercise.SuggestedWeight;
         var shouldProgress = Progression.ShouldProgress(exercise.Sets, exercise.RepsMax);
-        var e1rm = Progression.CalculateE1Rm(exercise);
 
         <div class="ppl-exercise-section animate-slide-up">
             <div class="ppl-exercise-header">
@@ -75,7 +73,10 @@ else
                     <div class="ppl-exercise-meta">
                         <span class="badge badge-muted">@exercise.TargetSets×@exercise.RepsMin–@exercise.RepsMax</span>
                         <span class="badge @GetMuscleGroupBadge(exercise.ExerciseSlot.MuscleGroup)">@exercise.ExerciseSlot.MuscleGroup</span>
-                        @if (isCompound) { <span class="badge badge-primary">%TM</span> }
+                         @if (!exercise.SuggestedWeight.HasValue && !exercise.ExerciseSlot.IsBodyweight)
+                         {
+                             <span class="badge badge-warning">⚠ Starting weight not set</span>
+                         }
                     </div>
                 </div>
                 @if (shouldProgress && session.Status != WorkoutStatus.Completed)
@@ -92,11 +93,12 @@ else
                     <div class="set-num">@set.SetNumber</div>
                     <div class="set-info">
                         <div class="set-weight-label">
-                            @(set.ActualWeight ?? exercise.SuggestedWeight) <span class="set-unit">lbs</span>
+                    @DisplayWeight(set.ActualWeight ?? exercise.SuggestedWeight) <span class="set-unit">lbs</span>
                         </div>
                         <div class="set-reps-label">× @set.TargetReps reps target</div>
                         @if (!exercise.ExerciseSlot.IsBodyweight &&
-                             plateMap.TryGetValue(set.ActualWeight ?? exercise.SuggestedWeight, out var plates) &&
+                             displayWeight.HasValue &&
+                             plateMap.TryGetValue(displayWeight.Value, out var plates) &&
                              plates.Count > 0)
                         {
                             <div class="plate-chips-inline">
@@ -114,7 +116,7 @@ else
                         @if (!exercise.ExerciseSlot.IsBodyweight)
                         {
                             <input class="set-input" type="number" inputmode="numeric"
-                                   value="@(set.ActualWeight ?? exercise.SuggestedWeight)"
+                                   value="@DisplayWeight(set.ActualWeight ?? exercise.SuggestedWeight)"
                                    @onchange="e => OnWeightChanged(set, exercise, e)" step="2.5"
                                    disabled="@(session.Status == WorkoutStatus.Completed)" />
                         }
@@ -131,21 +133,6 @@ else
                 </div>
             }
 
-            @* e1RM card for compound lifts *@
-            @if (isCompound && e1rm.HasValue)
-            {
-                <div class="e1rm-card">
-                    <span class="e1rm-label">ESTIMATED 1RM</span>
-                    <span class="e1rm-value">@e1rm lbs</span>
-                    @if (exercise.ExerciseSlot.LiftId.HasValue)
-                    {
-                        <button class="btn btn-ghost btn-sm" @onclick="() => SyncToTm(exercise.PplExerciseSlotId)"
-                                title="Update Training Max to 90% of this e1RM">
-                            ↑ Sync TM
-                        </button>
-                    }
-                </div>
-            }
         </div>
     }
 
@@ -192,6 +179,8 @@ else
         var weights = session.Exercises
             .SelectMany(e => e.Sets.Select(s => s.ActualWeight ?? e.SuggestedWeight))
             .Concat(session.Exercises.Select(e => e.SuggestedWeight))
+            .Where(w => w.HasValue)
+            .Select(w => w!.Value)
             .Distinct();
         plateMap = [];
         foreach (var w in weights)
@@ -222,6 +211,12 @@ else
         {
             set.ActualWeight = w;
             await SessionService.UpdateSetAsync(set.Id, set.ActualWeight, set.ActualReps, set.IsCompleted);
+            if (!exercise.SuggestedWeight.HasValue && !exercise.ExerciseSlot.IsBodyweight)
+            {
+                await SessionService.SetStartingWeightAsync(exercise.PplExerciseSlotId, w);
+                exercise.ExerciseSlot.StartingWeight ??= w;
+                exercise.ExerciseSlot.CurrentWeight ??= w;
+            }
             await BuildPlateMap();
             await AutoStart();
         }
@@ -255,11 +250,6 @@ else
         await LoadSession();
     }
 
-    private async Task SyncToTm(int slotId)
-    {
-        await Progression.SyncToTrainingMaxAsync(slotId);
-    }
-
     private async Task AutoStart()
     {
         if (session?.Status == WorkoutStatus.NotStarted)
@@ -276,6 +266,8 @@ else
         WorkoutStatus.Completed  => "badge-success",
         _ => "badge-muted"
     };
+
+    private static string DisplayWeight(double? weight) => weight?.ToString("0.##") ?? "—";
 
     private static string GetStatusLabel(WorkoutStatus s) => s switch
     {

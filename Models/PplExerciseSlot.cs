@@ -33,8 +33,11 @@ public class PplExerciseSlot
     public int? LiftId { get; set; }
     public Lift? Lift { get; set; }
 
-    /// <summary>Current working weight for double-progression exercises. Updated automatically on progression.</summary>
-    public double CurrentWeight { get; set; }
+    /// <summary>Weight entered during PPL setup or the first workout.</summary>
+    public double? StartingWeight { get; set; }
+
+    /// <summary>Current PPL working weight. Updated automatically on progression.</summary>
+    public double? CurrentWeight { get; set; }
 
     /// <summary>Pounds to add when the progression threshold is met.</summary>
     public double ProgressionIncrement { get; set; } = 5;

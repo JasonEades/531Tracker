@@ -10,12 +10,13 @@ public interface IPplProgramService
     Task<List<PplProgram>> GetAllProgramsAsync();
     Task<PplProgram?> GetProgramWithDetailsAsync(int programId);
     Task<PplProgram> CreateProgramAsync(string name, int daysPerWeek, string? notes = null);
+    Task ConfigureStartingWeightsAsync(int programId, IReadOnlyDictionary<int, double?> weights);
     Task SetActiveProgramAsync(int programId);
     Task DeleteProgramAsync(int programId);
     Task<PplSession> GetOrCreateNextSessionAsync(int programId);
 }
 
-public class PplProgramService(AppDbContext db, ILiftService liftService, ICurrentUserService userContext) : IPplProgramService
+public class PplProgramService(AppDbContext db, ICurrentUserService userContext) : IPplProgramService
 {
     public async Task<PplProgram?> GetActiveProgramAsync()
     {
@@ -46,9 +47,6 @@ public class PplProgramService(AppDbContext db, ILiftService liftService, ICurre
     public async Task<PplProgram> CreateProgramAsync(string name, int daysPerWeek, string? notes = null)
     {
         var userId = await userContext.GetUserIdAsync();
-        var lifts = await liftService.GetAllLiftsAsync();
-        var liftDict = lifts.ToDictionary(l => l.LiftType);
-
         var program = new PplProgram
         {
             UserId = userId,
@@ -66,13 +64,32 @@ public class PplProgramService(AppDbContext db, ILiftService liftService, ICurre
         await db.SaveChangesAsync();
 
         var templates = daysPerWeek >= 6
-            ? BuildSixDayTemplates(program.Id, liftDict)
-            : BuildThreeDayTemplates(program.Id, liftDict);
+            ? BuildSixDayTemplates(program.Id)
+            : BuildThreeDayTemplates(program.Id);
 
         db.PplDayTemplates.AddRange(templates);
         await db.SaveChangesAsync();
 
         return program;
+    }
+
+    public async Task ConfigureStartingWeightsAsync(int programId, IReadOnlyDictionary<int, double?> weights)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var slots = await db.PplExerciseSlots
+            .Include(s => s.DayTemplate)
+            .Where(s => s.DayTemplate.PplProgramId == programId && s.DayTemplate.Program.UserId == userId)
+            .ToListAsync();
+
+        foreach (var slot in slots)
+        {
+            if (!weights.TryGetValue(slot.Id, out var weight)) continue;
+            var normalized = weight is > 0 ? weight : null;
+            slot.StartingWeight = normalized;
+            slot.CurrentWeight = normalized;
+        }
+
+        await db.SaveChangesAsync();
     }
 
     public async Task SetActiveProgramAsync(int programId)
@@ -156,10 +173,6 @@ public class PplProgramService(AppDbContext db, ILiftService liftService, ICurre
         var order = 1;
         foreach (var slot in slots)
         {
-            double suggestedWeight = slot.UsePercentageOfTm && slot.Lift is not null
-                ? Math.Round(slot.Lift.TrainingMax * slot.TmPercentage / 5.0) * 5.0
-                : slot.CurrentWeight;
-
             var exercise = new PplSessionExercise
             {
                 PplSessionId = session.Id,
@@ -168,7 +181,7 @@ public class PplProgramService(AppDbContext db, ILiftService liftService, ICurre
                 TargetSets = slot.TargetSets,
                 RepsMin = slot.RepsMin,
                 RepsMax = slot.RepsMax,
-                SuggestedWeight = suggestedWeight,
+                SuggestedWeight = slot.CurrentWeight,
                 OrderInSession = order++
             };
             db.PplSessionExercises.Add(exercise);
@@ -191,58 +204,58 @@ public class PplProgramService(AppDbContext db, ILiftService liftService, ICurre
 
     // ── Template builders ──────────────────────────────────────────────────────
 
-    private static List<PplDayTemplate> BuildThreeDayTemplates(int programId, Dictionary<LiftType, Lift> lifts)
+    private static List<PplDayTemplate> BuildThreeDayTemplates(int programId)
     {
         var push = new PplDayTemplate { PplProgramId = programId, DayType = PplDayType.Push, Variant = PplVariant.Single, OrderInWeek = 1, Name = "Push — Bench Focus" };
-        push.ExerciseSlots = PushASlots(push, lifts);
+        push.ExerciseSlots = PushASlots(push);
 
         var pull = new PplDayTemplate { PplProgramId = programId, DayType = PplDayType.Pull, Variant = PplVariant.Single, OrderInWeek = 2, Name = "Pull — Deadlift Focus" };
-        pull.ExerciseSlots = PullASlots(pull, lifts);
+        pull.ExerciseSlots = PullASlots(pull);
 
         var legs = new PplDayTemplate { PplProgramId = programId, DayType = PplDayType.Legs, Variant = PplVariant.Single, OrderInWeek = 3, Name = "Legs — Squat Focus" };
-        legs.ExerciseSlots = LegsASlots(legs, lifts);
+        legs.ExerciseSlots = LegsASlots(legs);
 
         return [push, pull, legs];
     }
 
-    private static List<PplDayTemplate> BuildSixDayTemplates(int programId, Dictionary<LiftType, Lift> lifts)
+    private static List<PplDayTemplate> BuildSixDayTemplates(int programId)
     {
         var pushA = new PplDayTemplate { PplProgramId = programId, DayType = PplDayType.Push, Variant = PplVariant.A, OrderInWeek = 1, Name = "Push A — Bench Focus" };
-        pushA.ExerciseSlots = PushASlots(pushA, lifts);
+        pushA.ExerciseSlots = PushASlots(pushA);
 
         var pullA = new PplDayTemplate { PplProgramId = programId, DayType = PplDayType.Pull, Variant = PplVariant.A, OrderInWeek = 2, Name = "Pull A — Deadlift Focus" };
-        pullA.ExerciseSlots = PullASlots(pullA, lifts);
+        pullA.ExerciseSlots = PullASlots(pullA);
 
         var legsA = new PplDayTemplate { PplProgramId = programId, DayType = PplDayType.Legs, Variant = PplVariant.A, OrderInWeek = 3, Name = "Legs A — Squat Focus" };
-        legsA.ExerciseSlots = LegsASlots(legsA, lifts);
+        legsA.ExerciseSlots = LegsASlots(legsA);
 
         var pushB = new PplDayTemplate { PplProgramId = programId, DayType = PplDayType.Push, Variant = PplVariant.B, OrderInWeek = 4, Name = "Push B — OHP Focus" };
-        pushB.ExerciseSlots = PushBSlots(pushB, lifts);
+        pushB.ExerciseSlots = PushBSlots(pushB);
 
         var pullB = new PplDayTemplate { PplProgramId = programId, DayType = PplDayType.Pull, Variant = PplVariant.B, OrderInWeek = 5, Name = "Pull B — Row Focus" };
-        pullB.ExerciseSlots = PullBSlots(pullB, lifts);
+        pullB.ExerciseSlots = PullBSlots(pullB);
 
         var legsB = new PplDayTemplate { PplProgramId = programId, DayType = PplDayType.Legs, Variant = PplVariant.B, OrderInWeek = 6, Name = "Legs B — Hip-Hinge Focus" };
-        legsB.ExerciseSlots = LegsBSlots(legsB, lifts);
+        legsB.ExerciseSlots = LegsBSlots(legsB);
 
         return [pushA, pullA, legsA, pushB, pullB, legsB];
     }
 
     // ── Exercise slot definitions ──────────────────────────────────────────────
 
-    private static ICollection<PplExerciseSlot> PushASlots(PplDayTemplate template, Dictionary<LiftType, Lift> lifts) =>
+    private static ICollection<PplExerciseSlot> PushASlots(PplDayTemplate template) =>
     [
-        Slot(template, 1, "Barbell Bench Press", MuscleGroup.Chest,    4, 5, 8,  pct: 0.75, lift: lifts.GetValueOrDefault(LiftType.BenchPress), inc: 5),
+        Slot(template, 1, "Barbell Bench Press", MuscleGroup.Chest,    4, 5, 8, inc: 5),
         Slot(template, 2, "Incline DB Press",    MuscleGroup.Chest,    3, 8, 12, inc: 2.5),
-        Slot(template, 3, "Overhead Press",      MuscleGroup.Shoulders,3, 8, 10, pct: 0.60, lift: lifts.GetValueOrDefault(LiftType.OverheadPress), inc: 5),
+        Slot(template, 3, "Overhead Press",      MuscleGroup.Shoulders,3, 8, 10, inc: 5),
         Slot(template, 4, "Lateral Raise",       MuscleGroup.Shoulders,4, 12,15, inc: 2.5),
         Slot(template, 5, "Tricep Pushdown",     MuscleGroup.Triceps,  3, 10,15, inc: 2.5),
         Slot(template, 6, "Overhead Tricep Ext", MuscleGroup.Triceps,  3, 10,15, inc: 2.5),
     ];
 
-    private static ICollection<PplExerciseSlot> PushBSlots(PplDayTemplate template, Dictionary<LiftType, Lift> lifts) =>
+    private static ICollection<PplExerciseSlot> PushBSlots(PplDayTemplate template) =>
     [
-        Slot(template, 1, "Overhead Press",       MuscleGroup.Shoulders,4, 5, 8,  pct: 0.75, lift: lifts.GetValueOrDefault(LiftType.OverheadPress), inc: 5),
+        Slot(template, 1, "Overhead Press",       MuscleGroup.Shoulders,4, 5, 8, inc: 5),
         Slot(template, 2, "DB Shoulder Press",    MuscleGroup.Shoulders,3, 8, 12, inc: 2.5),
         Slot(template, 3, "Incline Barbell Bench",MuscleGroup.Chest,    3, 8, 10, inc: 5),
         Slot(template, 4, "Cable Fly",            MuscleGroup.Chest,    3, 12,15, inc: 2.5),
@@ -250,9 +263,9 @@ public class PplProgramService(AppDbContext db, ILiftService liftService, ICurre
         Slot(template, 6, "Tricep Dips",          MuscleGroup.Triceps,  3, 8, 12, inc: 0, bodyweight: true),
     ];
 
-    private static ICollection<PplExerciseSlot> PullASlots(PplDayTemplate template, Dictionary<LiftType, Lift> lifts) =>
+    private static ICollection<PplExerciseSlot> PullASlots(PplDayTemplate template) =>
     [
-        Slot(template, 1, "Conventional Deadlift",MuscleGroup.Back,    3, 5, 8,  pct: 0.75, lift: lifts.GetValueOrDefault(LiftType.Deadlift), inc: 10),
+        Slot(template, 1, "Conventional Deadlift",MuscleGroup.Back,    3, 5, 8, inc: 10),
         Slot(template, 2, "Lat Pulldown",         MuscleGroup.Back,    4, 8, 12, inc: 2.5),
         Slot(template, 3, "Barbell Row",          MuscleGroup.Back,    4, 8, 10, inc: 5),
         Slot(template, 4, "Cable Row",            MuscleGroup.Back,    3, 10,15, inc: 2.5),
@@ -260,7 +273,7 @@ public class PplProgramService(AppDbContext db, ILiftService liftService, ICurre
         Slot(template, 6, "Hammer Curl",          MuscleGroup.Biceps,  3, 10,15, inc: 2.5),
     ];
 
-    private static ICollection<PplExerciseSlot> PullBSlots(PplDayTemplate template, Dictionary<LiftType, Lift> lifts) =>
+    private static ICollection<PplExerciseSlot> PullBSlots(PplDayTemplate template) =>
     [
         Slot(template, 1, "Barbell Row",         MuscleGroup.Back,    4, 5, 8,  inc: 5),
         Slot(template, 2, "Weighted Pull-ups",   MuscleGroup.Back,    4, 6, 10, inc: 2.5),
@@ -270,16 +283,16 @@ public class PplProgramService(AppDbContext db, ILiftService liftService, ICurre
         Slot(template, 6, "Incline DB Curl",     MuscleGroup.Biceps,  3, 10,15, inc: 2.5),
     ];
 
-    private static ICollection<PplExerciseSlot> LegsASlots(PplDayTemplate template, Dictionary<LiftType, Lift> lifts) =>
+    private static ICollection<PplExerciseSlot> LegsASlots(PplDayTemplate template) =>
     [
-        Slot(template, 1, "Back Squat",          MuscleGroup.Quads,      4, 5, 8,  pct: 0.75, lift: lifts.GetValueOrDefault(LiftType.Squat), inc: 10),
+        Slot(template, 1, "Back Squat",          MuscleGroup.Quads,      4, 5, 8, inc: 10),
         Slot(template, 2, "Romanian Deadlift",   MuscleGroup.Hamstrings, 3, 8, 12, inc: 5),
         Slot(template, 3, "Leg Press",           MuscleGroup.Quads,      3, 10,15, inc: 10),
         Slot(template, 4, "Leg Curl",            MuscleGroup.Hamstrings, 3, 10,15, inc: 2.5),
         Slot(template, 5, "Standing Calf Raise", MuscleGroup.Calves,     4, 12,20, inc: 5),
     ];
 
-    private static ICollection<PplExerciseSlot> LegsBSlots(PplDayTemplate template, Dictionary<LiftType, Lift> lifts) =>
+    private static ICollection<PplExerciseSlot> LegsBSlots(PplDayTemplate template) =>
     [
         Slot(template, 1, "Romanian Deadlift",      MuscleGroup.Hamstrings, 4, 6, 10, inc: 5),
         Slot(template, 2, "Hack Squat",             MuscleGroup.Quads,      3, 8, 12, inc: 10),
@@ -292,7 +305,7 @@ public class PplProgramService(AppDbContext db, ILiftService liftService, ICurre
     private static PplExerciseSlot Slot(
         PplDayTemplate template, int order, string name, MuscleGroup muscle,
         int sets, int repsMin, int repsMax,
-        double? pct = null, Lift? lift = null, double inc = 5, bool bodyweight = false) =>
+        double inc = 5, bool bodyweight = false) =>
         new()
         {
             PplDayTemplateId = template.Id,
@@ -302,11 +315,9 @@ public class PplProgramService(AppDbContext db, ILiftService liftService, ICurre
             TargetSets = sets,
             RepsMin = repsMin,
             RepsMax = repsMax,
-            UsePercentageOfTm = pct.HasValue,
-            TmPercentage = pct ?? 0,
-            LiftId = lift?.Id,
-            Lift = lift,
-            CurrentWeight = 0,
+            UsePercentageOfTm = false,
+            TmPercentage = 0,
+            CurrentWeight = null,
             ProgressionIncrement = inc,
             IsBodyweight = bodyweight
         };

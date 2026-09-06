@@ -12,12 +12,6 @@ public interface IPplProgressionService
     /// <summary>Increments CurrentWeight on the slot by ProgressionIncrement and persists.</summary>
     Task ApplyProgressionAsync(int exerciseSlotId);
 
-    /// <summary>
-    /// Writes the best estimated 1RM from recent sessions back to Lift.TrainingMax.
-    /// Only applies for slots linked to a Lift.
-    /// </summary>
-    Task SyncToTrainingMaxAsync(int exerciseSlotId);
-
     /// <summary>Epley e1RM from the top-weight completed set of a session exercise.</summary>
     double? CalculateE1Rm(PplSessionExercise exercise);
 
@@ -25,7 +19,7 @@ public interface IPplProgressionService
     Task<int> SessionsSinceLastProgressionAsync(int exerciseSlotId);
 }
 
-public class PplProgressionService(AppDbContext db, IWeightCalculator weightCalc, ILiftService liftService)
+public class PplProgressionService(AppDbContext db, IWeightCalculator weightCalc)
     : IPplProgressionService
 {
     public bool ShouldProgress(IEnumerable<PplSessionSet> sets, int repsMax)
@@ -39,36 +33,10 @@ public class PplProgressionService(AppDbContext db, IWeightCalculator weightCalc
         var slot = await db.PplExerciseSlots.FindAsync(exerciseSlotId);
         if (slot is null || slot.IsBodyweight) return;
 
-        slot.CurrentWeight = weightCalc.RoundToNearest5(slot.CurrentWeight + slot.ProgressionIncrement);
+        if (!slot.CurrentWeight.HasValue) return;
+
+        slot.CurrentWeight = weightCalc.RoundToNearest5(slot.CurrentWeight.Value + slot.ProgressionIncrement);
         await db.SaveChangesAsync();
-    }
-
-    public async Task SyncToTrainingMaxAsync(int exerciseSlotId)
-    {
-        var slot = await db.PplExerciseSlots
-            .Include(s => s.Lift)
-            .FirstOrDefaultAsync(s => s.Id == exerciseSlotId);
-
-        if (slot?.LiftId is null) return;
-
-        // Find the highest e1RM across all session sets for this slot
-        var allSets = await db.PplSessionSets
-            .Where(s => s.SessionExercise.PplExerciseSlotId == exerciseSlotId
-                     && s.IsCompleted
-                     && s.ActualWeight.HasValue
-                     && s.ActualReps.HasValue
-                     && s.ActualReps > 0)
-            .ToListAsync();
-
-        if (allSets.Count == 0) return;
-
-        var bestE1Rm = allSets
-            .Select(s => weightCalc.CalculateEstimated1RM(s.ActualWeight!.Value, s.ActualReps!.Value))
-            .Max();
-
-        var newTm = weightCalc.RoundToNearest5(bestE1Rm * 0.9);
-
-        await liftService.UpdateTrainingMaxAsync(slot.LiftId.Value, newTm);
     }
 
     public double? CalculateE1Rm(PplSessionExercise exercise)

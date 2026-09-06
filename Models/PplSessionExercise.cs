@@ -23,8 +23,8 @@ public class PplSessionExercise
 
     public int RepsMax { get; set; }
 
-    /// <summary>Weight suggested at session creation (TM-derived or CurrentWeight).</summary>
-    public double SuggestedWeight { get; set; }
+    /// <summary>Weight planned at session creation. Null means the user has not established a starting weight.</summary>
+    public double? SuggestedWeight { get; set; }
 
     public int OrderInSession { get; set; }
 

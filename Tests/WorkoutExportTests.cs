@@ -26,6 +26,78 @@ public sealed class WorkoutExportTests
     }
 
     [Fact]
+    public async Task NewPplDoesNotRequireOrRead531Lifts()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var service = new PplProgramService(context, new TestCurrentUserService());
+
+        var program = await service.CreateProgramAsync("New PPL", 3);
+        var details = await service.GetProgramWithDetailsAsync(program.Id);
+
+        Assert.NotNull(details);
+        Assert.Equal(3, details!.DayTemplates.Count);
+        Assert.All(details.DayTemplates.SelectMany(d => d.ExerciseSlots), slot =>
+        {
+            Assert.Null(slot.CurrentWeight);
+            Assert.False(slot.UsePercentageOfTm);
+            Assert.Null(slot.LiftId);
+        });
+    }
+
+    [Fact]
+    public async Task PplThreeAndSixDayProgramsCreateExpectedRotations()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var service = new PplProgramService(context, new TestCurrentUserService());
+
+        var threeDay = await service.CreateProgramAsync("Three", 3);
+        var sixDay = await service.CreateProgramAsync("Six", 6);
+
+        Assert.Equal(3, (await service.GetProgramWithDetailsAsync(threeDay.Id))!.DayTemplates.Count);
+        Assert.Equal(6, (await service.GetProgramWithDetailsAsync(sixDay.Id))!.DayTemplates.Count);
+    }
+
+    [Fact]
+    public async Task PplStartingWeightIsSlotSpecificAndDoesNotRewritePlannedSnapshot()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var service = new PplProgramService(context, new TestCurrentUserService());
+        var sessionService = new PplSessionService(context);
+        var program = await service.CreateProgramAsync("PPL", 3);
+        var details = await service.GetProgramWithDetailsAsync(program.Id);
+        var firstSlot = details!.DayTemplates.First().ExerciseSlots.First(s => !s.IsBodyweight);
+
+        await service.ConfigureStartingWeightsAsync(program.Id, new Dictionary<int, double?> { [firstSlot.Id] = 185 });
+        var session = await service.GetOrCreateNextSessionAsync(program.Id);
+        var detailedSession = await sessionService.GetSessionWithDetailsAsync(session.Id);
+        var exercise = detailedSession!.Exercises.Single(e => e.PplExerciseSlotId == firstSlot.Id);
+        Assert.Equal(185, exercise.SuggestedWeight);
+
+        var set = exercise.Sets.First();
+        await sessionService.UpdateSetAsync(set.Id, 175, 8, true);
+        var reloaded = await sessionService.GetSessionWithDetailsAsync(session.Id);
+
+        var reloadedExercise = reloaded!.Exercises.Single(e => e.PplExerciseSlotId == firstSlot.Id);
+        Assert.Equal(185, reloadedExercise.SuggestedWeight);
+        Assert.Equal(175, reloadedExercise.Sets.First().ActualWeight);
+    }
+
+    [Fact]
     public void PdfIsGeneratedFromTheSameDocument()
     {
         var document = CreateDocument();

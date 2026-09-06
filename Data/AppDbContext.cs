@@ -153,6 +153,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         modelBuilder.Entity<PplExerciseSlot>(entity =>
         {
             entity.Property(e => e.MuscleGroup).HasConversion<string>();
+            entity.Property(e => e.StartingWeight);
+            entity.Property(e => e.CurrentWeight);
             entity.HasOne(e => e.Lift)
                   .WithMany()
                   .HasForeignKey(e => e.LiftId)

@@ -61,8 +61,7 @@
     <div class="setup-card">
         <div class="preview-title" style="margin-bottom:var(--space-4)">Default Exercises Included</div>
         <p class="option-hint" style="margin-bottom:var(--space-4)">
-            These are evidence-based defaults. You can swap or adjust any exercise after creating the program.
-            Compound lifts marked <span class="badge badge-primary" style="font-size:0.65rem">%TM</span> auto-calculate weight from your Training Max.
+             These are the exercises included in your program. Starting weights are optional and can be entered now or during your first workout.
         </p>
 
         @foreach (var group in GetExercisePreview())
@@ -74,12 +73,43 @@
                     <div class="ex-row">
                         <span class="ex-name">@ex.Name</span>
                         <span class="ex-meta">@ex.Sets×@ex.RepsMin–@ex.RepsMax</span>
-                        @if (ex.UseTm)
-                        {
-                            <span class="badge badge-primary" style="font-size:0.65rem">%TM</span>
-                        }
                     </div>
                 }
+
+    @if (createdProgram is not null && programDetails is not null)
+    {
+        <div class="setup-card mt-3">
+            <div class="preview-title" style="margin-bottom:var(--space-2)">Set Your Starting Weights</div>
+            <p class="option-hint" style="margin-bottom:var(--space-4)">
+                Enter the weight you currently use for each exercise. Leave any exercise blank and establish it during your first workout.
+            </p>
+            @foreach (var day in programDetails.DayTemplates.OrderBy(d => d.OrderInWeek))
+            {
+                <div class="ex-group">
+                    <div class="ex-group-header @GetDayCss(day.DayType)">@day.Name</div>
+                    @foreach (var slot in day.ExerciseSlots.OrderBy(s => s.OrderInDay))
+                    {
+                        <div class="ex-row">
+                            <span class="ex-name">@slot.ExerciseName</span>
+                            <span class="ex-meta">@slot.TargetSets×@slot.RepsMin–@slot.RepsMax</span>
+                            @if (slot.IsBodyweight)
+                            {
+                                <span class="badge badge-muted">Bodyweight</span>
+                            }
+                            else
+                            {
+                                <input class="form-control" style="max-width:110px" type="number" min="0" step="2.5"
+                                       placeholder="Optional"
+                                       @bind="startingWeightDraft[slot.Id]" />
+                                <span class="set-unit">lbs</span>
+                            }
+                        </div>
+                    }
+                </div>
+            }
+            <p class="option-hint" style="margin-top:var(--space-3)">You can change these weights later. They do not change completed workout history.</p>
+        </div>
+    }
             </div>
         }
     </div>
@@ -90,8 +120,8 @@
     }
 
     <div class="flex gap-1 mt-3">
-        <button class="btn btn-primary flex-1 btn-lg" @onclick="CreateProgram" disabled="@loading">
-            @(loading ? "Creating…" : "🚀 Create Program")
+        <button class="btn btn-primary flex-1 btn-lg" @onclick="Submit" disabled="@loading">
+            @(loading ? "Saving…" : createdProgram is null ? "🚀 Create Program" : "Save Starting Weights")
         </button>
         <button class="btn btn-outline" @onclick='() => Nav.NavigateTo("/")'>Cancel</button>
     </div>
@@ -103,6 +133,9 @@
     private string? notes;
     private string? error;
     private bool loading;
+    private PplProgram? createdProgram;
+    private PplProgram? programDetails;
+    private Dictionary<int, string?> startingWeightDraft = [];
 
     private async Task CreateProgram()
     {
@@ -116,7 +149,14 @@
         try
         {
             var program = await PplService.CreateProgramAsync(programName.Trim(), selectedDays, notes);
-            Nav.NavigateTo("/");
+            createdProgram = program;
+            programDetails = await PplService.GetProgramWithDetailsAsync(program.Id);
+            if (programDetails is not null)
+            {
+                startingWeightDraft = programDetails.DayTemplates
+                    .SelectMany(d => d.ExerciseSlots)
+                    .ToDictionary(s => s.Id, _ => (string?)null);
+            }
         }
         catch (Exception ex)
         {
@@ -125,6 +165,33 @@
         }
     }
 
+    private async Task SaveStartingWeights()
+    {
+        if (createdProgram is null) return;
+
+        var weights = startingWeightDraft.ToDictionary(
+            pair => pair.Key,
+            pair => double.TryParse(pair.Value, out var weight) && weight > 0 ? weight : (double?)null);
+        loading = true;
+        await PplService.ConfigureStartingWeightsAsync(createdProgram.Id, weights);
+        Nav.NavigateTo("/");
+    }
+
+    private async Task Submit()
+    {
+        if (createdProgram is null)
+            await CreateProgram();
+        else
+            await SaveStartingWeights();
+    }
+
+    private static string GetDayCss(PplDayType type) => type switch
+    {
+        PplDayType.Push => "push",
+        PplDayType.Pull => "pull",
+        PplDayType.Legs => "legs",
+        _ => ""
+    };
     private record DayPreview(string Label, string Name, string Css);
     private record ExercisePreview(string Name, int Sets, int RepsMin, int RepsMax, bool UseTm);
     private record ExerciseGroup(string Title, string Css, List<ExercisePreview> Exercises);

@@ -11,6 +11,7 @@ public interface IPplSessionService
     Task CompleteSessionAsync(int sessionId);
     Task ReopenSessionAsync(int sessionId);
     Task UpdateSetAsync(int setId, double? actualWeight, int? actualReps, bool isCompleted);
+    Task SetStartingWeightAsync(int exerciseSlotId, double weight);
     Task<List<PplSession>> GetSessionHistoryAsync(int programId, int take = 30);
 }
 
@@ -34,6 +35,19 @@ public class PplSessionService(AppDbContext db) : IPplSessionService
         {
             session.Status = WorkoutStatus.InProgress;
             session.StartedAt = DateTime.UtcNow;
+            await db.SaveChangesAsync();
+        }
+    }
+
+    public async Task SetStartingWeightAsync(int exerciseSlotId, double weight)
+    {
+        if (weight <= 0) return;
+
+        var slot = await db.PplExerciseSlots.FindAsync(exerciseSlotId);
+        if (slot is not null)
+        {
+            slot.StartingWeight ??= weight;
+            slot.CurrentWeight ??= weight;
             await db.SaveChangesAsync();
         }
     }
