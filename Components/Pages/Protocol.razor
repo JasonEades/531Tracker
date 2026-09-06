@@ -67,7 +67,7 @@ else
     private bool loading = true;
     private bool saving;
     private bool saved;
-    private bool isPreview;
+    private bool isPreview = true;
 
     private string RenderedMarkdown => Markdown.ToHtml(markdown, MarkdownPipeline);
 
