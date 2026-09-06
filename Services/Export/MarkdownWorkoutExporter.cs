@@ -97,6 +97,16 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
                 var type = set.IsAmrap ? $"{set.Type} — AMRAP" : set.Type;
                 builder.AppendLine($"| {set.Number} | {type} | {set.TargetReps} | {Value(set.ActualReps)} | {Weight(set.TargetWeight)} | {Weight(set.ActualWeight)} | {(set.IsCompleted ? "Yes" : "No")} | {Inline(set.Notes)} |");
             }
+            if (exercise.AdditionalSets.Count > 0)
+            {
+                builder.AppendLine();
+                builder.AppendLine("### Additional Sets");
+                builder.AppendLine();
+                builder.AppendLine("| Set | Type | Weight | Reps | RPE | RIR | Notes |");
+                builder.AppendLine("|---:|---|---:|---:|---:|---:|---|");
+                foreach (var set in exercise.AdditionalSets)
+                    builder.AppendLine($"| {set.Number} | {Inline(set.Type)} | {Weight(set.ActualWeight ?? set.TargetWeight)} | {Value(set.ActualReps ?? set.TargetReps)} | {Value(set.Rpe)} | {Value(set.Rir)} | {Inline(set.Notes)} |");
+            }
         }
 
         if (workout.Accessories.Count > 0)
@@ -137,6 +147,7 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
 
     private static string Inline(string? value) => string.IsNullOrEmpty(value) ? "—" : value.Replace("|", "\\|").Replace("\r", " ").Replace("\n", "<br>");
     private static string Value(int? value) => value?.ToString(CultureInfo.InvariantCulture) ?? "—";
+    private static string Value(double? value) => value?.ToString("0.#", CultureInfo.InvariantCulture) ?? "—";
     private static string Weight(double value) => value.ToString("0.##", CultureInfo.InvariantCulture);
     private static string Weight(double? value) => value.HasValue ? Weight(value.Value) : "—";
 }

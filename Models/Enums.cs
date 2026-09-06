@@ -31,6 +31,15 @@ public enum SetType
     Fsl
 }
 
+public enum AdditionalSetType
+{
+    Additional,
+    DropSet,
+    BackOffSet,
+    ExtraVolume,
+    Other
+}
+
 public enum BbbMode
 {
     None,

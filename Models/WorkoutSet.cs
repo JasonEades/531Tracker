@@ -14,6 +14,12 @@ public class WorkoutSet
 
     public int SetNumber { get; set; }
 
+    public bool IsAdditional { get; set; }
+
+    public AdditionalSetType AdditionalSetType { get; set; } = AdditionalSetType.Additional;
+
+    public int Sequence { get; set; }
+
     public double PrescribedWeight { get; set; }
 
     public int PrescribedReps { get; set; }
@@ -21,6 +27,12 @@ public class WorkoutSet
     public double? ActualWeight { get; set; }
 
     public int? ActualReps { get; set; }
+
+    public double? Rpe { get; set; }
+
+    public double? Rir { get; set; }
+
+    public string? Notes { get; set; }
 
     public bool IsCompleted { get; set; }
 }

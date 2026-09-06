@@ -148,23 +148,7 @@ public sealed class WorkoutExportService(
         var exercises = workout.Sets
             .GroupBy(s => s.Lift)
             .OrderBy(g => g.Key.LiftType)
-            .Select(group => new ExerciseExportModel
-            {
-                Name = group.Key.Name,
-                Category = string.Join(", ", group.Select(s => s.SetType.ToString()).Distinct()),
-                Sets = group.OrderBy(s => s.SetType).ThenBy(s => s.SetNumber).Select(s => new SetExportModel
-                {
-                    Number = s.SetNumber,
-                    Type = s.SetType.ToString(),
-                    TargetReps = s.PrescribedReps,
-                    TargetWeight = s.PrescribedWeight,
-                    ActualReps = s.ActualReps,
-                    ActualWeight = s.ActualWeight,
-                    IsCompleted = s.IsCompleted,
-                    IsAmrap = s.SetType == SetType.Main && workout.Week.WeekNumber == WeekNumber.Week3
-                        && s.SetNumber == group.Where(x => x.SetType == SetType.Main).Max(x => x.SetNumber)
-                }).ToList()
-            }).ToList();
+            .Select(group => MapExercise(group, workout)).ToList();
 
         var accessories = workout.WorkoutAccessories.OrderBy(wa => wa.Accessory.Name).Select(wa => new AccessoryExportModel
         {
@@ -192,6 +176,36 @@ public sealed class WorkoutExportService(
         };
     }
 
+    private static ExerciseExportModel MapExercise(IGrouping<Lift, WorkoutSet> group, Workout workout)
+    {
+        var programmed = group.Where(s => !s.IsAdditional).ToList();
+        var mainSetNumbers = programmed.Where(s => s.SetType == SetType.Main).Select(s => s.SetNumber).ToHashSet();
+        return new ExerciseExportModel
+        {
+            Name = group.Key.Name,
+            Category = string.Join(", ", programmed.Select(s => s.SetType.ToString()).Distinct()),
+            Sets = programmed.OrderBy(s => s.SetType).ThenBy(s => s.SetNumber).Select(s => MapSet(s, s.SetType.ToString(),
+                s.SetType == SetType.Main && mainSetNumbers.Count > 0 && workout.Week.WeekNumber == WeekNumber.Week3 && s.SetNumber == mainSetNumbers.Max())).ToList(),
+            AdditionalSets = group.Where(s => s.IsAdditional).OrderBy(s => s.Sequence).Select(s => MapSet(s, s.AdditionalSetType.ToString(), false)).ToList()
+        };
+    }
+
+    private static SetExportModel MapSet(WorkoutSet set, string type, bool isAmrap) => new()
+    {
+        Number = set.IsAdditional ? set.Sequence : set.SetNumber,
+        Type = type,
+        TargetReps = set.PrescribedReps,
+        TargetWeight = set.PrescribedWeight,
+        ActualReps = set.ActualReps,
+        ActualWeight = set.ActualWeight,
+        IsCompleted = set.IsCompleted,
+        Notes = set.Notes,
+        IsAmrap = isAmrap,
+        AdditionalType = set.IsAdditional ? set.AdditionalSetType.ToString() : null,
+        Rpe = set.Rpe,
+        Rir = set.Rir
+    };
+
     private static ExportSummaryModel Summarize(IEnumerable<WeekExportModel> weeks) => Summarize(weeks.SelectMany(w => w.Workouts));
 
     private static ExportSummaryModel Summarize(IEnumerable<WorkoutExportModel> workouts)
@@ -216,10 +230,10 @@ public sealed class WorkoutExportService(
         return new ExportSummaryModel
         {
             ExerciseCount = exerciseList.Count + accessoryList.Count,
-            SetCount = exerciseList.Sum(e => e.Sets.Count) + accessoryList.Sum(a => a.Sets),
-            CompletedSetCount = exerciseList.Sum(e => e.Sets.Count(s => s.IsCompleted)) + accessoryList.Where(a => a.IsCompleted).Sum(a => a.Sets),
-            TotalReps = exerciseList.Sum(e => e.Sets.Sum(s => s.ActualReps ?? s.TargetReps)) + accessoryList.Sum(a => a.Sets * a.Reps),
-            TotalVolume = exerciseList.Sum(e => e.Sets.Sum(s => (s.ActualWeight ?? s.TargetWeight) * (s.ActualReps ?? s.TargetReps))) + accessoryList.Sum(a => a.Weight * a.Reps * a.Sets)
+            SetCount = exerciseList.Sum(e => e.Sets.Count + e.AdditionalSets.Count) + accessoryList.Sum(a => a.Sets),
+            CompletedSetCount = exerciseList.Sum(e => e.Sets.Count(s => s.IsCompleted) + e.AdditionalSets.Count(s => s.IsCompleted)) + accessoryList.Where(a => a.IsCompleted).Sum(a => a.Sets),
+            TotalReps = exerciseList.Sum(e => e.Sets.Concat(e.AdditionalSets).Sum(s => s.ActualReps ?? s.TargetReps)) + accessoryList.Sum(a => a.Sets * a.Reps),
+            TotalVolume = exerciseList.Sum(e => e.Sets.Concat(e.AdditionalSets).Sum(s => (s.ActualWeight ?? s.TargetWeight) * (s.ActualReps ?? s.TargetReps))) + accessoryList.Sum(a => a.Weight * a.Reps * a.Sets)
         };
     }
 

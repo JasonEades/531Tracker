@@ -111,6 +111,85 @@ public sealed class WorkoutExportTests
     }
 
     [Fact]
+    public void MarkdownSeparatesAdditionalSetsFromProgrammedSets()
+    {
+        var document = CreateDocument();
+        document.Workout!.Exercises[0].AdditionalSets.Add(new SetExportModel
+        {
+            Number = 1,
+            Type = "DropSet",
+            ActualWeight = 165,
+            ActualReps = 12,
+            Rpe = 8,
+            Notes = "Drop set after AMRAP",
+            IsCompleted = true
+        });
+
+        var markdown = System.Text.Encoding.UTF8.GetString(new MarkdownWorkoutExporter().Render(document));
+
+        Assert.Contains("### Additional Sets", markdown);
+        Assert.Contains("| 1 | DropSet | 165 | 12 | 8 |", markdown);
+        Assert.True(markdown.IndexOf("### Additional Sets", StringComparison.Ordinal) > markdown.IndexOf("| 5 | Main", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task AdditionalSetsPersistInOrderWithoutChangingProgrammedSets()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using (var context = new AppDbContext(options))
+        {
+            await context.Database.EnsureCreatedAsync();
+            var lift = new Lift { LiftType = LiftType.BenchPress, Name = "Bench Press", UserId = "test-user" };
+            var cycle = new Cycle { Name = "Test Cycle", UserId = "test-user" };
+            var week = new Week { Cycle = cycle, WeekNumber = WeekNumber.Week1 };
+            var workout = new Workout { Week = week, MainLiftType = LiftType.BenchPress };
+            workout.Sets.Add(new WorkoutSet { Lift = lift, SetType = SetType.Main, SetNumber = 1, PrescribedWeight = 185, PrescribedReps = 5 });
+            context.Add(workout);
+            await context.SaveChangesAsync();
+        }
+
+        int firstId;
+        await using (var context = new AppDbContext(options))
+        {
+            var service = new WorkoutService(context, new TestCurrentUserService());
+            var first = await service.AddAdditionalSetAsync(1, 165, 12, AdditionalSetType.DropSet, 8, null, "After top set");
+            var second = await service.AddAdditionalSetAsync(1, 145, 12, AdditionalSetType.DropSet, 9, null, null);
+            Assert.NotNull(first);
+            Assert.NotNull(second);
+            firstId = first!.Id;
+            Assert.Equal(1, first.Sequence);
+            Assert.Equal(2, second!.Sequence);
+        }
+
+        await using (var context = new AppDbContext(options))
+        {
+            var programmed = await context.WorkoutSets.SingleAsync(s => !s.IsAdditional);
+            var additional = await context.WorkoutSets.Where(s => s.IsAdditional).OrderBy(s => s.Sequence).ToListAsync();
+            Assert.Equal(185, programmed.PrescribedWeight);
+            Assert.Equal(5, programmed.PrescribedReps);
+            Assert.Equal(2, additional.Count);
+            Assert.Equal("After top set", additional[0].Notes);
+
+            var service = new WorkoutService(context, new TestCurrentUserService());
+            await service.UpdateAdditionalSetAsync(firstId, 160, 10, AdditionalSetType.BackOffSet, 7, 2, "Updated");
+            await service.DeleteAdditionalSetAsync(additional[1].Id);
+        }
+
+        await using (var context = new AppDbContext(options))
+        {
+            var remaining = await context.WorkoutSets.Where(s => s.IsAdditional).ToListAsync();
+            Assert.Single(remaining);
+            Assert.Equal(160, remaining[0].ActualWeight);
+            Assert.Equal(AdditionalSetType.BackOffSet, remaining[0].AdditionalSetType);
+            Assert.Equal("Updated", remaining[0].Notes);
+            Assert.Single(await context.WorkoutSets.Where(s => !s.IsAdditional).ToListAsync());
+        }
+    }
+
+    [Fact]
     public async Task WorkoutNotesPersistAcrossEditsAndStayWithTheirWorkout()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

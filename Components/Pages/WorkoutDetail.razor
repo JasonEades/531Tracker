@@ -213,6 +213,77 @@ else
         }
     </div>
 
+    @* ── Additional Sets ───────────────────────────────── *@
+    <div class="exercise-section animate-slide-up">
+        <div class="exercise-section-header">
+            <div class="exercise-section-title">➕ Additional Sets — @GetLiftDisplayName(workout.MainLiftType)</div>
+            @if (!showAdditionalSetForm)
+            {
+                <button class="btn btn-sm btn-primary" @onclick="BeginAdditionalSet">+ Add Set</button>
+            }
+        </div>
+        @if (additionalSets.Count == 0 && !showAdditionalSetForm)
+        {
+            <p class="section-subtitle">Record extra work without changing the programmed sets.</p>
+        }
+        @foreach (var set in additionalSets)
+        {
+            @if (editingAdditionalSetId == set.Id)
+            {
+                <div class="set-card">
+                    <div class="set-num">@set.Sequence</div>
+                    <div class="set-inputs" style="flex:1;flex-wrap:wrap">
+                        <select class="form-control" @bind="editAdditionalType">
+                            @foreach (var type in Enum.GetValues<AdditionalSetType>()) { <option value="@type">@GetAdditionalSetTypeLabel(type)</option> }
+                        </select>
+                        <input class="set-input" type="number" min="0" step="0.5" @bind="editAdditionalWeight" />
+                        <input class="set-input" type="number" min="1" @bind="editAdditionalReps" />
+                        <input class="set-input" type="number" min="0" max="10" step="0.5" placeholder="RPE" @bind="editAdditionalRpe" />
+                        <input class="set-input" type="number" min="0" step="0.5" placeholder="RIR" @bind="editAdditionalRir" />
+                        <input class="form-control" placeholder="Set notes" @bind="editAdditionalNotes" />
+                    </div>
+                    <button class="btn btn-sm btn-primary" @onclick="() => SaveAdditionalSetEdit(set)">Save</button>
+                    <button class="btn btn-sm btn-outline" @onclick="CancelAdditionalSetEdit">Cancel</button>
+                </div>
+            }
+            else
+            {
+                <div class="set-card completed-set">
+                    <div class="set-num">@set.Sequence</div>
+                    <div class="set-info">
+                        <div class="set-weight-label">@FormatPlate(set.ActualWeight ?? set.PrescribedWeight) <span class="set-unit">lbs</span></div>
+                        <div class="set-reps-label">× @(set.ActualReps ?? set.PrescribedReps) reps · @GetAdditionalSetTypeLabel(set.AdditionalSetType)</div>
+                        @if (set.Rpe.HasValue || set.Rir.HasValue || !string.IsNullOrWhiteSpace(set.Notes))
+                        {
+                            <div class="section-subtitle">@(set.Rpe.HasValue ? $"RPE {set.Rpe:0.#}" : "")@(set.Rir.HasValue ? $" · RIR {set.Rir:0.#}" : "")@(string.IsNullOrWhiteSpace(set.Notes) ? "" : $" · {set.Notes}")</div>
+                        }
+                    </div>
+                    <button class="btn btn-sm btn-outline" @onclick="() => BeginAdditionalSetEdit(set)">Edit</button>
+                    <button class="btn btn-sm btn-danger" @onclick="() => DeleteAdditionalSet(set.Id)">✕</button>
+                </div>
+            }
+        }
+        @if (showAdditionalSetForm)
+        {
+            <div class="set-card">
+                <div class="set-num">@(additionalSets.Count + 1)</div>
+                <div class="set-inputs" style="flex:1;flex-wrap:wrap">
+                    <select class="form-control" @bind="newAdditionalType">
+                        @foreach (var type in Enum.GetValues<AdditionalSetType>()) { <option value="@type">@GetAdditionalSetTypeLabel(type)</option> }
+                    </select>
+                    <input class="set-input" type="number" min="0" step="0.5" placeholder="Weight" @bind="newAdditionalWeight" />
+                    <input class="set-input" type="number" min="1" placeholder="Reps" @bind="newAdditionalReps" />
+                    <input class="set-input" type="number" min="0" max="10" step="0.5" placeholder="RPE" @bind="newAdditionalRpe" />
+                    <input class="set-input" type="number" min="0" step="0.5" placeholder="RIR" @bind="newAdditionalRir" />
+                    <input class="form-control" placeholder="Set notes" @bind="newAdditionalNotes" />
+                </div>
+                <button class="btn btn-sm btn-primary" @onclick="() => SaveAdditionalSet(true)">Save &amp; Add Another</button>
+                <button class="btn btn-sm btn-success" @onclick="() => SaveAdditionalSet(false)">Save</button>
+                <button class="btn btn-sm btn-outline" @onclick="CancelAdditionalSet">Done</button>
+            </div>
+        }
+    </div>
+
     @* ── e1RM Estimate ──────────────────────────────────────────── *@
     @if (EstimatedOneRepMax.HasValue)
     {
@@ -448,6 +519,21 @@ else
     private List<WorkoutSet> bbbSets = [];
     private List<WorkoutSet> warmupSets = [];
     private List<WorkoutSet> fslSets = [];
+    private List<WorkoutSet> additionalSets = [];
+    private bool showAdditionalSetForm;
+    private AdditionalSetType newAdditionalType = AdditionalSetType.Additional;
+    private double newAdditionalWeight;
+    private int newAdditionalReps = 1;
+    private double? newAdditionalRpe;
+    private double? newAdditionalRir;
+    private string? newAdditionalNotes;
+    private int editingAdditionalSetId;
+    private AdditionalSetType editAdditionalType;
+    private double editAdditionalWeight;
+    private int editAdditionalReps;
+    private double? editAdditionalRpe;
+    private double? editAdditionalRir;
+    private string? editAdditionalNotes;
 
     private int SetsTotal => warmupSets.Count + mainSets.Count + bbbSets.Count + fslSets.Count;
     private int SetsDone  => warmupSets.Concat(mainSets).Concat(bbbSets).Concat(fslSets).Count(s => s.IsCompleted);
@@ -526,9 +612,10 @@ else
         if (workout is not null)
         {
             warmupSets  = workout.Sets.Where(s => s.SetType == SetType.Warmup).OrderBy(s => s.SetNumber).ToList();
-            mainSets    = workout.Sets.Where(s => s.SetType == SetType.Main).OrderBy(s => s.SetNumber).ToList();
+            mainSets    = workout.Sets.Where(s => !s.IsAdditional && s.SetType == SetType.Main).OrderBy(s => s.SetNumber).ToList();
             bbbSets     = workout.Sets.Where(s => s.SetType == SetType.Bbb).OrderBy(s => s.SetNumber).ToList();
             fslSets     = workout.Sets.Where(s => s.SetType == SetType.Fsl).OrderBy(s => s.SetNumber).ToList();
+            additionalSets = workout.Sets.Where(s => s.IsAdditional).OrderBy(s => s.Sequence).ToList();
 
             var allWeights = warmupSets.Concat(mainSets).Concat(bbbSets)
                 .Select(s => s.PrescribedWeight).Distinct();
@@ -537,6 +624,52 @@ else
                 plateMap[w] = await PlateCalc.CalculatePlates(w, CurrentBarWeight);
         }
     }
+
+    private void BeginAdditionalSet()
+    {
+        showAdditionalSetForm = true;
+        newAdditionalType = AdditionalSetType.Additional;
+        newAdditionalWeight = 0;
+        newAdditionalReps = 1;
+        newAdditionalRpe = null;
+        newAdditionalRir = null;
+        newAdditionalNotes = null;
+    }
+
+    private async Task SaveAdditionalSet(bool addAnother)
+    {
+        if (workout is null) return;
+        await WorkoutService.AddAdditionalSetAsync(WorkoutId, newAdditionalWeight, newAdditionalReps, newAdditionalType, newAdditionalRpe, newAdditionalRir, newAdditionalNotes);
+        await LoadWorkout();
+        if (addAnother) BeginAdditionalSet(); else showAdditionalSetForm = false;
+    }
+
+    private void BeginAdditionalSetEdit(WorkoutSet set)
+    {
+        editingAdditionalSetId = set.Id;
+        editAdditionalType = set.AdditionalSetType;
+        editAdditionalWeight = set.ActualWeight ?? set.PrescribedWeight;
+        editAdditionalReps = set.ActualReps ?? set.PrescribedReps;
+        editAdditionalRpe = set.Rpe;
+        editAdditionalRir = set.Rir;
+        editAdditionalNotes = set.Notes;
+    }
+
+    private async Task SaveAdditionalSetEdit(WorkoutSet set)
+    {
+        await WorkoutService.UpdateAdditionalSetAsync(set.Id, editAdditionalWeight, editAdditionalReps, editAdditionalType, editAdditionalRpe, editAdditionalRir, editAdditionalNotes);
+        editingAdditionalSetId = 0;
+        await LoadWorkout();
+    }
+
+    private async Task DeleteAdditionalSet(int setId)
+    {
+        await WorkoutService.DeleteAdditionalSetAsync(setId);
+        await LoadWorkout();
+    }
+
+    private void CancelAdditionalSetEdit() => editingAdditionalSetId = 0;
+    private void CancelAdditionalSet() => showAdditionalSetForm = false;
 
     private async Task OnBarSelected(ChangeEventArgs e)
     {
@@ -709,6 +842,14 @@ else
         LiftType.Deadlift      => "Deadlift",
         LiftType.OverheadPress => "Overhead Press",
         _                      => lt.ToString()
+    };
+
+    private static string GetAdditionalSetTypeLabel(AdditionalSetType type) => type switch
+    {
+        AdditionalSetType.DropSet => "Drop Set",
+        AdditionalSetType.BackOffSet => "Back-Off Set",
+        AdditionalSetType.ExtraVolume => "Extra Volume",
+        _ => type.ToString()
     };
 
     private static string GetWeekLabel(WeekNumber wn) => wn switch

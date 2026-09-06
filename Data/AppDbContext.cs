@@ -82,6 +82,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         modelBuilder.Entity<WorkoutSet>(entity =>
         {
             entity.Property(e => e.SetType).HasConversion<string>();
+            entity.Property(e => e.AdditionalSetType).HasConversion<string>();
+            entity.HasIndex(e => new { e.WorkoutId, e.LiftId, e.IsAdditional, e.Sequence });
         });
 
         modelBuilder.Entity<WorkoutAccessory>(entity =>

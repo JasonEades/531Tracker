@@ -68,6 +68,7 @@ public sealed class ExerciseExportModel
     public string Category { get; init; } = string.Empty;
     public string? Notes { get; init; }
     public List<SetExportModel> Sets { get; init; } = [];
+    public List<SetExportModel> AdditionalSets { get; init; } = [];
 }
 
 public sealed class SetExportModel
@@ -81,6 +82,9 @@ public sealed class SetExportModel
     public bool IsCompleted { get; init; }
     public string? Notes { get; init; }
     public bool IsAmrap { get; init; }
+    public string? AdditionalType { get; init; }
+    public double? Rpe { get; init; }
+    public double? Rir { get; init; }
 }
 
 public sealed class AccessoryExportModel

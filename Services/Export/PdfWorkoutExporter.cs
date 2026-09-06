@@ -105,6 +105,11 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
                 column.Item().PaddingTop(8).Text($"{exercise.Category} — {exercise.Name}").Bold().FontSize(11);
                 Note(column.Item(), "Exercise Notes", exercise.Notes);
                 RenderSets(column.Item(), exercise);
+                if (exercise.AdditionalSets.Count > 0)
+                {
+                    column.Item().PaddingTop(5).Text("Additional Sets").Bold();
+                    RenderAdditionalSets(column.Item(), exercise.AdditionalSets);
+                }
             }
             if (workout.Accessories.Count > 0)
             {
@@ -123,7 +128,31 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
                     }
                 });
             }
+
             Summary(column.Item(), "Workout Summary", workout.Summary);
+        });
+    }
+
+    private static void RenderAdditionalSets(IContainer container, IReadOnlyList<SetExportModel> sets)
+    {
+        container.Table(table =>
+        {
+            table.ColumnsDefinition(columns =>
+            {
+                columns.ConstantColumn(28); columns.RelativeColumn(2); columns.ConstantColumn(58); columns.ConstantColumn(45);
+                columns.ConstantColumn(40); columns.ConstantColumn(40); columns.RelativeColumn(3);
+            });
+            Header(table, "Set", "Type", "Weight", "Reps", "RPE", "RIR", "Notes");
+            foreach (var set in sets)
+            {
+                table.Cell().Element(Cell).Text(set.Number.ToString());
+                table.Cell().Element(Cell).Text(set.Type);
+                table.Cell().Element(Cell).Text(Weight(set.ActualWeight ?? set.TargetWeight));
+                table.Cell().Element(Cell).Text((set.ActualReps ?? set.TargetReps).ToString());
+                table.Cell().Element(Cell).Text(set.Rpe?.ToString("0.#") ?? "—");
+                table.Cell().Element(Cell).Text(set.Rir?.ToString("0.#") ?? "—");
+                table.Cell().Element(Cell).Text(set.Notes ?? "—");
+            }
         });
     }
 
