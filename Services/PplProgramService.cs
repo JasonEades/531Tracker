@@ -21,7 +21,7 @@ public class PplProgramService(AppDbContext db, ICurrentUserService userContext)
     public async Task<PplProgram?> GetActiveProgramAsync()
     {
         var userId = await userContext.GetUserIdAsync();
-        return await db.PplPrograms.FirstOrDefaultAsync(p => p.IsActive && p.UserId == userId);
+        return await db.PplPrograms.Include(p => p.Weeks).FirstOrDefaultAsync(p => p.IsActive && p.UserId == userId);
     }
 
     public async Task<List<PplProgram>> GetAllProgramsAsync()
@@ -117,12 +117,17 @@ public class PplProgramService(AppDbContext db, ICurrentUserService userContext)
 
     public async Task<PplSession> GetOrCreateNextSessionAsync(int programId)
     {
+        var userId = await userContext.GetUserIdAsync();
+        var program = await db.PplPrograms
+            .FirstOrDefaultAsync(p => p.Id == programId && p.UserId == userId)
+            ?? throw new InvalidOperationException("PPL program was not found.");
+
         // Check for an existing incomplete session first
         var existing = await db.PplSessions
             .Include(s => s.DayTemplate)
             .Include(s => s.Exercises)
                 .ThenInclude(e => e.Sets)
-            .Where(s => s.PplProgramId == programId && s.Status != WorkoutStatus.Completed)
+            .Where(s => s.PplProgramId == programId && s.Program.UserId == userId && s.Status != WorkoutStatus.Completed)
             .OrderByDescending(s => s.CreatedAt)
             .FirstOrDefaultAsync();
 
@@ -137,7 +142,7 @@ public class PplProgramService(AppDbContext db, ICurrentUserService userContext)
         if (templates.Count == 0) throw new InvalidOperationException("Program has no day templates.");
 
         var lastSession = await db.PplSessions
-            .Where(s => s.PplProgramId == programId && s.Status == WorkoutStatus.Completed)
+            .Where(s => s.PplProgramId == programId && s.Program.UserId == userId && s.Status == WorkoutStatus.Completed)
             .OrderByDescending(s => s.CompletedAt)
             .FirstOrDefaultAsync();
 
@@ -156,18 +161,32 @@ public class PplProgramService(AppDbContext db, ICurrentUserService userContext)
         // Build the session with exercise snapshots
         var slots = await db.PplExerciseSlots
             .Include(s => s.Lift)
-            .Where(s => s.PplDayTemplateId == nextTemplate.Id)
+            .Where(s => s.PplDayTemplateId == nextTemplate.Id && s.DayTemplate.Program.UserId == userId)
             .OrderBy(s => s.OrderInDay)
             .ToListAsync();
+
+        var programCreatedDate = program.CreatedAt.ToUniversalTime();
 
         var session = new PplSession
         {
             PplProgramId = programId,
             PplDayTemplateId = nextTemplate.Id,
             Status = WorkoutStatus.NotStarted,
-            CreatedAt = DateTime.UtcNow
+            CreatedAt = DateTime.UtcNow,
+            OccurredOn = DateTime.UtcNow
         };
         db.PplSessions.Add(session);
+        await db.SaveChangesAsync();
+
+        var weekNumber = Math.Max(1, (int)Math.Floor((session.OccurredOn.Date - programCreatedDate.Date).TotalDays / 7) + 1);
+        var pplWeek = await db.PplWeeks.FirstOrDefaultAsync(w => w.PplProgramId == programId && w.WeekNumber == weekNumber);
+        if (pplWeek is null)
+        {
+            pplWeek = new PplWeek { PplProgramId = programId, WeekNumber = weekNumber, StartDate = programCreatedDate.Date.AddDays((weekNumber - 1) * 7) };
+            db.PplWeeks.Add(pplWeek);
+            await db.SaveChangesAsync();
+        }
+        session.PplWeekId = pplWeek.Id;
         await db.SaveChangesAsync();
 
         var order = 1;

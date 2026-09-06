@@ -68,6 +68,36 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
             builder.AppendLine();
             RenderWorkout(builder, workout, headingLevel + 1, false);
         }
+        foreach (var session in week.AdditionalSessions)
+        {
+            builder.AppendLine("---");
+            builder.AppendLine();
+            RenderAdditionalSession(builder, session, headingLevel + 1);
+        }
+    }
+
+    private static void RenderAdditionalSession(StringBuilder builder, AdditionalSessionExportModel session, int headingLevel)
+    {
+        var heading = new string('#', headingLevel + 1);
+        builder.AppendLine($"{heading} Additional Session — {Inline(session.Name)}");
+        builder.AppendLine();
+        builder.AppendLine($"**Date:** {session.Date:yyyy-MM-dd}");
+        builder.AppendLine($"**Type:** {session.SessionType}");
+        RenderNote(builder, "Session Notes", session.Notes);
+        if (session.CardioEntries.Count > 0)
+        {
+            builder.AppendLine(); builder.AppendLine("### Cardio"); builder.AppendLine();
+            builder.AppendLine("| Exercise | Quantity | Unit | Notes |"); builder.AppendLine("|---|---:|---|---|");
+            foreach (var entry in session.CardioEntries)
+                builder.AppendLine($"| {Inline(entry.Exercise)} | {entry.Quantity} | {entry.Unit} | {Inline(entry.Notes)} |");
+        }
+        foreach (var exercise in session.Exercises)
+        {
+            builder.AppendLine(); builder.AppendLine($"### {Inline(exercise.Name)}");
+            builder.AppendLine("| Set | Weight | Reps | Notes |"); builder.AppendLine("|---:|---:|---:|---|");
+            foreach (var set in exercise.Sets)
+                builder.AppendLine($"| {set.Number} | {Value(set.Weight)} | {Value(set.Reps)} | {Inline(set.Notes)} |");
+        }
     }
 
     private static void RenderWorkout(StringBuilder builder, WorkoutExportModel workout, int headingLevel, bool includeCycleMetadata)

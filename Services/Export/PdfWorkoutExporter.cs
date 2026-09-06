@@ -90,6 +90,53 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
                 column.Item().PaddingTop(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
                 RenderWorkout(column.Item().PaddingTop(8), workout);
             }
+            foreach (var session in week.AdditionalSessions)
+            {
+                column.Item().PaddingTop(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
+                RenderAdditionalSession(column.Item().PaddingTop(8), session);
+            }
+        });
+    }
+
+    private static void RenderAdditionalSession(IContainer container, AdditionalSessionExportModel session)
+    {
+        container.Column(column =>
+        {
+            SectionTitle(column.Item(), $"Additional Session — {session.Name}", 14);
+            Metadata(column.Item(), $"Date: {session.Date:yyyy-MM-dd}  |  Type: {session.SessionType}");
+            Note(column.Item(), "Session Notes", session.Notes);
+            if (session.CardioEntries.Count > 0)
+            {
+                column.Item().PaddingTop(8).Text("Cardio").Bold().FontSize(11);
+                column.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(columns => { columns.RelativeColumn(3); columns.ConstantColumn(65); columns.RelativeColumn(2); columns.RelativeColumn(3); });
+                    Header(table, "Exercise", "Quantity", "Unit", "Notes");
+                    foreach (var entry in session.CardioEntries)
+                    {
+                        table.Cell().Element(Cell).Text(entry.Exercise);
+                        table.Cell().Element(Cell).Text(entry.Quantity.ToString("0.##"));
+                        table.Cell().Element(Cell).Text(entry.Unit);
+                        table.Cell().Element(Cell).Text(entry.Notes ?? "");
+                    }
+                });
+            }
+            foreach (var exercise in session.Exercises)
+            {
+                column.Item().PaddingTop(8).Text(exercise.Name).Bold();
+                column.Item().Table(table =>
+                {
+                    table.ColumnsDefinition(columns => { columns.ConstantColumn(35); columns.ConstantColumn(65); columns.ConstantColumn(45); columns.RelativeColumn(3); });
+                    Header(table, "Set", "Weight", "Reps", "Notes");
+                    foreach (var set in exercise.Sets)
+                    {
+                        table.Cell().Element(Cell).Text(set.Number.ToString());
+                        table.Cell().Element(Cell).Text(set.Weight?.ToString("0.##") ?? "—");
+                        table.Cell().Element(Cell).Text(set.Reps?.ToString() ?? "—");
+                        table.Cell().Element(Cell).Text(set.Notes ?? "");
+                    }
+                });
+            }
         });
     }
 

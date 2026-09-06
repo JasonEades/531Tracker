@@ -18,6 +18,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<WorkoutSet> WorkoutSets => Set<WorkoutSet>();
     public DbSet<Accessory> Accessories => Set<Accessory>();
     public DbSet<WorkoutAccessory> WorkoutAccessories => Set<WorkoutAccessory>();
+    public DbSet<AdditionalSession> AdditionalSessions => Set<AdditionalSession>();
+    public DbSet<AdditionalStrengthExercise> AdditionalStrengthExercises => Set<AdditionalStrengthExercise>();
+    public DbSet<AdditionalStrengthSet> AdditionalStrengthSets => Set<AdditionalStrengthSet>();
+    public DbSet<CardioEntry> CardioEntries => Set<CardioEntry>();
     public DbSet<AccessoryHistory> AccessoryHistory => Set<AccessoryHistory>();
     public DbSet<UserEquipment> UserEquipment => Set<UserEquipment>();
     public DbSet<PlateInventory> PlateInventory => Set<PlateInventory>();
@@ -31,6 +35,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<PplSession> PplSessions => Set<PplSession>();
     public DbSet<PplSessionExercise> PplSessionExercises => Set<PplSessionExercise>();
     public DbSet<PplSessionSet> PplSessionSets => Set<PplSessionSet>();
+    public DbSet<PplWeek> PplWeeks => Set<PplWeek>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -59,12 +64,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
                   .WithOne(wo => wo.Week)
                   .HasForeignKey(wo => wo.WeekId)
                   .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(w => w.AdditionalSessions)
+                  .WithOne(s => s.Week)
+                  .HasForeignKey(s => s.WeekId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<Workout>(entity =>
         {
             entity.Property(e => e.MainLiftType).HasConversion<string>();
             entity.Property(e => e.Status).HasConversion<string>();
+            entity.HasIndex(e => new { e.WeekId, e.OccurredOn });
             entity.HasMany(w => w.Sets)
                   .WithOne(s => s.Workout)
                   .HasForeignKey(s => s.WorkoutId)
@@ -93,12 +103,30 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
                   .HasForeignKey(wa => wa.AccessoryId);
         });
 
+        modelBuilder.Entity<Accessory>(entity =>
+        {
+            entity.Property(e => e.Category).HasConversion<string>();
+        });
+
         modelBuilder.Entity<AccessoryHistory>(entity =>
         {
             entity.HasIndex(ah => new { ah.UserId, ah.AccessoryId, ah.RecordedAt });
             entity.HasOne(ah => ah.Accessory)
                   .WithMany(a => a.History)
                   .HasForeignKey(ah => ah.AccessoryId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<PplWeek>(entity =>
+        {
+            entity.HasIndex(e => new { e.PplProgramId, e.WeekNumber }).IsUnique();
+            entity.HasMany(w => w.Sessions)
+                  .WithOne(s => s.Week)
+                  .HasForeignKey(s => s.PplWeekId)
+                  .OnDelete(DeleteBehavior.SetNull);
+            entity.HasMany(w => w.AdditionalSessions)
+                  .WithOne(s => s.PplWeek)
+                  .HasForeignKey(s => s.PplWeekId)
                   .OnDelete(DeleteBehavior.Cascade);
         });
 
@@ -134,6 +162,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
                   .WithOne(s => s.Program)
                   .HasForeignKey(s => s.PplProgramId)
                   .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(p => p.Weeks)
+                  .WithOne(w => w.Program)
+                  .HasForeignKey(w => w.PplProgramId)
+                  .OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<PplDayTemplate>(entity =>
@@ -164,10 +196,44 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         modelBuilder.Entity<PplSession>(entity =>
         {
             entity.Property(e => e.Status).HasConversion<string>();
+            entity.HasIndex(e => new { e.PplProgramId, e.OccurredOn });
             entity.HasMany(s => s.Exercises)
                   .WithOne(e => e.Session)
                   .HasForeignKey(e => e.PplSessionId)
                   .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AdditionalSession>(entity =>
+        {
+            entity.Property(e => e.SessionType).HasConversion<string>();
+            entity.Property(e => e.Status).HasConversion<string>();
+            entity.HasIndex(e => new { e.WeekId, e.OccurredOn });
+            entity.HasIndex(e => new { e.PplWeekId, e.OccurredOn });
+            entity.HasMany(s => s.StrengthExercises)
+                  .WithOne(e => e.Session)
+                  .HasForeignKey(e => e.AdditionalSessionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.HasMany(s => s.CardioEntries)
+                  .WithOne(e => e.Session)
+                  .HasForeignKey(e => e.AdditionalSessionId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<AdditionalStrengthExercise>(entity =>
+        {
+            entity.HasMany(e => e.Sets)
+                  .WithOne(s => s.Exercise)
+                  .HasForeignKey(s => s.AdditionalStrengthExerciseId)
+                  .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<CardioEntry>(entity =>
+        {
+            entity.Property(e => e.Unit).HasConversion<string>();
+            entity.HasOne(e => e.Accessory)
+                  .WithMany()
+                  .HasForeignKey(e => e.AccessoryId)
+                  .OnDelete(DeleteBehavior.Restrict);
         });
 
         modelBuilder.Entity<PplSessionExercise>(entity =>
@@ -188,7 +254,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     private static void SeedData(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Accessory>().HasData(
-            new Accessory { Id = 1, Name = "Barbell Row", Description = "Bent-over barbell row" },
+            new Accessory { Id = 1, Name = "Barbell Row", Description = "Bent-over barbell row", Category = AccessoryCategory.Strength },
             new Accessory { Id = 2, Name = "Dumbbell Row", Description = "Single-arm dumbbell row" },
             new Accessory { Id = 3, Name = "Lat Pulldown", Description = "Cable lat pulldown" },
             new Accessory { Id = 4, Name = "Face Pull", Description = "Cable face pull" },
@@ -202,7 +268,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
             new Accessory { Id = 12, Name = "Tricep Pushdown", Description = "Cable tricep pushdown" },
             new Accessory { Id = 13, Name = "Lateral Raise", Description = "Dumbbell lateral raise" },
             new Accessory { Id = 14, Name = "Romanian Deadlift", Description = "Romanian deadlift" },
-            new Accessory { Id = 15, Name = "Bulgarian Split Squat", Description = "Rear foot elevated split squat" }
+            new Accessory { Id = 15, Name = "Bulgarian Split Squat", Description = "Rear foot elevated split squat", Category = AccessoryCategory.Strength },
+            new Accessory { Id = 16, Name = "Rowing", Category = AccessoryCategory.Cardio },
+            new Accessory { Id = 17, Name = "Biking", Category = AccessoryCategory.Cardio },
+            new Accessory { Id = 18, Name = "Walking", Category = AccessoryCategory.Cardio },
+            new Accessory { Id = 19, Name = "Running", Category = AccessoryCategory.Cardio },
+            new Accessory { Id = 20, Name = "Treadmill", Category = AccessoryCategory.Cardio },
+            new Accessory { Id = 21, Name = "Elliptical", Category = AccessoryCategory.Cardio },
+            new Accessory { Id = 22, Name = "Stair Climber", Category = AccessoryCategory.Cardio },
+            new Accessory { Id = 23, Name = "Swimming", Category = AccessoryCategory.Cardio },
+            new Accessory { Id = 24, Name = "Rucking", Category = AccessoryCategory.Cardio },
+            new Accessory { Id = 25, Name = "Other", Category = AccessoryCategory.Cardio }
         );
     }
 }

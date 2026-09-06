@@ -12,6 +12,11 @@ public class PplSession
 
     public WorkoutStatus Status { get; set; } = WorkoutStatus.NotStarted;
 
+    public int? PplWeekId { get; set; }
+    public PplWeek? Week { get; set; }
+
+    public DateTime OccurredOn { get; set; } = DateTime.UtcNow;
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime? StartedAt { get; set; }

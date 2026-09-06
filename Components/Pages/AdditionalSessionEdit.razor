@@ -1,0 +1,124 @@
+@page "/sessions/add/{WeekId:int}"
+@page "/sessions/add/ppl/{PplWeekId:int}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IAdditionalSessionService SessionService
+@inject NavigationManager Nav
+
+<PageTitle>Add Session — 5/3/1 Tracker</PageTitle>
+
+<div class="page-header mb-4"><h1>+ Add Session</h1><p class="text-muted">Record training outside the programmed workout.</p></div>
+<div class="setup-sheet">
+    <div class="form-group">
+        <label class="form-label">Session type</label>
+        <select class="form-control" @bind="type">
+            <option value="@SessionType.CustomStrength">Custom Workout</option>
+            <option value="@SessionType.Cardio">Cardio</option>
+        </select>
+    </div>
+    <div class="form-group">
+        <label class="form-label">Date</label>
+        <input class="form-control" type="date" @bind="date" />
+    </div>
+    <div class="form-group">
+        <label class="form-label">Name</label>
+        <input class="form-control" @bind="name" placeholder="Custom Workout or Cardio Session" />
+    </div>
+    <div class="form-group">
+        <label class="form-label">Notes</label>
+        <textarea class="form-control" rows="3" @bind="notes" placeholder="Optional session notes"></textarea>
+    </div>
+    @if (type == SessionType.Cardio)
+    {
+        <h3>Cardio entries</h3>
+        @foreach (var entry in cardioEntries)
+        {
+            <div class="form-row mb-2">
+                <select class="form-control" @bind="entry.AccessoryId">
+                    <option value="0">Select cardio exercise</option>
+                    @foreach (var accessory in cardioAccessories)
+                    {
+                        <option value="@accessory.Id">@accessory.Name</option>
+                    }
+                </select>
+                <input class="form-control" type="number" min="0.01" step="0.01" @bind="entry.Quantity" placeholder="Quantity" />
+                <select class="form-control" @bind="entry.Unit">
+                    @foreach (var unit in Enum.GetValues<CardioUnit>())
+                    {
+                        <option value="@unit">@unit</option>
+                    }
+                </select>
+                <input class="form-control" @bind="entry.Notes" placeholder="Entry notes" />
+            </div>
+        }
+        <button class="btn btn-outline btn-sm mb-3" @onclick="AddCardioRow">+ Add cardio</button>
+    }
+    @if (type == SessionType.CustomStrength)
+    {
+        <h3>Exercises</h3>
+        @foreach (var exercise in strengthEntries)
+        {
+            <div class="form-row mb-2">
+                <input class="form-control" @bind="exercise.Name" placeholder="Exercise" />
+                <input class="form-control" type="number" min="0" step="0.1" @bind="exercise.Weight" placeholder="Weight" />
+                <input class="form-control" type="number" min="1" @bind="exercise.Reps" placeholder="Reps" />
+            </div>
+        }
+        <button class="btn btn-outline btn-sm mb-3" @onclick="AddStrengthRow">+ Add exercise</button>
+    }
+    @if (!string.IsNullOrWhiteSpace(error)) { <div class="alert alert-danger">@error</div> }
+    <div class="flex gap-1">
+        <button class="btn btn-primary flex-1" @onclick="Save" disabled="@saving">@(saving ? "Saving…" : "Save Session")</button>
+        <button class="btn btn-outline" @onclick="NavBack">Cancel</button>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int WeekId { get; set; }
+    [Parameter] public int PplWeekId { get; set; }
+    private SessionType type = SessionType.CustomStrength;
+    private DateTime date = DateTime.Today;
+    private string? name;
+    private string? notes;
+    private string? error;
+    private bool saving;
+    private List<Accessory> cardioAccessories = [];
+    private List<CardioDraft> cardioEntries = [];
+    private List<StrengthDraft> strengthEntries = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        cardioAccessories = await SessionService.GetCardioAccessoriesAsync();
+        AddCardioRow();
+        AddStrengthRow();
+    }
+
+    private void AddCardioRow() => cardioEntries.Add(new CardioDraft());
+    private void AddStrengthRow() => strengthEntries.Add(new StrengthDraft());
+
+    private async Task Save()
+    {
+        error = null;
+        if (date == default) { error = "Choose a valid date."; return; }
+        if (type == SessionType.Cardio && (cardioEntries.Count == 0 || cardioEntries.Any(e => e.AccessoryId == 0 || e.Quantity <= 0)))
+        { error = "Select a cardio exercise and enter a quantity greater than zero for each entry."; return; }
+        saving = true;
+        var session = WeekId > 0
+            ? await SessionService.CreateForWeekAsync(WeekId, type, date, name, notes)
+            : await SessionService.CreateForPplWeekAsync(PplWeekId, type, date, name, notes);
+        foreach (var entry in cardioEntries.Where(e => e.AccessoryId > 0 && e.Quantity > 0))
+            await SessionService.AddCardioEntryAsync(session.Id, entry.AccessoryId, entry.Quantity, entry.Unit, entry.Notes);
+        foreach (var exercise in strengthEntries.Where(e => !string.IsNullOrWhiteSpace(e.Name)))
+        {
+            var savedExercise = await SessionService.AddStrengthExerciseAsync(session.Id, exercise.Name);
+            if (savedExercise is not null && (exercise.Weight > 0 || exercise.Reps > 0))
+                await SessionService.AddStrengthSetAsync(savedExercise.Id, exercise.Weight > 0 ? exercise.Weight : null, exercise.Reps > 0 ? exercise.Reps : null, null);
+        }
+        saving = false;
+        NavBack();
+    }
+
+    private void NavBack() => Nav.NavigateTo(WeekId > 0 ? "/" : "/ppl/history");
+    private sealed class CardioDraft { public int AccessoryId { get; set; } public double Quantity { get; set; } public CardioUnit Unit { get; set; } = CardioUnit.Minutes; public string? Notes { get; set; } }
+    private sealed class StrengthDraft { public string Name { get; set; } = string.Empty; public double Weight { get; set; } public int Reps { get; set; } }
+}

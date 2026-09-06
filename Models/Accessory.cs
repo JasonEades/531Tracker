@@ -16,6 +16,8 @@ public class Accessory
     [StringLength(200)]
     public string? Description { get; set; }
 
+    public AccessoryCategory Category { get; set; } = AccessoryCategory.Other;
+
     public bool IsActive { get; set; } = true;
 
     public ICollection<WorkoutAccessory> WorkoutAccessories { get; set; } = [];

@@ -8,6 +8,34 @@ public enum LiftType
     OverheadPress
 }
 
+public enum SessionType
+{
+    ProgrammedWorkout,
+    CustomStrength,
+    Cardio
+}
+
+public enum AccessoryCategory
+{
+    Strength,
+    Isolation,
+    Core,
+    Cardio,
+    Other
+}
+
+public enum CardioUnit
+{
+    Minutes,
+    Hours,
+    Miles,
+    Kilometers,
+    Meters,
+    Yards,
+    Steps,
+    Calories
+}
+
 public enum WeekNumber
 {
     Week1 = 1,

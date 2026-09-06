@@ -106,12 +106,17 @@ public sealed class WorkoutExportService(
         .AsNoTracking()
         .Include(w => w.Cycle)
         .Include(w => w.Workouts).ThenInclude(wo => wo.Sets).ThenInclude(s => s.Lift)
-        .Include(w => w.Workouts).ThenInclude(wo => wo.WorkoutAccessories).ThenInclude(wa => wa.Accessory);
+        .Include(w => w.Workouts).ThenInclude(wo => wo.WorkoutAccessories).ThenInclude(wa => wa.Accessory)
+        .Include(w => w.AdditionalSessions).ThenInclude(s => s.StrengthExercises).ThenInclude(e => e.Sets)
+        .Include(w => w.AdditionalSessions).ThenInclude(s => s.CardioEntries).ThenInclude(e => e.Accessory);
+
 
     private IQueryable<Cycle> CycleQuery() => db.Cycles
         .AsNoTracking()
         .Include(c => c.Weeks).ThenInclude(w => w.Workouts).ThenInclude(wo => wo.Sets).ThenInclude(s => s.Lift)
-        .Include(c => c.Weeks).ThenInclude(w => w.Workouts).ThenInclude(wo => wo.WorkoutAccessories).ThenInclude(wa => wa.Accessory);
+        .Include(c => c.Weeks).ThenInclude(w => w.Workouts).ThenInclude(wo => wo.WorkoutAccessories).ThenInclude(wa => wa.Accessory)
+        .Include(c => c.Weeks).ThenInclude(w => w.AdditionalSessions).ThenInclude(s => s.StrengthExercises).ThenInclude(e => e.Sets)
+        .Include(c => c.Weeks).ThenInclude(w => w.AdditionalSessions).ThenInclude(s => s.CardioEntries).ThenInclude(e => e.Accessory);
 
     private static CycleExportModel MapCycle(Cycle cycle)
     {
@@ -131,7 +136,8 @@ public sealed class WorkoutExportService(
 
     private static WeekExportModel MapWeek(Week week)
     {
-        var workouts = week.Workouts.OrderBy(w => w.CompletedAt ?? DateTime.MaxValue).ThenBy(w => w.MainLiftType).Select(MapWorkout).ToList();
+        var workouts = week.Workouts.OrderBy(w => w.OccurredOn).ThenBy(w => w.CreatedAt).ThenBy(w => w.MainLiftType).Select(MapWorkout).ToList();
+        var additional = week.AdditionalSessions.OrderBy(s => s.OccurredOn).ThenBy(s => s.CreatedAt).Select(MapAdditionalSession).ToList();
         return new WeekExportModel
         {
             Id = week.Id,
@@ -139,9 +145,24 @@ public sealed class WorkoutExportService(
             CycleNumber = week.Cycle.CycleNumber,
             Notes = week.Notes,
             Workouts = workouts,
+            AdditionalSessions = additional,
             Summary = Summarize(workouts)
         };
     }
+
+    private static AdditionalSessionExportModel MapAdditionalSession(AdditionalSession session) => new()
+    {
+        Date = session.OccurredOn,
+        SessionType = session.SessionType.ToString(),
+        Name = session.Name,
+        Notes = session.Notes,
+        Exercises = session.StrengthExercises.OrderBy(e => e.Order).Select(e => new AdditionalExerciseExportModel
+        {
+            Name = e.ExerciseName,
+            Sets = e.Sets.OrderBy(s => s.SetNumber).Select(s => new AdditionalSetExportModel { Number = s.SetNumber, Weight = s.Weight, Reps = s.Reps, Notes = s.Notes }).ToList()
+        }).ToList(),
+        CardioEntries = session.CardioEntries.OrderBy(e => e.Id).Select(e => new CardioExportModel { Exercise = e.Accessory.Name, Quantity = e.Quantity, Unit = e.Unit.ToString(), Notes = e.Notes }).ToList()
+    };
 
     private static WorkoutExportModel MapWorkout(Workout workout)
     {
@@ -167,7 +188,7 @@ public sealed class WorkoutExportService(
             WeekNumber = (int)workout.Week.WeekNumber,
             WorkoutName = $"{DisplayName(workout.MainLiftType)} Day",
             WorkoutType = workout.MainLiftType.ToString(),
-            WorkoutDate = workout.CompletedAt,
+            WorkoutDate = workout.OccurredOn,
             Status = workout.Status.ToString(),
             Notes = workout.Notes,
             Exercises = exercises,

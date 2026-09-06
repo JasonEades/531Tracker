@@ -11,6 +11,10 @@ public class Workout
 
     public WorkoutStatus Status { get; set; } = WorkoutStatus.NotStarted;
 
+    public DateTime OccurredOn { get; set; } = DateTime.UtcNow;
+
+    public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
     public DateTime? CompletedAt { get; set; }
 
     public string? Notes { get; set; }

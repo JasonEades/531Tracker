@@ -36,6 +36,8 @@ public class CycleService(
                 .ThenInclude(w => w.Workouts)
                     .ThenInclude(wo => wo.WorkoutAccessories)
                         .ThenInclude(wa => wa.Accessory)
+            .Include(c => c.Weeks)
+                .ThenInclude(w => w.AdditionalSessions)
             .Where(c => !c.IsCompleted && c.UserId == userId)
             .OrderByDescending(c => c.CycleNumber)
             .FirstOrDefaultAsync();
@@ -53,6 +55,10 @@ public class CycleService(
                 .ThenInclude(w => w.Workouts)
                     .ThenInclude(wo => wo.WorkoutAccessories)
                         .ThenInclude(wa => wa.Accessory)
+            .Include(c => c.Weeks)
+                .ThenInclude(w => w.AdditionalSessions)
+                    .ThenInclude(s => s.CardioEntries)
+                        .ThenInclude(e => e.Accessory)
             .FirstOrDefaultAsync(c => c.Id == cycleId && c.UserId == userId);
     }
 
@@ -172,13 +178,16 @@ public class CycleService(
             db.Weeks.Add(week);
             await db.SaveChangesAsync();
 
+            var workoutOffset = 0;
             foreach (var mainLift in lifts)
             {
                 var workout = new Workout
                 {
                     WeekId = week.Id,
                     MainLiftType = mainLift.LiftType,
-                    Status = WorkoutStatus.NotStarted
+                    Status = WorkoutStatus.NotStarted,
+                    CreatedAt = DateTime.UtcNow,
+                    OccurredOn = cycle.CreatedAt.Date.AddDays(((int)weekNum - 1) * 7 + workoutOffset++)
                 };
                 db.Workouts.Add(workout);
                 await db.SaveChangesAsync();

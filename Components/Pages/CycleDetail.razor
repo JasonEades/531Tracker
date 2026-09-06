@@ -199,7 +199,23 @@ else
                     <div class="flex gap-1">
                         <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportScope.Week, week.Id, WorkoutExportFormat.Markdown)" disabled="@exporting">Export Week MD</button>
                         <button class="btn btn-outline btn-sm" @onclick="() => Export(WorkoutExportScope.Week, week.Id, WorkoutExportFormat.Pdf)" disabled="@exporting">Export Week PDF</button>
+                        <button class="btn btn-primary btn-sm" @onclick="() => AddSession(week.Id)">+ Add Session</button>
                     </div>
+                @if (week.AdditionalSessions.Count > 0)
+                {
+                    <div class="week-grid mt-2">
+                        @foreach (var session in week.AdditionalSessions.OrderBy(s => s.OccurredOn).ThenBy(s => s.CreatedAt))
+                        {
+                            <div class="workout-item">
+                                <div>
+                                    <div class="workout-name">@session.Name</div>
+                                    <div class="workout-meta">@session.OccurredOn.ToString("MMM d, yyyy") · @session.SessionType</div>
+                                </div>
+                                <span class="badge badge-info">Additional</span>
+                            </div>
+                        }
+                    </div>
+                }
                 </div>
                 <div class="week-grid">
                     @foreach (var wo in weekWorkouts.OrderBy(w => w.MainLiftType))
@@ -337,6 +353,7 @@ else
     }
 
     private void GoToWorkout(int id) => Nav.NavigateTo("/workout/" + id);
+    private void AddSession(int weekId) => Nav.NavigateTo("/sessions/add/" + weekId);
 
     private async Task Export(WorkoutExportScope scope, int id, WorkoutExportFormat format)
     {

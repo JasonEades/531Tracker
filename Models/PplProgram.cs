@@ -25,4 +25,5 @@ public class PplProgram
 
     public ICollection<PplDayTemplate> DayTemplates { get; set; } = [];
     public ICollection<PplSession> Sessions { get; set; } = [];
+    public ICollection<PplWeek> Weeks { get; set; } = [];
 }

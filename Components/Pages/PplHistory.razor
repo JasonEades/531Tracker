@@ -74,6 +74,10 @@
                         </div>
                     </div>
                 </button>
+                @if (s.Week is not null)
+                {
+                    <button class="btn btn-outline btn-sm mb-3" @onclick="() => AddSession(s.Week.Id)">+ Add Session to Week @s.Week.WeekNumber</button>
+                }
             }
         }
     }
@@ -101,4 +105,5 @@
     };
 
     private void GoToSession(int id) => Nav.NavigateTo($"/ppl/session/{id}");
+    private void AddSession(int weekId) => Nav.NavigateTo("/sessions/add/ppl/" + weekId);
 }

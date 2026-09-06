@@ -26,6 +26,62 @@ public sealed class WorkoutExportTests
     }
 
     [Fact]
+    public async Task AdditionalCardioSessionPersistsDateQuantityUnitAndNotes()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var cycle = new Cycle { UserId = "test-user", Name = "Cycle" };
+        var week = new Week { Cycle = cycle, WeekNumber = WeekNumber.Week1 };
+        context.Weeks.Add(week);
+        await context.SaveChangesAsync();
+
+        var service = new AdditionalSessionService(context, new TestCurrentUserService());
+        var session = await service.CreateForWeekAsync(week.Id, SessionType.Cardio, new DateTime(2026, 9, 8), "Cardio Session", "Easy recovery session");
+        var entry = await service.AddCardioEntryAsync(session.Id, 16, 30, CardioUnit.Minutes, "Steady pace");
+
+        var reloaded = await service.GetAsync(session.Id);
+        Assert.NotNull(entry);
+        Assert.Equal(new DateTime(2026, 9, 8), reloaded!.OccurredOn);
+        Assert.Equal("Easy recovery session", reloaded.Notes);
+        Assert.Equal(30, reloaded.CardioEntries.Single().Quantity);
+        Assert.Equal(CardioUnit.Minutes, reloaded.CardioEntries.Single().Unit);
+    }
+
+    [Fact]
+    public void MarkdownRendersAdditionalCardioSession()
+    {
+        var document = new WorkoutExportDocument
+        {
+            Scope = WorkoutExportScope.Week,
+            Week = new WeekExportModel
+            {
+                WeekNumber = 2,
+                CycleNumber = 12,
+                AdditionalSessions =
+                [
+                    new AdditionalSessionExportModel
+                    {
+                        Name = "Cardio Session",
+                        SessionType = "Cardio",
+                        Date = new DateTime(2026, 9, 8),
+                        CardioEntries = [new CardioExportModel { Exercise = "Rowing", Quantity = 30, Unit = "Minutes", Notes = "Easy recovery session" }]
+                    }
+                ]
+            }
+        };
+
+        var markdown = System.Text.Encoding.UTF8.GetString(new MarkdownWorkoutExporter().Render(document));
+        Assert.Contains("Additional Session", markdown);
+        Assert.Contains("2026-09-08", markdown);
+        Assert.Contains("30", markdown);
+        Assert.Contains("Minutes", markdown);
+    }
+
+    [Fact]
     public async Task NewPplDoesNotRequireOrRead531Lifts()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
@@ -77,7 +133,7 @@ public sealed class WorkoutExportTests
         await using var context = new AppDbContext(options);
         await context.Database.EnsureCreatedAsync();
         var service = new PplProgramService(context, new TestCurrentUserService());
-        var sessionService = new PplSessionService(context);
+        var sessionService = new PplSessionService(context, new TestCurrentUserService());
         var program = await service.CreateProgramAsync("PPL", 3);
         var details = await service.GetProgramWithDetailsAsync(program.Id);
         var firstSlot = details!.DayTemplates.First().ExerciseSlots.First(s => !s.IsBodyweight);
@@ -95,6 +151,36 @@ public sealed class WorkoutExportTests
         var reloadedExercise = reloaded!.Exercises.Single(e => e.PplExerciseSlotId == firstSlot.Id);
         Assert.Equal(185, reloadedExercise.SuggestedWeight);
         Assert.Equal(175, reloadedExercise.Sets.First().ActualWeight);
+    }
+
+    [Fact]
+    public async Task PplWeightsAndSessionsAreIsolatedByUser()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var owner = new TestCurrentUserService("owner");
+        var other = new TestCurrentUserService("other");
+        var programService = new PplProgramService(context, owner);
+        var ownerSessionService = new PplSessionService(context, owner);
+        var otherSessionService = new PplSessionService(context, other);
+
+        var program = await programService.CreateProgramAsync("Owner PPL", 3);
+        var details = await programService.GetProgramWithDetailsAsync(program.Id);
+        var slot = details!.DayTemplates.SelectMany(d => d.ExerciseSlots).First(s => !s.IsBodyweight);
+        await programService.ConfigureStartingWeightsAsync(program.Id, new Dictionary<int, double?> { [slot.Id] = 185 });
+        var session = await programService.GetOrCreateNextSessionAsync(program.Id);
+
+        Assert.NotNull(await ownerSessionService.GetSessionWithDetailsAsync(session.Id));
+        Assert.Null(await otherSessionService.GetSessionWithDetailsAsync(session.Id));
+
+        await otherSessionService.SetStartingWeightAsync(slot.Id, 315);
+        var unchanged = await context.PplExerciseSlots.SingleAsync(s => s.Id == slot.Id);
+        Assert.Equal(185, unchanged.CurrentWeight);
     }
 
     [Fact]
@@ -349,8 +435,12 @@ public sealed class WorkoutExportTests
 
     private sealed class TestCurrentUserService : ICurrentUserService
     {
-        public Task<string> GetUserIdAsync() => Task.FromResult("test-user");
-        public Task<string?> GetUserIdOrNullAsync() => Task.FromResult<string?>("test-user");
+        private readonly string userId;
+
+        public TestCurrentUserService(string userId = "test-user") => this.userId = userId;
+
+        public Task<string> GetUserIdAsync() => Task.FromResult(userId);
+        public Task<string?> GetUserIdOrNullAsync() => Task.FromResult<string?>(userId);
     }
 
     private static WorkoutExportModel CreateWorkout(string name, string notes) => new()

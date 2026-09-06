@@ -44,7 +44,40 @@ public sealed class WeekExportModel
     public int CycleNumber { get; init; }
     public string? Notes { get; init; }
     public List<WorkoutExportModel> Workouts { get; init; } = [];
+    public List<AdditionalSessionExportModel> AdditionalSessions { get; init; } = [];
     public ExportSummaryModel Summary { get; init; } = new();
+}
+
+public sealed class AdditionalSessionExportModel
+{
+    public DateTime Date { get; init; }
+    public string SessionType { get; init; } = string.Empty;
+    public string Name { get; init; } = string.Empty;
+    public string? Notes { get; init; }
+    public List<AdditionalExerciseExportModel> Exercises { get; init; } = [];
+    public List<CardioExportModel> CardioEntries { get; init; } = [];
+}
+
+public sealed class AdditionalExerciseExportModel
+{
+    public string Name { get; init; } = string.Empty;
+    public List<AdditionalSetExportModel> Sets { get; init; } = [];
+}
+
+public sealed class AdditionalSetExportModel
+{
+    public int Number { get; init; }
+    public double? Weight { get; init; }
+    public int? Reps { get; init; }
+    public string? Notes { get; init; }
+}
+
+public sealed class CardioExportModel
+{
+    public string Exercise { get; init; } = string.Empty;
+    public double Quantity { get; init; }
+    public string Unit { get; init; } = string.Empty;
+    public string? Notes { get; init; }
 }
 
 public sealed class WorkoutExportModel

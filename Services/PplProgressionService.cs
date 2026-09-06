@@ -19,7 +19,7 @@ public interface IPplProgressionService
     Task<int> SessionsSinceLastProgressionAsync(int exerciseSlotId);
 }
 
-public class PplProgressionService(AppDbContext db, IWeightCalculator weightCalc)
+public class PplProgressionService(AppDbContext db, IWeightCalculator weightCalc, ICurrentUserService userContext)
     : IPplProgressionService
 {
     public bool ShouldProgress(IEnumerable<PplSessionSet> sets, int repsMax)
@@ -30,7 +30,11 @@ public class PplProgressionService(AppDbContext db, IWeightCalculator weightCalc
 
     public async Task ApplyProgressionAsync(int exerciseSlotId)
     {
-        var slot = await db.PplExerciseSlots.FindAsync(exerciseSlotId);
+        var userId = await userContext.GetUserIdAsync();
+        var slot = await db.PplExerciseSlots
+            .Include(s => s.DayTemplate)
+                .ThenInclude(d => d.Program)
+            .FirstOrDefaultAsync(s => s.Id == exerciseSlotId && s.DayTemplate.Program.UserId == userId);
         if (slot is null || slot.IsBodyweight) return;
 
         if (!slot.CurrentWeight.HasValue) return;
@@ -53,12 +57,17 @@ public class PplProgressionService(AppDbContext db, IWeightCalculator weightCalc
 
     public async Task<int> SessionsSinceLastProgressionAsync(int exerciseSlotId)
     {
-        var slot = await db.PplExerciseSlots.FindAsync(exerciseSlotId);
+        var userId = await userContext.GetUserIdAsync();
+        var slot = await db.PplExerciseSlots
+            .Include(s => s.DayTemplate)
+                .ThenInclude(d => d.Program)
+            .FirstOrDefaultAsync(s => s.Id == exerciseSlotId && s.DayTemplate.Program.UserId == userId);
         if (slot is null) return 0;
 
         // Count sessions where the slot was used at the current weight
         return await db.PplSessionExercises
             .Where(e => e.PplExerciseSlotId == exerciseSlotId
+                     && e.Session.Program.UserId == userId
                      && e.SuggestedWeight == slot.CurrentWeight)
             .CountAsync();
     }
