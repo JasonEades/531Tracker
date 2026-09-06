@@ -28,7 +28,19 @@ public sealed class WorkoutExportTests
     [Fact]
     public void PdfIsGeneratedFromTheSameDocument()
     {
-        var pdf = new PdfWorkoutExporter().Render(CreateDocument());
+        var document = CreateDocument();
+        document.Workout!.Exercises[0].AdditionalSets.Add(new SetExportModel
+        {
+            Number = 1,
+            Type = "DropSet",
+            ActualWeight = 165,
+            ActualReps = 12,
+            Rpe = 8,
+            Notes = "After AMRAP",
+            IsCompleted = true
+        });
+
+        var pdf = new PdfWorkoutExporter().Render(document);
 
         Assert.NotEmpty(pdf);
         Assert.Equal("%PDF-", System.Text.Encoding.ASCII.GetString(pdf, 0, 5));
@@ -186,6 +198,43 @@ public sealed class WorkoutExportTests
             Assert.Equal(AdditionalSetType.BackOffSet, remaining[0].AdditionalSetType);
             Assert.Equal("Updated", remaining[0].Notes);
             Assert.Single(await context.WorkoutSets.Where(s => !s.IsAdditional).ToListAsync());
+        }
+    }
+
+    [Fact]
+    public async Task AdditionalSetValidationRejectsInvalidValuesAndNonPrimaryLifts()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using (var context = new AppDbContext(options))
+        {
+            await context.Database.EnsureCreatedAsync();
+            var bench = new Lift { LiftType = LiftType.BenchPress, Name = "Bench Press", UserId = "test-user" };
+            var deadlift = new Lift { LiftType = LiftType.Deadlift, Name = "Deadlift", UserId = "test-user" };
+            var cycle = new Cycle { Name = "Test Cycle", UserId = "test-user" };
+            var week = new Week { Cycle = cycle, WeekNumber = WeekNumber.Week1 };
+            var workout = new Workout { Week = week, MainLiftType = LiftType.BenchPress };
+            workout.Sets.Add(new WorkoutSet { Lift = deadlift, SetType = SetType.Main, SetNumber = 1, PrescribedWeight = 315, PrescribedReps = 5 });
+            context.AddRange(bench, workout);
+            await context.SaveChangesAsync();
+        }
+
+        await using (var context = new AppDbContext(options))
+        {
+            var service = new WorkoutService(context, new TestCurrentUserService());
+
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+                service.AddAdditionalSetAsync(1, -1, 5, AdditionalSetType.Additional, null, null, null));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+                service.AddAdditionalSetAsync(1, 100, 0, AdditionalSetType.Additional, null, null, null));
+            await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() =>
+                service.AddAdditionalSetAsync(1, 100, 5, AdditionalSetType.Additional, 11, null, null));
+
+            var result = await service.AddAdditionalSetAsync(1, 100, 5, AdditionalSetType.Additional, null, null, null);
+            Assert.Null(result);
+            Assert.Empty(await context.WorkoutSets.Where(s => s.IsAdditional).ToListAsync());
         }
     }
 
