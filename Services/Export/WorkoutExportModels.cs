@@ -34,6 +34,7 @@ public sealed class CycleExportModel
     public bool IsCompleted { get; init; }
     public string? Notes { get; init; }
     public List<AdditionalSessionExportModel> AdditionalSessions { get; init; } = [];
+    public List<DailyStepExportModel> DailySteps { get; init; } = [];
     public List<WeekExportModel> Weeks { get; init; } = [];
     public ExportSummaryModel Summary { get; init; } = new();
 }
@@ -46,6 +47,7 @@ public sealed class WeekExportModel
     public string? Notes { get; init; }
     public List<WorkoutExportModel> Workouts { get; init; } = [];
     public List<AdditionalSessionExportModel> AdditionalSessions { get; init; } = [];
+    public List<DailyStepExportModel> DailySteps { get; init; } = [];
     public ExportSummaryModel Summary { get; init; } = new();
 }
 
@@ -94,7 +96,15 @@ public sealed class WorkoutExportModel
     public string? Notes { get; init; }
     public List<ExerciseExportModel> Exercises { get; init; } = [];
     public List<AccessoryExportModel> Accessories { get; init; } = [];
+    public List<DailyStepExportModel> DailySteps { get; init; } = [];
     public ExportSummaryModel Summary { get; init; } = new();
+}
+
+public sealed class DailyStepExportModel
+{
+    public DateTime Date { get; init; }
+    public long Steps { get; init; }
+    public string Provider { get; init; } = string.Empty;
 }
 
 public sealed class ExerciseExportModel

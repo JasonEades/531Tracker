@@ -23,6 +23,7 @@ public sealed class GoogleHealthOptions
     public string TokenEndpoint { get; set; } = "https://oauth2.googleapis.com/token";
     public string UserInfoEndpoint { get; set; } = "https://openidconnect.googleapis.com/v1/userinfo";
     public string Scope { get; set; } = "openid email https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly";
+    public int SyncHourUtc { get; set; } = 2;
 }
 
 public sealed record GoogleHealthOAuthState(string UserId, string ReturnUrl, DateTime CreatedAtUtc);

@@ -24,13 +24,32 @@ public sealed class GoogleHealthTests
         db.Cycles.Add(cycle);
         await db.SaveChangesAsync();
 
-        var resolver = new CycleDateResolver(db, new TestCurrentUserService());
-        var assignment = await resolver.FindAssignmentAsync(new DateTime(2026, 9, 8));
-        var outside = await resolver.FindAssignmentAsync(new DateTime(2026, 10, 1));
+        var resolver = new CycleDateResolver(db);
+        var assignment = await resolver.FindAssignmentAsync("test-user", new DateTime(2026, 9, 8));
+        var outside = await resolver.FindAssignmentAsync("test-user", new DateTime(2026, 10, 1));
 
         Assert.NotNull(assignment);
         Assert.Equal(WeekNumber.Week2, assignment!.Week.WeekNumber);
         Assert.Null(outside);
+    }
+
+    [Fact]
+    public async Task CycleDateResolverDoesNotAssignAnotherUsersCycle()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+        await using var db = new AppDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+
+        var cycle = new Cycle { UserId = "other-user", Name = "Other Cycle", StartDate = new DateTime(2026, 9, 1) };
+        cycle.Weeks.Add(new Week { WeekNumber = WeekNumber.Week1 });
+        db.Cycles.Add(cycle);
+        await db.SaveChangesAsync();
+
+        var resolver = new CycleDateResolver(db);
+
+        Assert.Null(await resolver.FindAssignmentAsync("test-user", new DateTime(2026, 9, 2)));
     }
 
     [Fact]
@@ -61,11 +80,5 @@ public sealed class GoogleHealthTests
 
         Assert.Equal(100, analytics.CompletionPercent);
         Assert.Equal(7, analytics.AdditionalSessions);
-    }
-
-    private sealed class TestCurrentUserService : ICurrentUserService
-    {
-        public Task<string> GetUserIdAsync() => Task.FromResult("test-user");
-        public Task<string?> GetUserIdOrNullAsync() => Task.FromResult<string?>("test-user");
     }
 }

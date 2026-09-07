@@ -8,14 +8,13 @@ public sealed record CycleWeekAssignment(Cycle Cycle, Week Week);
 
 public interface ICycleDateResolver
 {
-    Task<CycleWeekAssignment?> FindAssignmentAsync(DateTime localDate);
+    Task<CycleWeekAssignment?> FindAssignmentAsync(string userId, DateTime localDate);
 }
 
-public sealed class CycleDateResolver(AppDbContext db, ICurrentUserService userContext) : ICycleDateResolver
+public sealed class CycleDateResolver(AppDbContext db) : ICycleDateResolver
 {
-    public async Task<CycleWeekAssignment?> FindAssignmentAsync(DateTime localDate)
+    public async Task<CycleWeekAssignment?> FindAssignmentAsync(string userId, DateTime localDate)
     {
-        var userId = await userContext.GetUserIdAsync();
         var date = localDate.Date;
         var cycles = await db.Cycles
             .Include(c => c.Weeks)

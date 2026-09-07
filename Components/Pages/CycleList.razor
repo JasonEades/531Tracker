@@ -1,6 +1,11 @@
 @page "/cycles"
 @attribute [Authorize]
 @rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using FiveThreeOneTracker.Data
+@using FiveThreeOneTracker.Models
+@inject AppDbContext Db
+@inject ICurrentUserService UserContext
 @inject ICycleService CycleService
 @inject IPplProgramService PplService
 @inject NavigationManager Nav
@@ -11,6 +16,37 @@
     <h1>Workouts</h1>
     <p class="page-subtitle">All training cycles</p>
 </div>
+
+<section class="history-steps-card mb-4">
+    <div class="history-steps-header">
+        <div>
+            <h2>Daily Steps</h2>
+            <p>Google Health totals for the last 14 days</p>
+        </div>
+        @if (stepHistory.Count > 0)
+        {
+            <strong>@stepHistory.Sum(x => x.Steps).ToString("N0")</strong>
+        }
+    </div>
+    @if (stepHistory.All(x => x.Steps == 0))
+    {
+        <p class="text-muted">No step data has been imported yet.</p>
+    }
+    else
+    {
+        <div class="steps-chart" role="img" aria-label="Daily Google Health steps for the last 14 days">
+            @foreach (var point in stepHistory)
+            {
+                <div class="steps-chart-column">
+                    <div class="steps-chart-bar-wrap">
+                        <div class="steps-chart-bar" style="height:@BarHeight(point.Steps)%" title="@point.Steps.ToString("N0") steps on @point.Date.ToString("d")"></div>
+                    </div>
+                    <span>@point.Date.ToString("M/d")</span>
+                </div>
+            }
+        </div>
+    }
+</section>
 
 @* ── New Cycle setup form (inline sheet) ──────────────────── *@
 @if (showCreate)
@@ -215,6 +251,7 @@ else
 @code {
     private List<Cycle> cycles = [];
     private List<PplProgram> pplPrograms = [];
+    private List<StepHistoryPoint> stepHistory = [];
     private bool loading = true;
     private bool creating;
     private bool showCreate;
@@ -222,13 +259,30 @@ else
     private bool enableWarmup;
     private BbbMode selectedBbbMode = BbbMode.OppositeDay;
     private double selectedBbbPct = 50;
+    private double StepMaximum => Math.Max(1, stepHistory.Max(x => x.Steps));
 
     protected override async Task OnInitializedAsync()
     {
+        var userId = await UserContext.GetUserIdAsync();
+        var today = DateTime.UtcNow.Date;
+        var start = today.AddDays(-13);
+        var records = await Db.DailyStepRecords.AsNoTracking()
+            .Where(x => x.UserId == userId && x.LocalDate >= start && x.LocalDate <= today)
+            .ToDictionaryAsync(x => x.LocalDate.Date, x => x.StepCount);
+        stepHistory = Enumerable.Range(0, 14)
+            .Select(offset =>
+            {
+                var date = start.AddDays(offset);
+                return new StepHistoryPoint(date, records.GetValueOrDefault(date));
+            })
+            .ToList();
+
         cycles = await CycleService.GetAllCyclesAsync();
         pplPrograms = await PplService.GetAllProgramsAsync();
         loading = false;
     }
+
+    private double BarHeight(long steps) => steps == 0 ? 2 : Math.Max(4, steps / StepMaximum * 100);
 
     private void ShowCreateForm()
     {
@@ -260,4 +314,6 @@ else
     }
 
     private void GoToCycle(int id) => Nav.NavigateTo("/cycles/" + id);
+
+    private sealed record StepHistoryPoint(DateTime Date, long Steps);
 }

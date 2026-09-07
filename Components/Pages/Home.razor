@@ -297,6 +297,23 @@ else
         </div>
     </div>
 
+    @if (analytics.Steps.IsConnected)
+    {
+        <div class="card analytics-card analytics-chart-card">
+            <div class="card-header">Steps — Last 30 Days</div>
+            <div class="analytics-muted">Daily totals from Google Health</div>
+            <div class="steps-30-day-chart" aria-label="Google Health steps for the last 30 days">
+                @foreach (var point in analytics.Steps.Last30Days)
+                {
+                    <div class="steps-30-day-column" title="@point.Date.ToString("d"): @point.Steps.ToString("N0") steps">
+                        <div class="steps-30-day-bar" style="height:@(point.Steps * 100 / Math.Max(1, analytics.Steps.Last30Days.Max(x => x.Steps)))%"></div>
+                        <span>@point.Date.ToString("M/d")</span>
+                    </div>
+                }
+            </div>
+        </div>
+    }
+
     <div class="card analytics-card analytics-chart-card">
         <div class="card-header">Training Activity</div>
         <p class="analytics-description">Completed sessions and actual lifting volume by month. Planned sets are not included in volume.</p>

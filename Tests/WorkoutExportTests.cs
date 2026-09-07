@@ -82,6 +82,28 @@ public sealed class WorkoutExportTests
     }
 
     [Fact]
+    public void MarkdownRendersCanonicalDailySteps()
+    {
+        var document = new WorkoutExportDocument
+        {
+            Scope = WorkoutExportScope.Week,
+            Week = new WeekExportModel
+            {
+                WeekNumber = 1,
+                CycleNumber = 4,
+                DailySteps = [new DailyStepExportModel { Date = new DateTime(2026, 9, 8), Steps = 12_345, Provider = "GoogleHealth" }]
+            }
+        };
+
+        var markdown = System.Text.Encoding.UTF8.GetString(new MarkdownWorkoutExporter().Render(document));
+
+        Assert.Contains("Daily Steps", markdown);
+        Assert.Contains("2026-09-08", markdown);
+        Assert.Contains("12,345", markdown);
+        Assert.Contains("GoogleHealth", markdown);
+    }
+
+    [Fact]
     public async Task NewPplDoesNotRequireOrRead531Lifts()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

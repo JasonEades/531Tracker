@@ -73,52 +73,24 @@ public sealed class GoogleHealthSyncService(
             }
 
             await db.SaveChangesAsync(cancellationToken);
-            var assignment = await cycleDateResolver.FindAssignmentAsync(item.Date);
-            if (assignment is null)
-            {
-                unassigned++;
-                continue;
-            }
+            var assignmentResult = await EnsureCardioAssignmentAsync(userId, record, cancellationToken);
+            cardio += assignmentResult.Added ? 1 : 0;
+            unassigned += assignmentResult.Unassigned ? 1 : 0;
+        }
 
-            var entry = record.CardioEntry;
-            if (entry is null)
-            {
-                var accessory = await db.Accessories.SingleAsync(x => x.Category == AccessoryCategory.Cardio && x.IsActive && x.Name == "Steps", cancellationToken);
-                var session = new AdditionalSession
-                {
-                    WeekId = assignment.Week.Id,
-                    SessionType = SessionType.Cardio,
-                    OccurredOn = item.Date,
-                    CreatedAt = DateTime.UtcNow,
-                    Name = "Google Health — Steps",
-                    Notes = "Imported from Google Health"
-                };
-                db.AdditionalSessions.Add(session);
-                await db.SaveChangesAsync(cancellationToken);
-                entry = new CardioEntry
-                {
-                    AdditionalSessionId = session.Id,
-                    AccessoryId = accessory.Id,
-                    DailyStepRecordId = record.Id,
-                    Quantity = item.StepCount,
-                    Unit = CardioUnit.Steps,
-                    Source = "Google Health",
-                    Notes = "Imported from Google Health"
-                };
-                db.CardioEntries.Add(entry);
-                cardio++;
-            }
-            else
-            {
-                entry.Quantity = item.StepCount;
-                entry.Unit = CardioUnit.Steps;
-                entry.Source = "Google Health";
-                entry.Session.OccurredOn = item.Date;
-                entry.Session.WeekId = assignment.Week.Id;
-                entry.Session.CycleId = null;
-                entry.Session.Name = "Google Health — Steps";
-                entry.Session.Notes = "Imported from Google Health";
-            }
+        await db.SaveChangesAsync(cancellationToken);
+        var previouslyUnassigned = await db.DailyStepRecords
+            .Include(x => x.CardioEntry)
+                .ThenInclude(x => x!.Session)
+            .Where(x => x.UserId == userId && x.Provider == "GoogleHealth" &&
+                x.Metric == "DailySteps" && x.CardioEntry == null)
+            .ToListAsync(cancellationToken);
+
+        foreach (var record in previouslyUnassigned)
+        {
+            var assignmentResult = await EnsureCardioAssignmentAsync(userId, record, cancellationToken);
+            cardio += assignmentResult.Added ? 1 : 0;
+            unassigned += assignmentResult.Unassigned ? 1 : 0;
         }
 
         connection.LastSyncedAtUtc = DateTime.UtcNow;
@@ -126,6 +98,55 @@ public sealed class GoogleHealthSyncService(
         await db.SaveChangesAsync(cancellationToken);
         await transaction.CommitAsync(cancellationToken);
         return new HealthSyncResult(imported, cardio, updated, unassigned);
+    }
+
+    private async Task<(bool Added, bool Unassigned)> EnsureCardioAssignmentAsync(
+        string userId, DailyStepRecord record, CancellationToken cancellationToken)
+    {
+        var assignment = await cycleDateResolver.FindAssignmentAsync(userId, record.LocalDate);
+        if (assignment is null)
+            return (false, true);
+
+        var entry = record.CardioEntry;
+        if (entry is null)
+        {
+            var accessory = await db.Accessories.SingleAsync(
+                x => x.Category == AccessoryCategory.Cardio && x.IsActive && x.Name == "Steps", cancellationToken);
+            var session = new AdditionalSession
+            {
+                WeekId = assignment.Week.Id,
+                CycleId = assignment.Cycle.Id,
+                SessionType = SessionType.Cardio,
+                OccurredOn = record.LocalDate,
+                CreatedAt = DateTime.UtcNow,
+                Name = "Google Health — Steps",
+                Notes = "Imported from Google Health"
+            };
+            db.AdditionalSessions.Add(session);
+            await db.SaveChangesAsync(cancellationToken);
+            entry = new CardioEntry
+            {
+                AdditionalSessionId = session.Id,
+                AccessoryId = accessory.Id,
+                DailyStepRecordId = record.Id,
+                Quantity = record.StepCount,
+                Unit = CardioUnit.Steps,
+                Source = "Google Health",
+                Notes = "Imported from Google Health"
+            };
+            db.CardioEntries.Add(entry);
+            return (true, false);
+        }
+
+        entry.Quantity = record.StepCount;
+        entry.Unit = CardioUnit.Steps;
+        entry.Source = "Google Health";
+        entry.Session.OccurredOn = record.LocalDate;
+        entry.Session.WeekId = assignment.Week.Id;
+        entry.Session.CycleId = assignment.Cycle.Id;
+        entry.Session.Name = "Google Health — Steps";
+        entry.Session.Notes = "Imported from Google Health";
+        return (false, false);
     }
 
     private static IReadOnlyList<IncomingStep> ParseRecords(string payload, DateTime startDate, DateTime endDate)

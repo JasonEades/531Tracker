@@ -44,6 +44,7 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
         builder.AppendLine($"**Status:** {(cycle.IsCompleted ? "Completed" : "In progress")}");
         RenderNote(builder, "Cycle Notes", cycle.Notes);
         RenderSummary(builder, "Cycle Summary", cycle.Summary);
+        RenderDailySteps(builder, cycle.DailySteps);
 
         foreach (var session in cycle.AdditionalSessions)
         {
@@ -68,6 +69,7 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
         builder.AppendLine($"**Cycle:** Cycle {week.CycleNumber}");
         RenderNote(builder, "Week Notes", week.Notes);
         RenderSummary(builder, "Weekly Summary", week.Summary);
+        RenderDailySteps(builder, week.DailySteps);
 
         foreach (var workout in week.Workouts)
         {
@@ -120,6 +122,7 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
         builder.AppendLine($"**Status:** {workout.Status}");
         RenderNote(builder, "Workout Notes", workout.Notes);
         RenderSummary(builder, "Workout Summary", workout.Summary);
+        RenderDailySteps(builder, workout.DailySteps);
 
         foreach (var exercise in workout.Exercises)
         {
@@ -134,6 +137,7 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
                 var type = set.IsAmrap ? $"{set.Type} — AMRAP" : set.Type;
                 builder.AppendLine($"| {set.Number} | {type} | {set.TargetReps} | {Value(set.ActualReps)} | {Weight(set.TargetWeight)} | {Weight(set.ActualWeight)} | {(set.IsCompleted ? "Yes" : "No")} | {Inline(set.Notes)} |");
             }
+
             if (exercise.AdditionalSets.Count > 0)
             {
                 builder.AppendLine();
@@ -158,6 +162,21 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
                 builder.AppendLine($"| {Inline(accessory.Name)} | {accessory.Sets} | {accessory.Reps} | {Weight(accessory.Weight)} | {(accessory.IsCompleted ? "Yes" : "No")} | {Inline(accessory.Notes ?? accessory.Description)} |");
             }
         }
+    }
+
+    private static void RenderDailySteps(StringBuilder builder, IEnumerable<DailyStepExportModel> steps)
+    {
+        var rows = steps.OrderBy(x => x.Date).ToList();
+        if (rows.Count == 0)
+            return;
+
+        builder.AppendLine();
+        builder.AppendLine("### Daily Steps");
+        builder.AppendLine();
+        builder.AppendLine("| Date | Steps | Provider |");
+        builder.AppendLine("|---|---:|---|");
+        foreach (var step in rows)
+            builder.AppendLine($"| {step.Date:yyyy-MM-dd} | {step.Steps:N0} | {Inline(step.Provider)} |");
     }
 
     private static void RenderSummary(StringBuilder builder, string title, ExportSummaryModel summary)

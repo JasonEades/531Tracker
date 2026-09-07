@@ -21,6 +21,8 @@ public sealed class DashboardAnalyticsService(
         var yearStart = new DateTime(today.Year, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         var weekStart = StartOfWeek(today);
         var historyStart = today.AddYears(-1);
+        var hasGoogleHealth = await db.GoogleHealthConnections.AsNoTracking()
+            .AnyAsync(x => x.UserId == userId && x.Status == HealthConnectionStatus.Connected);
 
         var currentCycle = await db.Cycles
             .AsNoTracking()
@@ -108,16 +110,26 @@ public sealed class DashboardAnalyticsService(
             MonthlyTraining = BuildMonthly(yearStart.Year, yearWorkouts, yearPpl, yearAdditional),
             StrengthProgress = BuildStrengthProgress(workouts, pplSessions, today, currentCycle?.Id),
             RecentRecords = BuildRecords(workouts, pplSessions),
-            Steps = BuildSteps(stepRecords, today, weekStart, yearStart)
+            Steps = BuildSteps(stepRecords, today, weekStart, yearStart, hasGoogleHealth)
         };
     }
 
-    private static StepAnalytics BuildSteps(List<DailyStepPoint> records, DateTime today, DateTime weekStart, DateTime yearStart)
+    private static StepAnalytics BuildSteps(List<DailyStepPoint> records, DateTime today, DateTime weekStart, DateTime yearStart, bool isConnected)
     {
         var week = records.Where(x => x.Date >= weekStart && x.Date <= today).OrderBy(x => x.Date).ToList();
         var year = records.Where(x => x.Date >= yearStart && x.Date <= today).ToList();
+        var last30Start = today.AddDays(-29);
+        var recordsByDate = records.ToDictionary(x => x.Date.Date, x => x.Steps);
+        var last30 = Enumerable.Range(0, 30)
+            .Select(offset =>
+            {
+                var date = last30Start.AddDays(offset);
+                return new DailyStepPoint { Date = date, Steps = recordsByDate.GetValueOrDefault(date) };
+            })
+            .ToList();
         return new StepAnalytics
         {
+            IsConnected = isConnected,
             Today = records.Where(x => x.Date == today).Select(x => x.Steps).FirstOrDefault(),
             ThisWeekTotal = week.Sum(x => x.Steps),
             ThisWeekAverage = week.Count == 0 ? 0 : week.Average(x => x.Steps),
@@ -126,7 +138,8 @@ public sealed class DashboardAnalyticsService(
             ThisWeekDaysWithData = week.Count,
             YearTotal = year.Sum(x => x.Steps),
             YearAverage = year.Count == 0 ? 0 : year.Average(x => x.Steps),
-            ThisWeek = week
+            ThisWeek = week,
+            Last30Days = last30
         };
     }
 

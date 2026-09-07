@@ -38,4 +38,20 @@ public sealed class DashboardAnalyticsTests
 
         Assert.Equal(0, analytics.CompletionPercent);
     }
+
+    [Fact]
+    public void ConnectedStepAnalyticsProvidesThirtyDays()
+    {
+        var analytics = new StepAnalytics
+        {
+            IsConnected = true,
+            Last30Days = Enumerable.Range(0, 30)
+                .Select(i => new DailyStepPoint { Date = DateTime.UtcNow.Date.AddDays(i - 29), Steps = i * 1000 })
+                .ToList()
+        };
+
+        Assert.True(analytics.IsConnected);
+        Assert.Equal(30, analytics.Last30Days.Count);
+        Assert.Equal(29_000, analytics.Last30Days[^1].Steps);
+    }
 }

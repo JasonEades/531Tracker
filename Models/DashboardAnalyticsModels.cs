@@ -13,6 +13,7 @@ public sealed class DashboardAnalytics
 
 public sealed class StepAnalytics
 {
+    public bool IsConnected { get; init; }
     public long Today { get; init; }
     public long ThisWeekTotal { get; init; }
     public double ThisWeekAverage { get; init; }
@@ -22,6 +23,7 @@ public sealed class StepAnalytics
     public long YearTotal { get; init; }
     public double YearAverage { get; init; }
     public IReadOnlyList<DailyStepPoint> ThisWeek { get; init; } = [];
+    public IReadOnlyList<DailyStepPoint> Last30Days { get; init; } = [];
 }
 
 public sealed class DailyStepPoint

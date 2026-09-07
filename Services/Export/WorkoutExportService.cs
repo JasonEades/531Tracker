@@ -59,10 +59,12 @@ public sealed class WorkoutExportService(
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new WorkoutExportException("The workout could not be found.");
 
+        var workoutDate = workout.OccurredOn.Date;
+        var dailySteps = await GetDailyStepsAsync(userId, workoutDate, workoutDate.AddDays(1), cancellationToken);
         return new WorkoutExportDocument
         {
             Scope = WorkoutExportScope.Day,
-            Workout = MapWorkout(workout)
+            Workout = MapWorkout(workout, dailySteps)
         };
     }
 
@@ -74,10 +76,13 @@ public sealed class WorkoutExportService(
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new WorkoutExportException("The training week could not be found.");
 
+        var cycleStart = (week.Cycle.StartDate ?? week.Cycle.CreatedAt).Date;
+        var weekStart = cycleStart.AddDays(((int)week.WeekNumber - 1) * 7);
+        var dailySteps = await GetDailyStepsAsync(userId, weekStart, weekStart.AddDays(7), cancellationToken);
         return new WorkoutExportDocument
         {
             Scope = WorkoutExportScope.Week,
-            Week = MapWeek(week)
+            Week = MapWeek(week, dailySteps)
         };
     }
 
@@ -89,10 +94,12 @@ public sealed class WorkoutExportService(
             .SingleOrDefaultAsync(cancellationToken)
             ?? throw new WorkoutExportException("The training cycle could not be found.");
 
+        var cycleStart = (cycle.StartDate ?? cycle.CreatedAt).Date;
+        var dailySteps = await GetDailyStepsAsync(userId, cycleStart, cycleStart.AddDays(28), cancellationToken);
         return new WorkoutExportDocument
         {
             Scope = WorkoutExportScope.Cycle,
-            Cycle = MapCycle(cycle)
+            Cycle = MapCycle(cycle, dailySteps)
         };
     }
 
@@ -121,9 +128,9 @@ public sealed class WorkoutExportService(
         .Include(c => c.AdditionalSessions).ThenInclude(s => s.CardioEntries).ThenInclude(e => e.Accessory);
 
 
-    private static CycleExportModel MapCycle(Cycle cycle)
+    private static CycleExportModel MapCycle(Cycle cycle, List<DailyStepExportModel> dailySteps)
     {
-        var weeks = cycle.Weeks.OrderBy(w => w.WeekNumber).Select(MapWeek).ToList();
+        var weeks = cycle.Weeks.OrderBy(w => w.WeekNumber).Select(w => MapWeek(w)).ToList();
         var additional = cycle.AdditionalSessions.OrderBy(s => s.OccurredOn).ThenBy(s => s.CreatedAt).Select(MapAdditionalSession).ToList();
         return new CycleExportModel
         {
@@ -134,14 +141,15 @@ public sealed class WorkoutExportService(
             IsCompleted = cycle.IsCompleted,
             Notes = cycle.Notes,
             AdditionalSessions = additional,
+            DailySteps = dailySteps,
             Weeks = weeks,
             Summary = Summarize(weeks)
         };
     }
 
-    private static WeekExportModel MapWeek(Week week)
+    private static WeekExportModel MapWeek(Week week, List<DailyStepExportModel>? dailySteps = null)
     {
-        var workouts = week.Workouts.OrderBy(w => w.OccurredOn).ThenBy(w => w.CreatedAt).ThenBy(w => w.MainLiftType).Select(MapWorkout).ToList();
+        var workouts = week.Workouts.OrderBy(w => w.OccurredOn).ThenBy(w => w.CreatedAt).ThenBy(w => w.MainLiftType).Select(w => MapWorkout(w)).ToList();
         var additional = week.AdditionalSessions.OrderBy(s => s.OccurredOn).ThenBy(s => s.CreatedAt).Select(MapAdditionalSession).ToList();
         return new WeekExportModel
         {
@@ -151,6 +159,7 @@ public sealed class WorkoutExportService(
             Notes = week.Notes,
             Workouts = workouts,
             AdditionalSessions = additional,
+            DailySteps = dailySteps ?? [],
             Summary = Summarize(workouts)
         };
     }
@@ -169,7 +178,7 @@ public sealed class WorkoutExportService(
         CardioEntries = session.CardioEntries.OrderBy(e => e.Id).Select(e => new CardioExportModel { Exercise = e.Accessory.Name, Quantity = e.Quantity, Unit = e.Unit.ToString(), Notes = e.Notes, Source = e.Source }).ToList()
     };
 
-    private static WorkoutExportModel MapWorkout(Workout workout)
+    private static WorkoutExportModel MapWorkout(Workout workout, List<DailyStepExportModel>? dailySteps = null)
     {
         var exercises = workout.Sets
             .GroupBy(s => s.Lift)
@@ -199,8 +208,22 @@ public sealed class WorkoutExportService(
             Notes = workout.Notes,
             Exercises = exercises,
             Accessories = accessories,
+            DailySteps = dailySteps ?? [],
             Summary = Summarize(exercises, accessories)
         };
+    }
+
+    private async Task<List<DailyStepExportModel>> GetDailyStepsAsync(
+        string userId, DateTime? startInclusive, DateTime? endExclusive, CancellationToken cancellationToken)
+    {
+        if (startInclusive is null || endExclusive is null)
+            return [];
+
+        return await db.DailyStepRecords.AsNoTracking()
+            .Where(x => x.UserId == userId && x.LocalDate >= startInclusive.Value && x.LocalDate < endExclusive.Value)
+            .OrderBy(x => x.LocalDate)
+            .Select(x => new DailyStepExportModel { Date = x.LocalDate, Steps = x.StepCount, Provider = x.Provider })
+            .ToListAsync(cancellationToken);
     }
 
     private static ExerciseExportModel MapExercise(IGrouping<Lift, WorkoutSet> group, Workout workout)

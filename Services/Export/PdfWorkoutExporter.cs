@@ -69,6 +69,7 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
             Metadata(column.Item(), $"Cycle {cycle.CycleNumber}  |  Created {cycle.CreatedAt:yyyy-MM-dd}  |  {(cycle.IsCompleted ? "Completed" : "In progress")}");
             Note(column.Item(), "Cycle Notes", cycle.Notes);
             Summary(column.Item(), "Cycle Summary", cycle.Summary);
+            RenderDailySteps(column.Item(), cycle.DailySteps);
             foreach (var session in cycle.AdditionalSessions)
             {
                 column.Item().PaddingTop(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
@@ -90,6 +91,7 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
             Metadata(column.Item(), $"Cycle {week.CycleNumber}");
             Note(column.Item(), "Week Notes", week.Notes);
             Summary(column.Item(), "Weekly Summary", week.Summary);
+            RenderDailySteps(column.Item(), week.DailySteps);
             foreach (var workout in week.Workouts)
             {
                 column.Item().PaddingTop(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
@@ -152,6 +154,7 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
             SectionTitle(column.Item(), $"Workout — {workout.WorkoutName}", 14);
             Metadata(column.Item(), $"Date: {(workout.WorkoutDate?.ToString("yyyy-MM-dd") ?? "—")}  |  Cycle: {workout.CycleNumber}  |  Week: {workout.WeekNumber}  |  Status: {workout.Status}");
             Note(column.Item(), "Workout Notes", workout.Notes);
+            RenderDailySteps(column.Item(), workout.DailySteps);
             foreach (var exercise in workout.Exercises)
             {
                 column.Item().PaddingTop(8).Text($"{exercise.Category} — {exercise.Name}").Bold().FontSize(11);
@@ -178,6 +181,34 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
             }
 
             Summary(column.Item(), "Workout Summary", workout.Summary);
+        });
+    }
+
+    private static void RenderDailySteps(IContainer container, IEnumerable<DailyStepExportModel> steps)
+    {
+        var rows = steps.OrderBy(x => x.Date).ToList();
+        if (rows.Count == 0)
+            return;
+
+        container.PaddingTop(8).Column(column =>
+        {
+            column.Item().Text("Daily Steps").Bold().FontSize(11);
+            column.Item().Table(table =>
+            {
+                table.ColumnsDefinition(columns =>
+                {
+                    columns.RelativeColumn(2);
+                    columns.RelativeColumn(1);
+                    columns.RelativeColumn(2);
+                });
+                Header(table, "Date", "Steps", "Provider");
+                foreach (var step in rows)
+                {
+                    table.Cell().Element(Cell).Text(step.Date.ToString("yyyy-MM-dd"));
+                    table.Cell().Element(Cell).Text(step.Steps.ToString("N0"));
+                    table.Cell().Element(Cell).Text(step.Provider);
+                }
+            });
         });
     }
 
