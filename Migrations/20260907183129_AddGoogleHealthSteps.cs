@@ -86,10 +86,10 @@ namespace FiveThreeOneTracker.Migrations
                         onDelete: ReferentialAction.Cascade);
                 });
 
-            migrationBuilder.InsertData(
-                table: "Accessories",
-                columns: new[] { "Id", "Category", "Description", "IsActive", "Name", "UserId" },
-                values: new object[] { 26, "Cardio", null, true, "Steps", null });
+            migrationBuilder.Sql(
+                "INSERT INTO \"Accessories\" (\"Id\", \"Category\", \"Description\", \"IsActive\", \"Name\", \"UserId\") " +
+                "SELECT 26, 'Cardio', NULL, TRUE, 'Steps', NULL " +
+                "WHERE NOT EXISTS (SELECT 1 FROM \"Accessories\" WHERE \"Id\" = 26);");
 
             migrationBuilder.CreateIndex(
                 name: "IX_Cycles_UserId_StartDate",
