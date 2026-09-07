@@ -78,6 +78,7 @@ public sealed class CardioExportModel
     public string Exercise { get; init; } = string.Empty;
     public double Quantity { get; init; }
     public string Unit { get; init; } = string.Empty;
+    public string? Source { get; init; }
     public string? Notes { get; init; }
 }
 

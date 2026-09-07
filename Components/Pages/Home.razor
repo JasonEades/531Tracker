@@ -259,12 +259,32 @@ else
 {
     <div class="dashboard-analytics-grid animate-fade-in">
         <div class="card analytics-card">
+            <div class="card-header">Today's Activity</div>
+            <div class="analytics-stat-grid"><div><strong>@analytics.Steps.Today.ToString("N0")</strong><span>steps</span></div><div><strong>@analytics.Steps.ThisWeekTotal.ToString("N0")</strong><span>this week</span></div></div>
+            <div class="analytics-muted">Cardio · @analytics.Steps.Today.ToString("N0") Steps · Google Health</div>
+        </div>
+        <div class="card analytics-card">
             <div class="card-header">This Week</div>
             <div class="analytics-stat-grid">
                 <div><strong>@(analytics.ThisWeek.ProgrammedWorkouts + analytics.ThisWeek.PplSessions)</strong><span>workouts</span></div>
                 <div><strong>@analytics.ThisWeek.CardioSessions</strong><span>cardio</span></div>
                 <div><strong>@analytics.ThisWeek.StrengthVolume.ToString("N0")</strong><span>lb volume</span></div>
             </div>
+
+    @if (analytics.Steps.ThisWeekDaysWithData > 0)
+    {
+        <div class="card analytics-card">
+            <div class="card-header">Steps This Week</div>
+            <div class="analytics-muted">Total @analytics.Steps.ThisWeekTotal.ToString("N0") · Average @analytics.Steps.ThisWeekAverage.ToString("N0")/day · @analytics.Steps.ThisWeekDaysWithData days with data</div>
+            <div class="analytics-muted">Highest @analytics.Steps.ThisWeekHighest.ToString("N0") · Lowest @analytics.Steps.ThisWeekLowest.ToString("N0")</div>
+            <div class="monthly-chart" aria-label="Weekly steps chart">
+                @foreach (var point in analytics.Steps.ThisWeek)
+                {
+                    <div class="month-column" title="@point.Date.ToString("ddd"): @point.Steps.ToString("N0") steps"><div class="month-bar" style="height:@(point.Steps * 100 / Math.Max(1, analytics.Steps.ThisWeekHighest))%"></div><span>@point.Date.ToString("ddd")</span></div>
+                }
+            </div>
+        </div>
+    }
         </div>
         <div class="card analytics-card">
             <div class="card-header">Year to Date</div>

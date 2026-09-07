@@ -12,6 +12,7 @@ using Microsoft.EntityFrameworkCore;
 using MudBlazor.Services;
 using Npgsql.EntityFrameworkCore.PostgreSQL;
 using System.Security.Claims;
+using System.Net.Http.Headers;
 
 const string AdminRole  = "Admin";
 
@@ -152,6 +153,16 @@ builder.Services.AddAuthentication()
             else
             {
                 log.LogInformation("[AUTH] Existing user found, IsEnabled: {Enabled}", user.IsEnabled);
+                var existingGoogleLogin = (await userManager.GetLoginsAsync(user))
+                    .SingleOrDefault(login => login.LoginProvider == "Google");
+                if (existingGoogleLogin is not null && !string.Equals(existingGoogleLogin.ProviderKey, providerKey, StringComparison.Ordinal))
+                {
+                    log.LogWarning("[AUTH] Google subject mismatch for existing user {Email}", email);
+                    ctx.Fail("This Google account is not linked to the application account.");
+                    return;
+                }
+                if (existingGoogleLogin is null)
+                    await userManager.AddLoginAsync(user, new UserLoginInfo("Google", providerKey, "Google"));
             }
 
             // Ensure Admin role is assigned if this is the admin account.
@@ -196,6 +207,26 @@ builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IBbbMappingService, BbbMappingService>();
 builder.Services.AddScoped<IWeightCalculator, WeightCalculator>();
 builder.Services.AddScoped<ICycleService, CycleService>();
+builder.Services.AddScoped<ICycleDateResolver, CycleDateResolver>();
+builder.Services.Configure<GoogleHealthOptions>(builder.Configuration.GetSection(GoogleHealthOptions.SectionName));
+builder.Services.PostConfigure<GoogleHealthOptions>(options =>
+{
+    options.ClientId = string.IsNullOrWhiteSpace(options.ClientId)
+        ? builder.Configuration["Authentication:Google:ClientId"] ?? string.Empty
+        : options.ClientId;
+    options.ClientSecret = string.IsNullOrWhiteSpace(options.ClientSecret)
+        ? builder.Configuration["Authentication:Google:ClientSecret"] ?? string.Empty
+        : options.ClientSecret;
+});
+builder.Services.AddHttpClient("GoogleHealth", client =>
+{
+    client.Timeout = TimeSpan.FromSeconds(30);
+    client.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+});
+builder.Services.AddScoped<IGoogleHealthAuthorizationService, GoogleHealthAuthorizationService>();
+builder.Services.AddScoped<IGoogleHealthApiClient, GoogleHealthApiClient>();
+builder.Services.AddScoped<IGoogleHealthSyncService, GoogleHealthSyncService>();
+builder.Services.AddHostedService<GoogleHealthSyncHostedService>();
 builder.Services.AddScoped<IWorkoutService, WorkoutService>();
 builder.Services.AddScoped<IProtocolService, ProtocolService>();
 builder.Services.AddScoped<IAccessoryService, AccessoryService>();
@@ -235,6 +266,17 @@ using (var scope = app.Services.CreateScope())
     foreach (var u in disabledUsers) { u.IsEnabled = true; }
     await db.SaveChangesAsync();
 
+    // Backfill the date anchor for cycles created before health date mapping existed.
+    var cyclesWithoutStartDate = await db.Cycles
+        .Include(c => c.Weeks)
+            .ThenInclude(w => w.Workouts)
+        .Where(c => c.StartDate == null)
+        .ToListAsync();
+    foreach (var cycle in cyclesWithoutStartDate)
+        cycle.StartDate = cycle.Weeks.SelectMany(w => w.Workouts).Select(w => w.OccurredOn.Date).OrderBy(d => d).FirstOrDefault(cycle.CreatedAt.Date);
+    if (cyclesWithoutStartDate.Count > 0)
+        await db.SaveChangesAsync();
+
     // Seed Admin role
     if (!await roleManager.RoleExistsAsync(AdminRole))
         await roleManager.CreateAsync(new IdentityRole(AdminRole));
@@ -273,6 +315,37 @@ app.MapGet("/challenge/{provider}", async (string provider, string? returnUrl, H
     await ctx.ChallengeAsync(provider, props);
     log.LogInformation("[AUTH] ChallengeAsync issued, response status: {Status}", ctx.Response.StatusCode);
 });
+
+app.MapGet("/health/google/connect", (HttpContext ctx, IGoogleHealthAuthorizationService healthAuth) =>
+{
+    var userId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (userId is null)
+        return Results.Challenge(new AuthenticationProperties { RedirectUri = "/health/google/connect" });
+
+    var returnUrl = ctx.Request.Query["returnUrl"].ToString();
+    return Results.Redirect(healthAuth.CreateAuthorizationUrl(ctx, userId, returnUrl));
+}).RequireAuthorization();
+
+app.MapGet("/health/google/callback", async (HttpContext ctx, string? code, string? state,
+    IGoogleHealthAuthorizationService healthAuth, ILoggerFactory lf) =>
+{
+    try
+    {
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
+            throw new InvalidOperationException("Google did not return a valid authorization response.");
+
+        if (ctx.User.FindFirstValue(ClaimTypes.NameIdentifier) is null)
+            return Results.Challenge(new AuthenticationProperties { RedirectUri = "/health/google/connect" });
+
+        await healthAuth.CompleteAsync(ctx, code, state);
+        return Results.Redirect("/settings");
+    }
+    catch (Exception ex)
+    {
+        lf.CreateLogger("GoogleHealth.OAuth").LogWarning(ex, "Google Health authorization failed.");
+        return Results.Redirect("/settings?healthError=authorization_failed");
+    }
+}).RequireAuthorization();
 
 app.MapGet("/logout", async (SignInManager<ApplicationUser> signInManager, HttpContext ctx) =>
 {

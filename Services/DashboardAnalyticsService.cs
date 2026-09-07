@@ -55,6 +55,11 @@ public sealed class DashboardAnalyticsService(
             })
             .ToListAsync();
 
+        var stepRecords = await db.DailyStepRecords.AsNoTracking()
+            .Where(x => x.UserId == userId && x.LocalDate >= historyStart)
+            .Select(x => new DailyStepPoint { Date = x.LocalDate, Steps = x.StepCount })
+            .ToListAsync();
+
         var pplSessions = await db.PplSessions.AsNoTracking()
             .Where(s => s.Program.UserId == userId && s.Status == WorkoutStatus.Completed && s.OccurredOn >= historyStart)
             .Select(s => new PplSessionRow
@@ -102,7 +107,26 @@ public sealed class DashboardAnalyticsService(
             YearToDate = BuildYear(yearStart.Year, yearWorkouts, yearPpl, yearAdditional),
             MonthlyTraining = BuildMonthly(yearStart.Year, yearWorkouts, yearPpl, yearAdditional),
             StrengthProgress = BuildStrengthProgress(workouts, pplSessions, today, currentCycle?.Id),
-            RecentRecords = BuildRecords(workouts, pplSessions)
+            RecentRecords = BuildRecords(workouts, pplSessions),
+            Steps = BuildSteps(stepRecords, today, weekStart, yearStart)
+        };
+    }
+
+    private static StepAnalytics BuildSteps(List<DailyStepPoint> records, DateTime today, DateTime weekStart, DateTime yearStart)
+    {
+        var week = records.Where(x => x.Date >= weekStart && x.Date <= today).OrderBy(x => x.Date).ToList();
+        var year = records.Where(x => x.Date >= yearStart && x.Date <= today).ToList();
+        return new StepAnalytics
+        {
+            Today = records.Where(x => x.Date == today).Select(x => x.Steps).FirstOrDefault(),
+            ThisWeekTotal = week.Sum(x => x.Steps),
+            ThisWeekAverage = week.Count == 0 ? 0 : week.Average(x => x.Steps),
+            ThisWeekHighest = week.Count == 0 ? 0 : week.Max(x => x.Steps),
+            ThisWeekLowest = week.Count == 0 ? 0 : week.Min(x => x.Steps),
+            ThisWeekDaysWithData = week.Count,
+            YearTotal = year.Sum(x => x.Steps),
+            YearAverage = year.Count == 0 ? 0 : year.Average(x => x.Steps),
+            ThisWeek = week
         };
     }
 

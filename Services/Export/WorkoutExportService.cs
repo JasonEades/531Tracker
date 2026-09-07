@@ -166,7 +166,7 @@ public sealed class WorkoutExportService(
             Name = e.ExerciseName,
             Sets = e.Sets.OrderBy(s => s.SetNumber).Select(s => new AdditionalSetExportModel { Number = s.SetNumber, Weight = s.Weight, Reps = s.Reps, Notes = s.Notes }).ToList()
         }).ToList(),
-        CardioEntries = session.CardioEntries.OrderBy(e => e.Id).Select(e => new CardioExportModel { Exercise = e.Accessory.Name, Quantity = e.Quantity, Unit = e.Unit.ToString(), Notes = e.Notes }).ToList()
+        CardioEntries = session.CardioEntries.OrderBy(e => e.Id).Select(e => new CardioExportModel { Exercise = e.Accessory.Name, Quantity = e.Quantity, Unit = e.Unit.ToString(), Notes = e.Notes, Source = e.Source }).ToList()
     };
 
     private static WorkoutExportModel MapWorkout(Workout workout)

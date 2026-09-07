@@ -194,6 +194,74 @@ dotnet run --project FiveThreeOneTracker.csproj
 
 Open the URL shown in the terminal, then sign in with Google. Migrations are also applied automatically during application startup in the configured environment.
 
+### Configure Google Health
+
+Google Health uses a second authorization grant for the already signed-in Google user. It does not create another application account and it does not use Google Fit, Android, or Health Connect.
+
+Before connecting a user, complete the following in Google Cloud:
+
+1. Use the Google Cloud project that owns the existing web OAuth client, or create a dedicated web OAuth client in the project used by this application.
+2. Enable the current Google Health API used by the deployment and confirm that the activity/fitness REST resources are available to the project.
+3. Configure the OAuth consent screen with the application name, support email, authorized domain, privacy-policy URL, and contact information.
+4. Add the development Google accounts as test users while the consent screen is in testing.
+5. Request only this scope:
+
+   ```text
+   https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly
+   ```
+
+6. Add the exact Health callback URI to the web OAuth client. Examples:
+
+   ```text
+   https://localhost:PORT/health/google/callback
+   https://ppl531-jyi8z.ondigitalocean.app/health/google/callback
+   ```
+
+   The callback is different from the normal sign-in callback `/signin-google`.
+7. The application calls the current daily steps endpoint directly:
+
+   ```text
+   https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyRollUp
+   ```
+
+   It sends the requested UTC date window as `startTime` and `endTime` query parameters and reads each day's `steps.countSum` value.
+8. If Google classifies the requested scope as sensitive or restricted, complete Google's verification process before production use. Provide the requested privacy disclosures and demonstrate that tokens remain server-side.
+
+For local development, do not put secrets in `appsettings.json` or commit them to `appsettings.Development.json`. Use user secrets:
+
+```powershell
+dotnet user-secrets set "Authentication:Google:ClientId" "YOUR_WEB_CLIENT_ID" --project FiveThreeOneTracker.csproj
+dotnet user-secrets set "Authentication:Google:ClientSecret" "YOUR_WEB_CLIENT_SECRET" --project FiveThreeOneTracker.csproj
+```
+
+The Health client ID and secret fall back to the existing `Authentication:Google` values. They can be overridden independently when Google requires a separate web OAuth client:
+
+```powershell
+dotnet user-secrets set "Authentication:GoogleHealth:ClientId" "YOUR_HEALTH_WEB_CLIENT_ID" --project FiveThreeOneTracker.csproj
+dotnet user-secrets set "Authentication:GoogleHealth:ClientSecret" "YOUR_HEALTH_WEB_CLIENT_SECRET" --project FiveThreeOneTracker.csproj
+```
+
+For DigitalOcean App Platform, define the equivalent encrypted environment variables using double underscores:
+
+```text
+Authentication__Google__ClientId
+Authentication__Google__ClientSecret
+Authentication__GoogleHealth__ClientId       (optional override)
+Authentication__GoogleHealth__ClientSecret   (optional override)
+```
+
+After changing OAuth credentials, rotate any previously exposed client secret in Google Cloud. Never log or expose `ClientSecret`, access tokens, or refresh tokens. The application encrypts stored Health tokens with ASP.NET Core Data Protection and persists the protection keys in the database.
+
+To verify configuration locally:
+
+```powershell
+dotnet build
+dotnet test Tests/WorkoutExportTests.csproj
+dotnet run --project FiveThreeOneTracker.csproj
+```
+
+Sign in normally first, open **Settings → Google Health**, select **Connect Google Health**, approve the read-only activity scope, and then use **Sync Now**. The callback must return to the same authenticated browser session. A successful sync stores daily step records and represents dates covered by a training cycle as Cardio → Steps.
+
 ### Database providers
 
 The application supports both PostgreSQL and SQLite:

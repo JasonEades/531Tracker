@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <None Include=".do\app.yaml" />
+    <None Include=".github\copilot-instructions.md" />
     <None Include="Tests\WorkoutExportTests.csproj" />
   </ItemGroup>
 

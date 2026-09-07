@@ -17,6 +17,8 @@ public class Cycle
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
+    public DateTime? StartDate { get; set; }
+
     public bool IsCompleted { get; set; }
 
     public string? Notes { get; set; }

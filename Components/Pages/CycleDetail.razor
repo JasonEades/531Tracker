@@ -228,6 +228,10 @@ else
                                     {
                                         <div class="workout-meta">
                                             @string.Join(" · ", session.CardioEntries.Select(e => $"{e.Accessory.Name}: {e.Quantity:g} {e.Unit}"))
+                                            @if (session.CardioEntries.Any(e => e.Source == "Google Health"))
+                                            {
+                                                <span> · Source: Google Health</span>
+                                            }
                                         </div>
                                     }
                                 </div>

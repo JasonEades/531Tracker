@@ -94,9 +94,9 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
         if (session.CardioEntries.Count > 0)
         {
             builder.AppendLine(); builder.AppendLine("### Cardio"); builder.AppendLine();
-            builder.AppendLine("| Exercise | Quantity | Unit | Notes |"); builder.AppendLine("|---|---:|---|---|");
+            builder.AppendLine("| Exercise | Quantity | Unit | Source | Notes |"); builder.AppendLine("|---|---:|---|---|---|");
             foreach (var entry in session.CardioEntries)
-                builder.AppendLine($"| {Inline(entry.Exercise)} | {entry.Quantity} | {entry.Unit} | {Inline(entry.Notes)} |");
+                builder.AppendLine($"| {Inline(entry.Exercise)} | {entry.Quantity} | {entry.Unit} | {Inline(entry.Source)} | {Inline(entry.Notes)} |");
         }
         foreach (var exercise in session.Exercises)
         {

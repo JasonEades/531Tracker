@@ -27,6 +27,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<PlateInventory> PlateInventory => Set<PlateInventory>();
     public DbSet<Bar> Bars => Set<Bar>();
     public DbSet<UserProtocol> UserProtocols => Set<UserProtocol>();
+    public DbSet<GoogleHealthConnection> GoogleHealthConnections => Set<GoogleHealthConnection>();
+    public DbSet<DailyStepRecord> DailyStepRecords => Set<DailyStepRecord>();
 
     // ── PPL ──────────────────────────────────────────────────────────────────
     public DbSet<PplProgram> PplPrograms => Set<PplProgram>();
@@ -50,6 +52,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         modelBuilder.Entity<Cycle>(entity =>
         {
             entity.HasIndex(e => e.UserId);
+            entity.HasIndex(e => new { e.UserId, e.StartDate });
             entity.Property(e => e.BbbMode).HasConversion<string>();
             entity.HasMany(c => c.Weeks)
                   .WithOne(w => w.Cycle)
@@ -223,6 +226,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
                   .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<GoogleHealthConnection>(entity =>
+        {
+            entity.HasIndex(e => e.UserId).IsUnique();
+            entity.HasOne(e => e.User)
+                  .WithMany()
+                  .HasForeignKey(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(e => e.Status).HasConversion<string>();
+        });
+
+        modelBuilder.Entity<DailyStepRecord>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.Provider, e.Metric, e.LocalDate }).IsUnique();
+            entity.HasOne(e => e.User)
+                  .WithMany()
+                  .HasForeignKey(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(e => e.LocalDate).HasColumnType("date");
+        });
+
         modelBuilder.Entity<AdditionalStrengthExercise>(entity =>
         {
             entity.HasMany(e => e.Sets)
@@ -234,6 +257,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         modelBuilder.Entity<CardioEntry>(entity =>
         {
             entity.Property(e => e.Unit).HasConversion<string>();
+            entity.HasIndex(e => e.DailyStepRecordId).IsUnique();
+            entity.HasOne(e => e.DailyStepRecord)
+                  .WithOne(r => r.CardioEntry)
+                  .HasForeignKey<CardioEntry>(e => e.DailyStepRecordId)
+                  .OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(e => e.Accessory)
                   .WithMany()
                   .HasForeignKey(e => e.AccessoryId)
@@ -282,7 +310,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
             new Accessory { Id = 22, Name = "Stair Climber", Category = AccessoryCategory.Cardio },
             new Accessory { Id = 23, Name = "Swimming", Category = AccessoryCategory.Cardio },
             new Accessory { Id = 24, Name = "Rucking", Category = AccessoryCategory.Cardio },
-            new Accessory { Id = 25, Name = "Other", Category = AccessoryCategory.Cardio }
+            new Accessory { Id = 25, Name = "Other", Category = AccessoryCategory.Cardio },
+            new Accessory { Id = 26, Name = "Steps", Category = AccessoryCategory.Cardio }
         );
     }
 }

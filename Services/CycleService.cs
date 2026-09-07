@@ -93,6 +93,7 @@ public class CycleService(
             CycleNumber = cycleNumber,
             Name = $"Cycle {cycleNumber}",
             CreatedAt = DateTime.UtcNow,
+            StartDate = DateTime.UtcNow.Date,
             BbbMode = bbbMode,
             BbbPercentage = Math.Clamp(bbbPercentage, 30, 70),
             IncludeWarmup = includeWarmup,
@@ -191,7 +192,7 @@ public class CycleService(
                     MainLiftType = mainLift.LiftType,
                     Status = WorkoutStatus.NotStarted,
                     CreatedAt = DateTime.UtcNow,
-                    OccurredOn = cycle.CreatedAt.Date.AddDays(((int)weekNum - 1) * 7 + workoutOffset++)
+                    OccurredOn = (cycle.StartDate ?? cycle.CreatedAt).Date.AddDays(((int)weekNum - 1) * 7 + workoutOffset++)
                 };
                 db.Workouts.Add(workout);
                 await db.SaveChangesAsync();

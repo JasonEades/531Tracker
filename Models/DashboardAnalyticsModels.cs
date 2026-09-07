@@ -8,6 +8,26 @@ public sealed class DashboardAnalytics
     public IReadOnlyList<MonthlyTrainingPoint> MonthlyTraining { get; init; } = [];
     public IReadOnlyList<StrengthAnalytics> StrengthProgress { get; init; } = [];
     public IReadOnlyList<PerformanceRecord> RecentRecords { get; init; } = [];
+    public StepAnalytics Steps { get; init; } = new();
+}
+
+public sealed class StepAnalytics
+{
+    public long Today { get; init; }
+    public long ThisWeekTotal { get; init; }
+    public double ThisWeekAverage { get; init; }
+    public long ThisWeekHighest { get; init; }
+    public long ThisWeekLowest { get; init; }
+    public int ThisWeekDaysWithData { get; init; }
+    public long YearTotal { get; init; }
+    public double YearAverage { get; init; }
+    public IReadOnlyList<DailyStepPoint> ThisWeek { get; init; } = [];
+}
+
+public sealed class DailyStepPoint
+{
+    public DateTime Date { get; init; }
+    public long Steps { get; init; }
 }
 
 public sealed class CurrentProgramAnalytics

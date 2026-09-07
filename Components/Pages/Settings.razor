@@ -1,0 +1,123 @@
+@page "/settings"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using FiveThreeOneTracker.Data
+@using FiveThreeOneTracker.Models
+@inject AppDbContext Db
+@inject ICurrentUserService UserContext
+@inject IGoogleHealthAuthorizationService HealthAuthorization
+@inject IGoogleHealthSyncService HealthSync
+@inject NavigationManager Nav
+
+<PageTitle>Settings — The Lifting Lab</PageTitle>
+
+<div class="page-header">
+    <div>
+        <div class="eyebrow">ACCOUNT</div>
+        <h1>Settings</h1>
+    </div>
+</div>
+
+<section class="card mb-4">
+    <div class="card-header">
+        <div>
+            <div class="eyebrow">HEALTH INTEGRATIONS</div>
+            <h2>Google Health</h2>
+        </div>
+        <span class="badge @(connection?.Status == HealthConnectionStatus.Connected ? "badge-success" : "badge-muted")">
+            @(connection?.Status == HealthConnectionStatus.Connected ? "Connected" : "Not connected")
+        </span>
+    </div>
+    <p class="text-muted">Daily Google Health step totals are automatically added to your training weeks as Cardio → Steps.</p>
+
+    @if (connection?.Status == HealthConnectionStatus.Connected)
+    {
+        <div class="settings-grid mt-3">
+            <div><strong>Daily Steps</strong><br /><span class="text-muted">Read access granted</span></div>
+            <div><strong>Last synced</strong><br /><span class="text-muted">@(connection.LastSyncedAtUtc?.ToLocalTime().ToString("g") ?? "Not yet synced")</span></div>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(syncMessage))
+        {
+            <p class="text-muted mt-3">@syncMessage</p>
+        }
+        <div class="flex gap-1 mt-3">
+            <button class="btn btn-primary" @onclick="SyncNow" disabled="@busy">@(busy ? "Syncing…" : "Sync Now")</button>
+            <button class="btn btn-outline" @onclick="Connect">Reconnect</button>
+            <button class="btn btn-outline" @onclick="Disconnect" disabled="@busy">Disconnect</button>
+        </div>
+    }
+    else
+    {
+        <p class="text-muted">Connect Google Health to import your daily step count and add it to your training week.</p>
+        <button class="btn btn-primary mt-2" @onclick="Connect">Connect Google Health</button>
+    }
+</section>
+
+@if (!string.IsNullOrWhiteSpace(error))
+{
+    <div class="alert alert-danger">@error</div>
+}
+
+@code {
+    private GoogleHealthConnection? connection;
+    private bool busy;
+    private string? error;
+    private string? syncMessage;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        var userId = await UserContext.GetUserIdAsync();
+        connection = await Db.GoogleHealthConnections.AsNoTracking().SingleOrDefaultAsync(x => x.UserId == userId);
+    }
+
+    private void Connect()
+    {
+        Nav.NavigateTo("/health/google/connect?returnUrl=/settings", forceLoad: true);
+    }
+
+    private async Task SyncNow()
+    {
+        busy = true;
+        error = null;
+        syncMessage = null;
+        try
+        {
+            var result = await HealthSync.SyncAsync(DateTime.UtcNow.Date.AddDays(-90), DateTime.UtcNow.Date);
+            syncMessage = $"Imported {result.ImportedRecords} records; updated {result.UpdatedRecords}; created {result.CardioAdditions} cardio additions; {result.UnassignedRecords} remain outside a training cycle.";
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task Disconnect()
+    {
+        busy = true;
+        error = null;
+        try
+        {
+            await HealthAuthorization.DisconnectAsync(await UserContext.GetUserIdAsync());
+            await LoadAsync();
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+}
