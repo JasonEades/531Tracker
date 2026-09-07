@@ -157,11 +157,6 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
                 column.Item().PaddingTop(8).Text($"{exercise.Category} — {exercise.Name}").Bold().FontSize(11);
                 Note(column.Item(), "Exercise Notes", exercise.Notes);
                 RenderSets(column.Item(), exercise);
-                if (exercise.AdditionalSets.Count > 0)
-                {
-                    column.Item().PaddingTop(5).Text("Additional Sets").Bold();
-                    RenderAdditionalSets(column.Item(), exercise.AdditionalSets);
-                }
             }
             if (workout.Accessories.Count > 0)
             {
@@ -186,29 +181,6 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
         });
     }
 
-    private static void RenderAdditionalSets(IContainer container, IReadOnlyList<SetExportModel> sets)
-    {
-        container.Table(table =>
-        {
-            table.ColumnsDefinition(columns =>
-            {
-                columns.ConstantColumn(28); columns.RelativeColumn(2); columns.ConstantColumn(58); columns.ConstantColumn(45);
-                columns.ConstantColumn(40); columns.ConstantColumn(40); columns.RelativeColumn(3);
-            });
-            Header(table, "Set", "Type", "Weight", "Reps", "RPE", "RIR", "Notes");
-            foreach (var set in sets)
-            {
-                table.Cell().Element(Cell).Text(set.Number.ToString());
-                table.Cell().Element(Cell).Text(set.Type);
-                table.Cell().Element(Cell).Text(Weight(set.ActualWeight ?? set.TargetWeight));
-                table.Cell().Element(Cell).Text((set.ActualReps ?? set.TargetReps).ToString());
-                table.Cell().Element(Cell).Text(set.Rpe?.ToString("0.#") ?? "—");
-                table.Cell().Element(Cell).Text(set.Rir?.ToString("0.#") ?? "—");
-                table.Cell().Element(Cell).Text(set.Notes ?? "—");
-            }
-        });
-    }
-
     private static void RenderSets(IContainer container, ExerciseExportModel exercise)
     {
         container.Table(table =>
@@ -230,7 +202,27 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
                 table.Cell().Element(Cell).Text(set.IsCompleted ? "Yes" : "No");
                 table.Cell().Element(Cell).Text(set.Notes ?? "—");
             }
+            foreach (var set in exercise.AdditionalSets)
+            {
+                table.Cell().Element(Cell).Text(set.Number.ToString());
+                table.Cell().Element(Cell).Text(set.Type);
+                table.Cell().Element(Cell).Text("—");
+                table.Cell().Element(Cell).Text((set.ActualReps ?? set.TargetReps).ToString());
+                table.Cell().Element(Cell).Text("—");
+                table.Cell().Element(Cell).Text(Weight(set.ActualWeight ?? set.TargetWeight));
+                table.Cell().Element(Cell).Text("Yes");
+                table.Cell().Element(Cell).Text(AdditionalSetNotes(set));
+            }
         });
+    }
+
+    private static string AdditionalSetNotes(SetExportModel set)
+    {
+        var notes = new List<string>();
+        if (set.Rpe.HasValue) notes.Add($"RPE {set.Rpe:0.#}");
+        if (set.Rir.HasValue) notes.Add($"RIR {set.Rir:0.#}");
+        if (!string.IsNullOrWhiteSpace(set.Notes)) notes.Add(set.Notes);
+        return notes.Count == 0 ? "—" : string.Join(" · ", notes);
     }
 
     private static void Summary(IContainer container, string title, ExportSummaryModel summary)
