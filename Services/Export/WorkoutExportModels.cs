@@ -16,7 +16,7 @@ public sealed class WorkoutExportResult
 
 public sealed class WorkoutExportDocument
 {
-    public string AppName { get; init; } = "5/3/1 Tracker";
+    public string AppName { get; init; } = "The Lifting Lab";
     public string ProgramName { get; init; } = "5/3/1";
     public DateTime GeneratedAtUtc { get; init; } = DateTime.UtcNow;
     public WorkoutExportScope Scope { get; init; }

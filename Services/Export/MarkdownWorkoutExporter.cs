@@ -13,7 +13,7 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
     private static string RenderText(WorkoutExportDocument document)
     {
         var builder = new StringBuilder();
-        builder.AppendLine("# 5/3/1 Tracker Workout Export");
+        builder.AppendLine("# The Lifting Lab Workout Export");
         builder.AppendLine();
         builder.AppendLine($"**Program:** {document.ProgramName}");
         builder.AppendLine($"**Generated:** {document.GeneratedAtUtc:yyyy-MM-dd HH:mm:ss} UTC");

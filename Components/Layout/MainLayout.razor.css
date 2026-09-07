@@ -6,13 +6,17 @@
 
 /* User strip shown in the mobile/tablet top bar, to the right of the brand */
 .top-bar-user {
+    display: flex;
+    flex: 1 1 auto;
     margin-left: auto;
+    justify-content: flex-end;
 }
 
 .top-bar-user :deep(.nav-user-strip) {
     padding: 0;
     border-bottom: none;
     margin-bottom: 0;
+    justify-content: flex-end;
 }
 
 .top-bar-user :deep(.nav-user-name) {

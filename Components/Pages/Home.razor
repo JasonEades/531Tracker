@@ -7,9 +7,10 @@
 @inject IPplSessionService PplSessionService
 @inject IUserInitService UserInitService
 @inject ICurrentUserService UserContext
+@inject IDashboardAnalyticsService DashboardAnalyticsService
 @inject NavigationManager Nav
 
-<PageTitle>Dashboard — 5/3/1 Tracker</PageTitle>
+<PageTitle>Dashboard — The Lifting Lab</PageTitle>
 
 @if (loading)
 {
@@ -254,6 +255,87 @@ else
     } @* end @if currentCycle *@
 }
 
+@if (analytics is not null)
+{
+    <div class="dashboard-analytics-grid animate-fade-in">
+        <div class="card analytics-card">
+            <div class="card-header">This Week</div>
+            <div class="analytics-stat-grid">
+                <div><strong>@(analytics.ThisWeek.ProgrammedWorkouts + analytics.ThisWeek.PplSessions)</strong><span>workouts</span></div>
+                <div><strong>@analytics.ThisWeek.CardioSessions</strong><span>cardio</span></div>
+                <div><strong>@analytics.ThisWeek.StrengthVolume.ToString("N0")</strong><span>lb volume</span></div>
+            </div>
+        </div>
+        <div class="card analytics-card">
+            <div class="card-header">Year to Date</div>
+            <div class="analytics-stat-grid">
+                <div><strong>@analytics.YearToDate.TotalSessions</strong><span>sessions</span></div>
+                <div><strong>@analytics.YearToDate.CompletedSets</strong><span>sets</span></div>
+                <div><strong>@analytics.YearToDate.CardioMinutes.ToString("N0")</strong><span>cardio min</span></div>
+            </div>
+            <div class="analytics-muted">@analytics.YearToDate.ProgrammedWorkouts programmed · @analytics.YearToDate.AdditionalStrengthSessions additional strength</div>
+        </div>
+    </div>
+
+    <div class="card analytics-card analytics-chart-card">
+        <div class="card-header">Training Activity</div>
+        <p class="analytics-description">Completed sessions and actual lifting volume by month. Planned sets are not included in volume.</p>
+        <div class="monthly-chart" aria-label="Monthly training activity chart">
+            @foreach (var month in analytics.MonthlyTraining)
+            {
+                var maxSessions = Math.Max(1, analytics.MonthlyTraining.Max(x => x.Sessions));
+                <div class="month-column" title="@month.Label: @month.Sessions sessions, @month.StrengthVolume.ToString("N0") lb volume">
+                    <div class="month-bar" style="height:@(month.Sessions * 100 / maxSessions)%"></div>
+                    <span>@month.Label</span>
+                </div>
+            }
+        </div>
+        <p class="analytics-summary">@GetActivitySummary()</p>
+    </div>
+
+    @if (analytics.StrengthProgress.Count > 0)
+    {
+        <div class="card analytics-card">
+            <div class="card-header">Strength Progress</div>
+            <p class="analytics-description">Estimated 1RM uses the existing rounded Epley formula and actual completed sets.</p>
+            <select class="form-control analytics-select" @bind="selectedStrengthKey" aria-label="Exercise for strength progress">
+                @foreach (var item in analytics.StrengthProgress)
+                {
+                    <option value="@item.ExerciseKey">@item.ExerciseName</option>
+                }
+            </select>
+            @if (SelectedStrength is not null)
+            {
+                <div class="strength-summary">
+                    <div><span>Current</span><strong>@FormatWeight(SelectedStrength.Current)</strong></div>
+                    <div><span>3 months</span><strong>@FormatWeight(SelectedStrength.ThreeMonthsAgo)</strong></div>
+                    <div><span>6 months</span><strong>@FormatWeight(SelectedStrength.SixMonthsAgo)</strong></div>
+                    <div><span>1 year</span><strong>@FormatWeight(SelectedStrength.OneYearAgo)</strong></div>
+                </div>
+                <div class="strength-sparkline" aria-label="@GetStrengthSummary(SelectedStrength)">
+                    @foreach (var point in SelectedStrength.History)
+                    {
+                        <span title="@point.Date.ToString("d"): @point.Value.ToString("N0") lb" style="height:@(Math.Max(8, point.Value / Math.Max(1, SelectedStrength.History.Max(x => x.Value)) * 100))%"></span>
+                    }
+                </div>
+                <p class="analytics-summary">@GetStrengthSummary(SelectedStrength)</p>
+            }
+        </div>
+    }
+    else
+    {
+        <div class="card analytics-card empty-analytics"><div class="card-header">Strength Progress</div><p>Complete a few workouts to start seeing strength trends here.</p></div>
+    }
+
+    @if (analytics.YearToDate.CardioSessions > 0)
+    {
+        <div class="card analytics-card">
+            <div class="card-header">Cardio This Year</div>
+            <div class="analytics-stat-grid"><div><strong>@analytics.YearToDate.CardioSessions</strong><span>sessions</span></div><div><strong>@analytics.YearToDate.CardioMinutes.ToString("N0")</strong><span>minutes</span></div><div><strong>@analytics.YearToDate.CardioDistance.ToString("N0")</strong><span>@(analytics.YearToDate.CardioDistanceUnit?.ToString().ToLowerInvariant() ?? "distance units")</span></div></div>
+        </div>
+    }
+}
+
 @code {
     private Cycle? currentCycle;
     private List<Lift> lifts = [];
@@ -261,6 +343,8 @@ else
     private PplProgram? activePplProgram;
     private PplSession? nextPplSession;
     private bool loading = true;
+    private DashboardAnalytics? analytics;
+    private string? selectedStrengthKey;
     private bool showSetup;
     private bool enableBbb;
     private bool enableWarmup;
@@ -285,7 +369,15 @@ else
 
     private async Task LoadData()
     {
+        analytics = await DashboardAnalyticsService.GetDashboardAsync();
+        selectedStrengthKey ??= analytics.StrengthProgress.FirstOrDefault()?.ExerciseKey;
         currentCycle = await CycleService.GetCurrentCycleAsync();
+        if (analytics.Program.ProgramType == "5/3/1")
+        {
+            totalWorkouts = analytics.Program.PlannedSessions;
+            completedWorkouts = analytics.Program.CompletedSessions;
+            progressPercent = analytics.Program.CompletionPercent;
+        }
         lifts = await LiftService.GetAllLiftsAsync();
         activePplProgram = await PplProgramService.GetActiveProgramAsync();
         if (activePplProgram is not null)
@@ -297,9 +389,6 @@ else
         if (currentCycle is not null)
         {
             var allWorkouts = currentCycle.Weeks.SelectMany(w => w.Workouts).ToList();
-            totalWorkouts = allWorkouts.Count;
-            completedWorkouts = allWorkouts.Count(w => w.Status == WorkoutStatus.Completed);
-            progressPercent = totalWorkouts > 0 ? (int)(completedWorkouts * 100.0 / totalWorkouts) : 0;
 
             var activeWeek = currentCycle.Weeks
                 .OrderBy(w => w.WeekNumber)
@@ -315,6 +404,11 @@ else
                 .ToList();
         }
     }
+
+    private StrengthAnalytics? SelectedStrength => analytics?.StrengthProgress.FirstOrDefault(x => x.ExerciseKey == selectedStrengthKey);
+    private static string FormatWeight(double? value) => value is null ? "No data" : $"{value:N0} lb";
+    private string GetActivitySummary() => analytics is null ? "" : $"{analytics.YearToDate.TotalSessions} sessions logged this year.";
+    private static string GetStrengthSummary(StrengthAnalytics item) => item.Current is null ? "No completed strength data yet." : item.SixMonthsAgo is null ? $"Current estimated 1RM: {item.Current:N0} lb. Not enough six-month history for a comparison." : $"{item.ExerciseName} estimated 1RM is {item.Current:N0} lb, {item.Current.Value - item.SixMonthsAgo.Value:+#;-#;0} lb vs 6 months ago.";
 
     private async Task CreateFirstCycle()
     {

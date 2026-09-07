@@ -37,7 +37,7 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
     {
         container.Column(column =>
         {
-            column.Item().Text("5/3/1 Tracker Workout Export").FontSize(20).Bold().FontColor(Colors.Blue.Darken2);
+            column.Item().Text("The Lifting Lab Workout Export").FontSize(20).Bold().FontColor(Colors.Blue.Darken2);
             column.Item().PaddingTop(4).Text($"Program: {document.ProgramName}").FontSize(10);
         });
     }

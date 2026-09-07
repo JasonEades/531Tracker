@@ -32,6 +32,7 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 builder.Services.AddScoped<IWorkoutExportService, WorkoutExportService>();
 builder.Services.AddScoped<IAdditionalSessionService, AdditionalSessionService>();
+builder.Services.AddScoped<IDashboardAnalyticsService, DashboardAnalyticsService>();
 builder.Services.AddScoped<IWorkoutExportRenderer, MarkdownWorkoutExporter>();
 builder.Services.AddScoped<IWorkoutExportRenderer, PdfWorkoutExporter>();
 
