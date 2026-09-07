@@ -1,5 +1,19 @@
 /* Settings page equipment controls */
 
+.health-integration-body {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-3);
+}
+
+.health-integration-body .mt-3 {
+    margin-top: 0;
+}
+
+.health-integration-actions {
+    flex-wrap: wrap;
+}
+
 .settings-section {
     margin-bottom: var(--space-6);
 }

@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -245,15 +246,26 @@ public sealed class GoogleHealthApiClient(
         var endpoint = "https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyRollUp";
         var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(endpoint, new Dictionary<string, string?>
         {
-            ["startTime"] = new DateTimeOffset(startDate.Date, TimeSpan.Zero).ToString("O"),
-            ["endTime"] = new DateTimeOffset(endDate.Date.AddDays(1), TimeSpan.Zero).ToString("O")
+            ["startTime"] = FormatGoogleTimestamp(startDate.Date),
+            ["endTime"] = FormatGoogleTimestamp(endDate.Date.AddDays(1))
         });
         using var request = new HttpRequestMessage(HttpMethod.Get, query);
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var response = await client.SendAsync(request, cancellationToken);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            var providerError = await response.Content.ReadAsStringAsync(cancellationToken);
+            if (string.IsNullOrWhiteSpace(providerError))
+                providerError = response.ReasonPhrase ?? "No response details were returned.";
+            throw new InvalidOperationException(
+                $"Google Health daily steps request failed with HTTP {(int)response.StatusCode}: {providerError}");
+        }
         return await response.Content.ReadAsStringAsync(cancellationToken);
     }
+
+    private static string FormatGoogleTimestamp(DateTime date)
+        => new DateTimeOffset(DateTime.SpecifyKind(date, DateTimeKind.Utc))
+            .ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
 
     private sealed record RefreshedToken(
         [property: JsonPropertyName("access_token")] string AccessToken,

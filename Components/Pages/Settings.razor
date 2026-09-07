@@ -30,29 +30,31 @@
             @(connection?.Status == HealthConnectionStatus.Connected ? "Connected" : "Not connected")
         </span>
     </div>
-    <p class="text-muted">Daily Google Health step totals are automatically added to your training weeks as Cardio → Steps.</p>
+    <div class="card-body health-integration-body">
+        <p class="text-muted">Daily Google Health step totals are automatically added to your training weeks as Cardio → Steps.</p>
 
-    @if (connection?.Status == HealthConnectionStatus.Connected)
-    {
-        <div class="settings-grid mt-3">
-            <div><strong>Daily Steps</strong><br /><span class="text-muted">Read access granted</span></div>
-            <div><strong>Last synced</strong><br /><span class="text-muted">@(connection.LastSyncedAtUtc?.ToLocalTime().ToString("g") ?? "Not yet synced")</span></div>
-        </div>
-        @if (!string.IsNullOrWhiteSpace(syncMessage))
+        @if (connection?.Status == HealthConnectionStatus.Connected)
         {
-            <p class="text-muted mt-3">@syncMessage</p>
+            <div class="settings-grid mt-3">
+                <div><strong>Daily Steps</strong><br /><span class="text-muted">Read access granted</span></div>
+                <div><strong>Last synced</strong><br /><span class="text-muted">@(connection.LastSyncedAtUtc?.ToLocalTime().ToString("g") ?? "Not yet synced")</span></div>
+            </div>
+            @if (!string.IsNullOrWhiteSpace(syncMessage))
+            {
+                <p class="text-muted mt-3">@syncMessage</p>
+            }
+            <div class="flex gap-1 mt-3 health-integration-actions">
+                <button class="btn btn-primary" @onclick="SyncNow" disabled="@busy">@(busy ? "Syncing…" : "Sync Now")</button>
+                <button class="btn btn-outline" @onclick="Connect">Reconnect</button>
+                <button class="btn btn-outline" @onclick="Disconnect" disabled="@busy">Disconnect</button>
+            </div>
         }
-        <div class="flex gap-1 mt-3">
-            <button class="btn btn-primary" @onclick="SyncNow" disabled="@busy">@(busy ? "Syncing…" : "Sync Now")</button>
-            <button class="btn btn-outline" @onclick="Connect">Reconnect</button>
-            <button class="btn btn-outline" @onclick="Disconnect" disabled="@busy">Disconnect</button>
-        </div>
-    }
-    else
-    {
-        <p class="text-muted">Connect Google Health to import your daily step count and add it to your training week.</p>
-        <button class="btn btn-primary mt-2" @onclick="Connect">Connect Google Health</button>
-    }
+        else
+        {
+            <p class="text-muted">Connect Google Health to import your daily step count and add it to your training week.</p>
+            <button class="btn btn-primary mt-2" @onclick="Connect">Connect Google Health</button>
+        }
+    </div>
 </section>
 
 @if (loading)
@@ -291,7 +293,7 @@ else if (equipment is not null)
         syncMessage = null;
         try
         {
-            var result = await HealthSync.SyncAsync(DateTime.UtcNow.Date.AddDays(-90), DateTime.UtcNow.Date);
+            var result = await HealthSync.SyncAsync(DateTime.UtcNow.Date.AddDays(-89), DateTime.UtcNow.Date);
             syncMessage = $"Imported {result.ImportedRecords} records; updated {result.UpdatedRecords}; created {result.CardioAdditions} cardio additions; {result.UnassignedRecords} remain outside a training cycle.";
             await LoadAsync();
         }
