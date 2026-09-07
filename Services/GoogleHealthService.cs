@@ -165,8 +165,10 @@ public sealed class GoogleHealthAuthorizationService(
         return body.Length <= 500 ? body : body[..500];
     }
 
-    private static string Fingerprint(string value)
-        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..12];
+    private static string Fingerprint(string? value)
+        => string.IsNullOrWhiteSpace(value)
+            ? "(missing)"
+            : Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..12];
 
     private static string ClientIdSuffix(string value)
         => string.IsNullOrWhiteSpace(value) ? "(missing)" : value[^Math.Min(value.Length, 12)..];
