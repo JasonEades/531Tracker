@@ -377,7 +377,7 @@ else
 
     private void GoToWorkout(int id) => Nav.NavigateTo("/workout/" + id);
     private void AddSession(int weekId) => Nav.NavigateTo($"/sessions/add/{weekId}?returnCycleId={CycleId}");
-    private void EditSession(int id) => Nav.NavigateTo("/sessions/edit/" + id);
+    private void EditSession(int id) => Nav.NavigateTo($"/sessions/edit/{id}?returnCycleId={CycleId}");
 
     private async Task DeleteSession(int id)
     {
