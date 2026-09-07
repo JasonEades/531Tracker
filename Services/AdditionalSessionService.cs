@@ -11,12 +11,14 @@ public interface IAdditionalSessionService
     Task<AdditionalSession> CreateForWeekAsync(int weekId, SessionType type, DateTime occurredOn, string? name, string? notes);
     Task<AdditionalSession> CreateForCycleAsync(int cycleId, SessionType type, DateTime occurredOn, string? name, string? notes);
     Task<AdditionalSession> CreateForPplWeekAsync(int pplWeekId, SessionType type, DateTime occurredOn, string? name, string? notes);
-    Task UpdateAsync(int id, DateTime occurredOn, string? name, string? notes);
+    Task UpdateAsync(int id, DateTime occurredOn, string? name, string? notes, IReadOnlyCollection<CardioEntryInput>? cardioEntries = null);
     Task DeleteAsync(int id);
     Task<AdditionalStrengthExercise?> AddStrengthExerciseAsync(int sessionId, string exerciseName);
     Task<AdditionalStrengthSet?> AddStrengthSetAsync(int exerciseId, double? weight, int? reps, string? notes);
     Task<CardioEntry?> AddCardioEntryAsync(int sessionId, int accessoryId, double quantity, CardioUnit unit, string? notes);
 }
+
+public sealed record CardioEntryInput(int AccessoryId, double Quantity, CardioUnit Unit, string? Notes);
 
 public sealed class AdditionalSessionService(AppDbContext db, ICurrentUserService userContext) : IAdditionalSessionService
 {
@@ -43,9 +45,11 @@ public sealed class AdditionalSessionService(AppDbContext db, ICurrentUserServic
     public Task<AdditionalSession> CreateForPplWeekAsync(int pplWeekId, SessionType type, DateTime occurredOn, string? name, string? notes)
         => CreateAsync(new AdditionalSession { PplWeekId = pplWeekId }, type, occurredOn, name, notes);
 
-    public async Task UpdateAsync(int id, DateTime occurredOn, string? name, string? notes)
+    public async Task UpdateAsync(int id, DateTime occurredOn, string? name, string? notes, IReadOnlyCollection<CardioEntryInput>? cardioEntries = null)
     {
-        var session = await OwnedQuery(await userContext.GetUserIdAsync()).SingleOrDefaultAsync(s => s.Id == id);
+        var session = await OwnedQuery(await userContext.GetUserIdAsync())
+            .Include(s => s.CardioEntries)
+            .SingleOrDefaultAsync(s => s.Id == id);
         if (session is null) return;
         session.OccurredOn = DateTime.SpecifyKind(occurredOn.Date, DateTimeKind.Utc);
         session.Name = string.IsNullOrWhiteSpace(name) ? session.SessionType switch
@@ -55,6 +59,23 @@ public sealed class AdditionalSessionService(AppDbContext db, ICurrentUserServic
             _ => "Additional Session"
         } : name.Trim();
         session.Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
+
+        if (session.SessionType == SessionType.Cardio && cardioEntries is not null)
+        {
+            db.CardioEntries.RemoveRange(session.CardioEntries);
+            foreach (var entry in cardioEntries.Where(e => e.AccessoryId > 0 && e.Quantity > 0))
+            {
+                db.CardioEntries.Add(new CardioEntry
+                {
+                    AdditionalSessionId = session.Id,
+                    AccessoryId = entry.AccessoryId,
+                    Quantity = entry.Quantity,
+                    Unit = entry.Unit,
+                    Notes = string.IsNullOrWhiteSpace(entry.Notes) ? null : entry.Notes.Trim()
+                });
+            }
+        }
+
         await db.SaveChangesAsync();
     }
 

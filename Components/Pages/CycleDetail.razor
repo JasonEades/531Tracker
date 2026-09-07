@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject ICycleService CycleService
+@inject IAdditionalSessionService SessionService
 @inject ILiftService LiftService
 @inject IWorkoutExportService ExportService
 @inject IJSRuntime JS
@@ -213,22 +214,32 @@ else
                         </button>
                         <button class="btn btn-primary btn-sm" @onclick="() => AddSession(week.Id)">+ Add Session</button>
                     </div>
+                </div>
                 @if (week.AdditionalSessions.Count > 0)
                 {
-                    <div class="week-grid mt-2">
+                    <div class="week-grid mt-2 mb-4">
                         @foreach (var session in week.AdditionalSessions.OrderBy(s => s.OccurredOn).ThenBy(s => s.CreatedAt))
                         {
                             <div class="workout-item">
                                 <div>
                                     <div class="workout-name">@session.Name</div>
                                     <div class="workout-meta">@session.OccurredOn.ToString("MMM d, yyyy") · @session.SessionType</div>
+                                    @if (session.SessionType == SessionType.Cardio && session.CardioEntries.Count > 0)
+                                    {
+                                        <div class="workout-meta">
+                                            @string.Join(" · ", session.CardioEntries.Select(e => $"{e.Accessory.Name}: {e.Quantity:g} {e.Unit}"))
+                                        </div>
+                                    }
                                 </div>
-                                <span class="badge badge-info">Additional</span>
+                                <div class="flex items-center gap-1">
+                                    <button class="btn btn-outline btn-sm" @onclick="() => EditSession(session.Id)">Edit</button>
+                                    <button class="btn btn-sm" style="color:var(--color-danger);background:var(--color-danger-dim);"
+                                            @onclick="() => DeleteSession(session.Id)">Delete</button>
+                                </div>
                             </div>
                         }
                     </div>
                 }
-                </div>
                 <div class="week-grid">
                     @foreach (var wo in weekWorkouts.OrderBy(w => w.MainLiftType))
                     {
@@ -365,7 +376,15 @@ else
     }
 
     private void GoToWorkout(int id) => Nav.NavigateTo("/workout/" + id);
-    private void AddSession(int weekId) => Nav.NavigateTo("/sessions/add/" + weekId);
+    private void AddSession(int weekId) => Nav.NavigateTo($"/sessions/add/{weekId}?returnCycleId={CycleId}");
+    private void EditSession(int id) => Nav.NavigateTo("/sessions/edit/" + id);
+
+    private async Task DeleteSession(int id)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Delete this additional session?")) return;
+        await SessionService.DeleteAsync(id);
+        cycle = await CycleService.GetCycleWithDetailsAsync(CycleId);
+    }
 
     private async Task Export(WorkoutExportScope scope, int id, WorkoutExportFormat format)
     {

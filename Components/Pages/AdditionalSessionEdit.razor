@@ -1,14 +1,15 @@
 @page "/sessions/add/{WeekId:int}"
 @page "/sessions/add/cycle/{CycleId:int}"
 @page "/sessions/add/ppl/{PplWeekId:int}"
+@page "/sessions/edit/{SessionId:int}"
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject IAdditionalSessionService SessionService
 @inject NavigationManager Nav
 
-<PageTitle>Add Session — 5/3/1 Tracker</PageTitle>
+<PageTitle>@(SessionId > 0 ? "Edit Session" : "Add Session") — 5/3/1 Tracker</PageTitle>
 
-<div class="page-header mb-4"><h1>+ Add Session</h1><p class="text-muted">Record training outside the programmed workout.</p></div>
+<div class="page-header mb-4"><h1>@(SessionId > 0 ? "Edit Session" : "+ Add Session")</h1><p class="text-muted">Record training outside the programmed workout.</p></div>
 <div class="setup-sheet">
     <div class="form-group">
         <label class="form-label">Session type</label>
@@ -78,6 +79,8 @@
     [Parameter] public int WeekId { get; set; }
     [Parameter] public int CycleId { get; set; }
     [Parameter] public int PplWeekId { get; set; }
+    [Parameter] public int SessionId { get; set; }
+    [SupplyParameterFromQuery] public int ReturnCycleId { get; set; }
     private SessionType type = SessionType.CustomStrength;
     private DateTime date = DateTime.Today;
     private string? name;
@@ -90,11 +93,37 @@
 
     protected override async Task OnInitializedAsync()
     {
-        if (CycleId > 0)
-            type = SessionType.Cardio;
         cardioAccessories = await SessionService.GetCardioAccessoriesAsync();
-        AddCardioRow();
-        AddStrengthRow();
+
+        if (SessionId > 0)
+        {
+            var session = await SessionService.GetAsync(SessionId);
+            if (session is null)
+            {
+                error = "Session not found.";
+                return;
+            }
+
+            type = session.SessionType;
+            date = session.OccurredOn.Date;
+            name = session.Name;
+            notes = session.Notes;
+            WeekId = session.WeekId ?? 0;
+            CycleId = session.CycleId ?? 0;
+            PplWeekId = session.PplWeekId ?? 0;
+            cardioEntries = session.CardioEntries
+                .Select(e => new CardioDraft { AccessoryId = e.AccessoryId, Quantity = e.Quantity, Unit = e.Unit, Notes = e.Notes })
+                .ToList();
+            if (type == SessionType.Cardio && cardioEntries.Count == 0)
+                AddCardioRow();
+        }
+        else
+        {
+            if (CycleId > 0)
+                type = SessionType.Cardio;
+            AddCardioRow();
+            AddStrengthRow();
+        }
     }
 
     private void AddCardioRow() => cardioEntries.Add(new CardioDraft());
@@ -107,24 +136,36 @@
         if (type == SessionType.Cardio && (cardioEntries.Count == 0 || cardioEntries.Any(e => e.AccessoryId == 0 || e.Quantity <= 0)))
         { error = "Select a cardio exercise and enter a quantity greater than zero for each entry."; return; }
         saving = true;
-        var session = CycleId > 0
-            ? await SessionService.CreateForCycleAsync(CycleId, type, date, name, notes)
-            : WeekId > 0
-                ? await SessionService.CreateForWeekAsync(WeekId, type, date, name, notes)
-                : await SessionService.CreateForPplWeekAsync(PplWeekId, type, date, name, notes);
-        foreach (var entry in cardioEntries.Where(e => e.AccessoryId > 0 && e.Quantity > 0))
-            await SessionService.AddCardioEntryAsync(session.Id, entry.AccessoryId, entry.Quantity, entry.Unit, entry.Notes);
-        foreach (var exercise in strengthEntries.Where(e => !string.IsNullOrWhiteSpace(e.Name)))
+        if (SessionId > 0)
         {
-            var savedExercise = await SessionService.AddStrengthExerciseAsync(session.Id, exercise.Name);
-            if (savedExercise is not null && (exercise.Weight > 0 || exercise.Reps > 0))
-                await SessionService.AddStrengthSetAsync(savedExercise.Id, exercise.Weight > 0 ? exercise.Weight : null, exercise.Reps > 0 ? exercise.Reps : null, null);
+            await SessionService.UpdateAsync(SessionId, date, name, notes,
+                type == SessionType.Cardio
+                    ? cardioEntries.Where(e => e.AccessoryId > 0 && e.Quantity > 0)
+                        .Select(e => new CardioEntryInput(e.AccessoryId, e.Quantity, e.Unit, e.Notes))
+                        .ToArray()
+                    : null);
+        }
+        else
+        {
+            var session = CycleId > 0
+                ? await SessionService.CreateForCycleAsync(CycleId, type, date, name, notes)
+                : WeekId > 0
+                    ? await SessionService.CreateForWeekAsync(WeekId, type, date, name, notes)
+                    : await SessionService.CreateForPplWeekAsync(PplWeekId, type, date, name, notes);
+            foreach (var entry in cardioEntries.Where(e => e.AccessoryId > 0 && e.Quantity > 0))
+                await SessionService.AddCardioEntryAsync(session.Id, entry.AccessoryId, entry.Quantity, entry.Unit, entry.Notes);
+            foreach (var exercise in strengthEntries.Where(e => !string.IsNullOrWhiteSpace(e.Name)))
+            {
+                var savedExercise = await SessionService.AddStrengthExerciseAsync(session.Id, exercise.Name);
+                if (savedExercise is not null && (exercise.Weight > 0 || exercise.Reps > 0))
+                    await SessionService.AddStrengthSetAsync(savedExercise.Id, exercise.Weight > 0 ? exercise.Weight : null, exercise.Reps > 0 ? exercise.Reps : null, null);
+            }
         }
         saving = false;
         NavBack();
     }
 
-    private void NavBack() => Nav.NavigateTo(CycleId > 0 ? $"/cycles/{CycleId}" : WeekId > 0 ? "/" : "/ppl/history");
+    private void NavBack() => Nav.NavigateTo(CycleId > 0 ? $"/cycles/{CycleId}" : ReturnCycleId > 0 ? $"/cycles/{ReturnCycleId}" : WeekId > 0 ? "/" : "/ppl/history");
     private sealed class CardioDraft { public int AccessoryId { get; set; } public double Quantity { get; set; } public CardioUnit Unit { get; set; } = CardioUnit.Minutes; public string? Notes { get; set; } }
     private sealed class StrengthDraft { public string Name { get; set; } = string.Empty; public double Weight { get; set; } public int Reps { get; set; } }
 }
