@@ -1,6 +1,8 @@
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
+using System.Security.Cryptography;
 using System.Security.Claims;
+using System.Text;
 using System.Text.Json.Serialization;
 using FiveThreeOneTracker.Data;
 using FiveThreeOneTracker.Models;
@@ -120,6 +122,15 @@ public sealed class GoogleHealthAuthorizationService(
         var user = await userManager.FindByIdAsync(oauthState.UserId)
             ?? throw new InvalidOperationException("The authenticated application user no longer exists.");
         var login = (await userManager.GetLoginsAsync(user)).SingleOrDefault(x => x.LoginProvider == "Google");
+        logger.LogInformation(
+            "Google Health identity comparison. ApplicationEmail={ApplicationEmail}, HealthEmail={HealthEmail}, " +
+            "ApplicationSubjectFingerprint={ApplicationSubjectFingerprint}, HealthSubjectFingerprint={HealthSubjectFingerprint}, " +
+            "HealthClientIdSuffix={HealthClientIdSuffix}",
+            user.Email,
+            profile.Email,
+            login is null ? "(no Google login)" : Fingerprint(login.ProviderKey),
+            Fingerprint(profile.Subject),
+            ClientIdSuffix(settings.ClientId));
         if (login is null || !string.Equals(login.ProviderKey, profile.Subject, StringComparison.Ordinal))
             throw new InvalidOperationException("The authorized Google account does not match the signed-in application account.");
 
@@ -154,6 +165,12 @@ public sealed class GoogleHealthAuthorizationService(
         return body.Length <= 500 ? body : body[..500];
     }
 
+    private static string Fingerprint(string value)
+        => Convert.ToHexString(SHA256.HashData(Encoding.UTF8.GetBytes(value)))[..12];
+
+    private static string ClientIdSuffix(string value)
+        => string.IsNullOrWhiteSpace(value) ? "(missing)" : value[^Math.Min(value.Length, 12)..];
+
     public async Task DisconnectAsync(string userId)
     {
         var connection = await db.GoogleHealthConnections.FirstOrDefaultAsync(x => x.UserId == userId);
@@ -178,7 +195,9 @@ public sealed class GoogleHealthAuthorizationService(
         [property: JsonPropertyName("expires_in")] int ExpiresIn,
         [property: JsonPropertyName("refresh_token")] string? RefreshToken);
 
-    private sealed record GoogleUserInfo([property: JsonPropertyName("sub")] string Subject);
+    private sealed record GoogleUserInfo(
+        [property: JsonPropertyName("sub")] string Subject,
+        [property: JsonPropertyName("email")] string? Email);
 }
 
 public interface IGoogleHealthApiClient
