@@ -21,8 +21,8 @@ public sealed class GoogleHealthOptions
     public string CallbackPath { get; set; } = "/health/google/callback";
     public string AuthorizationEndpoint { get; set; } = "https://accounts.google.com/o/oauth2/v2/auth";
     public string TokenEndpoint { get; set; } = "https://oauth2.googleapis.com/token";
-    public string UserInfoEndpoint { get; set; } = "https://oauth2.googleapis.com/tokeninfo";
-    public string Scope { get; set; } = "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly";
+    public string UserInfoEndpoint { get; set; } = "https://openidconnect.googleapis.com/v1/userinfo";
+    public string Scope { get; set; } = "openid email https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly";
 }
 
 public sealed record GoogleHealthOAuthState(string UserId, string ReturnUrl, DateTime CreatedAtUtc);

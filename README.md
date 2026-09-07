@@ -204,9 +204,11 @@ Before connecting a user, complete the following in Google Cloud:
 2. Enable the current Google Health API used by the deployment and confirm that the activity/fitness REST resources are available to the project.
 3. Configure the OAuth consent screen with the application name, support email, authorized domain, privacy-policy URL, and contact information.
 4. Add the development Google accounts as test users while the consent screen is in testing.
-5. Request only this scope:
+5. Request these scopes:
 
    ```text
+   openid
+   email
    https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly
    ```
 
