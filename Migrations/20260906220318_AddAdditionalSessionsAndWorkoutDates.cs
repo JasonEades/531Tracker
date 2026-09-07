@@ -291,22 +291,10 @@ namespace FiveThreeOneTracker.Migrations
                 column: "Category",
                 value: "Strength");
 
-            migrationBuilder.InsertData(
-                table: "Accessories",
-                columns: new[] { "Id", "Category", "Description", "IsActive", "Name", "UserId" },
-                values: new object[,]
-                {
-                    { 16, "Cardio", null, true, "Rowing", null },
-                    { 17, "Cardio", null, true, "Biking", null },
-                    { 18, "Cardio", null, true, "Walking", null },
-                    { 19, "Cardio", null, true, "Running", null },
-                    { 20, "Cardio", null, true, "Treadmill", null },
-                    { 21, "Cardio", null, true, "Elliptical", null },
-                    { 22, "Cardio", null, true, "Stair Climber", null },
-                    { 23, "Cardio", null, true, "Swimming", null },
-                    { 24, "Cardio", null, true, "Rucking", null },
-                    { 25, "Cardio", null, true, "Other", null }
-                });
+            foreach (var name in new[] { "Rowing", "Biking", "Walking", "Running", "Treadmill", "Elliptical", "Stair Climber", "Swimming", "Rucking", "Other" })
+            {
+                migrationBuilder.Sql($"INSERT INTO \"Accessories\" (\"Name\", \"Description\", \"Category\", \"IsActive\", \"UserId\") SELECT '{name}', NULL, 'Cardio', TRUE, NULL WHERE NOT EXISTS (SELECT 1 FROM \"Accessories\" WHERE \"Name\" = '{name}');");
+            }
 
             migrationBuilder.CreateIndex(
                 name: "IX_Workouts_WeekId_OccurredOn",
