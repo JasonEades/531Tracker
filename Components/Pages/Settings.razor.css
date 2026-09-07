@@ -1,4 +1,4 @@
-/* ── Equipment / Settings page isolation styles ── */
+/* Settings page equipment controls */
 
 .settings-section {
     margin-bottom: var(--space-6);
@@ -14,7 +14,6 @@
     padding: 0 2px;
 }
 
-/* Plate inventory rows */
 .plate-row {
     display: flex;
     align-items: center;
@@ -23,9 +22,7 @@
     gap: var(--space-4);
 }
 
-.plate-row:last-child {
-    border-bottom: none;
-}
+.plate-row:last-child { border-bottom: none; }
 
 .plate-visual-wrap {
     display: flex;
@@ -53,7 +50,6 @@
     font-size: var(--text-base);
 }
 
-/* Stepper */
 .plate-stepper {
     display: flex;
     align-items: center;
@@ -81,14 +77,8 @@
     -webkit-tap-highlight-color: transparent;
 }
 
-.plate-step-btn:hover:not(:disabled) {
-    background: var(--color-surface-3);
-}
-
-.plate-step-btn:disabled {
-    opacity: 0.3;
-    cursor: not-allowed;
-}
+.plate-step-btn:hover:not(:disabled) { background: var(--color-surface-3); }
+.plate-step-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
 .plate-step-value {
     font-size: var(--text-xl);
@@ -98,18 +88,8 @@
     text-align: center;
 }
 
-/* Plate Calculator */
-.calc-input-row {
-    display: flex;
-    gap: var(--space-3);
-    align-items: flex-end;
-}
-
-.calc-btn {
-    height: 48px;
-    flex-shrink: 0;
-    align-self: flex-end;
-}
+.calc-input-row { display: flex; gap: var(--space-3); align-items: flex-end; }
+.calc-btn { height: 48px; flex-shrink: 0; align-self: flex-end; }
 
 .calc-result {
     padding: var(--space-4);
@@ -137,13 +117,7 @@
 }
 
 .calc-barbell::-webkit-scrollbar { display: none; }
-
-.calc-plates-left,
-.calc-plates-right {
-    display: flex;
-    gap: 4px;
-    align-items: center;
-}
+.calc-plates-left, .calc-plates-right { display: flex; gap: 4px; align-items: center; }
 
 .calc-bar-center {
     font-size: var(--text-xs);

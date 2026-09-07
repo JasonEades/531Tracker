@@ -37,7 +37,8 @@ public sealed class GoogleHealthAuthorizationService(
     IDataProtectionProvider dataProtectionProvider,
     IOptions<GoogleHealthOptions> options,
     UserManager<ApplicationUser> userManager,
-    AppDbContext db) : IGoogleHealthAuthorizationService
+    AppDbContext db,
+    ILogger<GoogleHealthAuthorizationService> logger) : IGoogleHealthAuthorizationService
 {
     private const string StatePurpose = "FiveThreeOneTracker.GoogleHealth.OAuthState.v1";
     private readonly GoogleHealthOptions settings = options.Value;
@@ -64,6 +65,7 @@ public sealed class GoogleHealthAuthorizationService(
 
     public async Task<GoogleHealthConnection> CompleteAsync(HttpContext context, string code, string state)
     {
+        logger.LogInformation("Google Health OAuth callback started.");
         GoogleHealthOAuthState oauthState;
         try
         {
@@ -92,14 +94,26 @@ public sealed class GoogleHealthAuthorizationService(
                 ["redirect_uri"] = BuildCallbackUrl(context),
                 ["grant_type"] = "authorization_code"
             }));
-        tokenResponse.EnsureSuccessStatusCode();
+        if (!tokenResponse.IsSuccessStatusCode)
+        {
+            var providerError = await ReadProviderErrorAsync(tokenResponse);
+            logger.LogWarning("Google Health token exchange failed. StatusCode={StatusCode}, ProviderError={ProviderError}",
+                (int)tokenResponse.StatusCode, providerError);
+            throw new InvalidOperationException($"Google token exchange failed with HTTP {(int)tokenResponse.StatusCode}: {providerError}");
+        }
         var tokens = await tokenResponse.Content.ReadFromJsonAsync<GoogleTokenResponse>()
             ?? throw new InvalidOperationException("Google returned an empty token response.");
 
         using var userInfoRequest = new HttpRequestMessage(HttpMethod.Get, Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(settings.UserInfoEndpoint, "access_token", tokens.AccessToken));
         userInfoRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", tokens.AccessToken);
         using var userInfoResponse = await client.SendAsync(userInfoRequest);
-        userInfoResponse.EnsureSuccessStatusCode();
+        if (!userInfoResponse.IsSuccessStatusCode)
+        {
+            var providerError = await ReadProviderErrorAsync(userInfoResponse);
+            logger.LogWarning("Google Health profile lookup failed. StatusCode={StatusCode}, ProviderError={ProviderError}",
+                (int)userInfoResponse.StatusCode, providerError);
+            throw new InvalidOperationException($"Google profile lookup failed with HTTP {(int)userInfoResponse.StatusCode}: {providerError}");
+        }
         var profile = await userInfoResponse.Content.ReadFromJsonAsync<GoogleUserInfo>()
             ?? throw new InvalidOperationException("Google returned an empty profile response.");
 
@@ -127,7 +141,17 @@ public sealed class GoogleHealthAuthorizationService(
         connection.RevokedAtUtc = null;
         connection.LastSyncError = null;
         await db.SaveChangesAsync();
+        logger.LogInformation("Google Health OAuth connection saved for application user.");
         return connection;
+    }
+
+    private static async Task<string> ReadProviderErrorAsync(HttpResponseMessage response)
+    {
+        var body = await response.Content.ReadAsStringAsync();
+        if (string.IsNullOrWhiteSpace(body))
+            return response.ReasonPhrase ?? "No response details were returned.";
+
+        return body.Length <= 500 ? body : body[..500];
     }
 
     public async Task DisconnectAsync(string userId)

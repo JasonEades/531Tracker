@@ -329,6 +329,8 @@ app.MapGet("/health/google/connect", (HttpContext ctx, IGoogleHealthAuthorizatio
 app.MapGet("/health/google/callback", async (HttpContext ctx, string? code, string? state,
     IGoogleHealthAuthorizationService healthAuth, ILoggerFactory lf) =>
 {
+    var failureReference = Guid.NewGuid().ToString("N")[..12];
+    var log = lf.CreateLogger("GoogleHealth.OAuth");
     try
     {
         if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(state))
@@ -342,8 +344,8 @@ app.MapGet("/health/google/callback", async (HttpContext ctx, string? code, stri
     }
     catch (Exception ex)
     {
-        lf.CreateLogger("GoogleHealth.OAuth").LogWarning(ex, "Google Health authorization failed.");
-        return Results.Redirect("/settings?healthError=authorization_failed");
+        log.LogError(ex, "Google Health authorization failed. FailureReference={FailureReference}", failureReference);
+        return Results.Redirect($"/settings?healthError=authorization_failed&healthErrorRef={failureReference}");
     }
 }).RequireAuthorization();
 
