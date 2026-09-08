@@ -117,7 +117,7 @@ public sealed class GoogleHealthSyncService(
                 WeekId = assignment.Week.Id,
                 CycleId = assignment.Cycle.Id,
                 SessionType = SessionType.Cardio,
-                OccurredOn = record.LocalDate,
+                OccurredOn = DateTime.SpecifyKind(record.LocalDate.Date, DateTimeKind.Utc),
                 CreatedAt = DateTime.UtcNow,
                 Name = "Google Health — Steps",
                 Notes = "Imported from Google Health"
@@ -141,7 +141,7 @@ public sealed class GoogleHealthSyncService(
         entry.Quantity = record.StepCount;
         entry.Unit = CardioUnit.Steps;
         entry.Source = "Google Health";
-        entry.Session.OccurredOn = record.LocalDate;
+        entry.Session.OccurredOn = DateTime.SpecifyKind(record.LocalDate.Date, DateTimeKind.Utc);
         entry.Session.WeekId = assignment.Week.Id;
         entry.Session.CycleId = assignment.Cycle.Id;
         entry.Session.Name = "Google Health — Steps";
@@ -154,8 +154,10 @@ public sealed class GoogleHealthSyncService(
         using var document = JsonDocument.Parse(payload);
         var values = document.RootElement.ValueKind == JsonValueKind.Array
             ? document.RootElement.EnumerateArray()
-            : document.RootElement.TryGetProperty("dataPoints", out var dataPoints)
-                ? dataPoints.EnumerateArray()
+            : document.RootElement.TryGetProperty("rollupDataPoints", out var rollupDataPoints)
+                ? rollupDataPoints.EnumerateArray()
+                : document.RootElement.TryGetProperty("dataPoints", out var dataPoints)
+                    ? dataPoints.EnumerateArray()
                 : document.RootElement.TryGetProperty("records", out var records)
                     ? records.EnumerateArray()
                 : throw new InvalidOperationException("Google Health returned an unsupported daily steps response.");
@@ -177,6 +179,17 @@ public sealed class GoogleHealthSyncService(
 
     private static string? GetDateText(JsonElement value)
     {
+        if (value.TryGetProperty("civilStartTime", out var civilStartTime) &&
+            civilStartTime.ValueKind == JsonValueKind.Object &&
+            civilStartTime.TryGetProperty("date", out var civilDate) &&
+            civilDate.ValueKind == JsonValueKind.Object &&
+            civilDate.TryGetProperty("year", out var year) &&
+            civilDate.TryGetProperty("month", out var month) &&
+            civilDate.TryGetProperty("day", out var day))
+        {
+            return $"{year.GetInt32():D4}-{month.GetInt32():D2}-{day.GetInt32():D2}";
+        }
+
         foreach (var name in new[] { "date", "day", "startTime" })
         {
             if (value.TryGetProperty(name, out var property))
@@ -190,6 +203,9 @@ public sealed class GoogleHealthSyncService(
         if (value.TryGetProperty("steps", out var steps) && steps.ValueKind == JsonValueKind.Object &&
             steps.TryGetProperty("countSum", out var countSum))
             return ReadInt64(countSum);
+        if (value.TryGetProperty("steps", out steps) && steps.ValueKind == JsonValueKind.Object &&
+            steps.TryGetProperty("count_sum", out var countSumSnakeCase))
+            return ReadInt64(countSumSnakeCase);
         if (value.TryGetProperty("stepCount", out var stepCount))
             return ReadInt64(stepCount);
         return 0;

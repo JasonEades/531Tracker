@@ -220,13 +220,13 @@ Before connecting a user, complete the following in Google Cloud:
    ```
 
    The callback is different from the normal sign-in callback `/signin-google`.
-7. The application calls the current daily steps endpoint directly:
+7. The application calls the current daily steps endpoint directly with a JSON POST body:
 
    ```text
    https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyRollUp
    ```
 
-   It sends the requested UTC date window as `startTime` and `endTime` query parameters and reads each day's `steps.countSum` value.
+   It sends the requested civil date window as nested `range.start.date` and `range.end.date` values, with a one-day `windowSizeDays` and `pageSize` of 90, and reads each day's `rollupDataPoints[].steps.countSum` value.
 8. If Google classifies the requested scope as sensitive or restricted, complete Google's verification process before production use. Provide the requested privacy disclosures and demonstrate that tokens remain server-side.
 
 For local development, do not put secrets in `appsettings.json` or commit them to `appsettings.Development.json`. Use user secrets:

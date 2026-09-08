@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
@@ -244,12 +243,20 @@ public sealed class GoogleHealthApiClient(
         }
 
         var endpoint = "https://health.googleapis.com/v4/users/me/dataTypes/steps/dataPoints:dailyRollUp";
-        var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.AddQueryString(endpoint, new Dictionary<string, string?>
+        var requestBody = JsonContent.Create(new
         {
-            ["startTime"] = FormatGoogleTimestamp(startDate.Date),
-            ["endTime"] = FormatGoogleTimestamp(endDate.Date.AddDays(1))
+            range = new
+            {
+                start = CreateCivilDate(startDate.Date),
+                end = CreateCivilDate(endDate.Date.AddDays(1))
+            },
+            windowSizeDays = 1,
+            pageSize = 90
         });
-        using var request = new HttpRequestMessage(HttpMethod.Get, query);
+        using var request = new HttpRequestMessage(HttpMethod.Post, endpoint)
+        {
+            Content = requestBody
+        };
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
         using var response = await client.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
@@ -263,9 +270,23 @@ public sealed class GoogleHealthApiClient(
         return await response.Content.ReadAsStringAsync(cancellationToken);
     }
 
-    private static string FormatGoogleTimestamp(DateTime date)
-        => new DateTimeOffset(DateTime.SpecifyKind(date, DateTimeKind.Utc))
-            .ToString("yyyy-MM-dd'T'HH:mm:ss'Z'", CultureInfo.InvariantCulture);
+    private static object CreateCivilDate(DateTime date)
+        => new
+        {
+            date = new
+            {
+                year = date.Year,
+                month = date.Month,
+                day = date.Day
+            },
+            time = new
+            {
+                hours = 0,
+                minutes = 0,
+                seconds = 0,
+                nanos = 0
+            }
+        };
 
     private sealed record RefreshedToken(
         [property: JsonPropertyName("access_token")] string AccessToken,
