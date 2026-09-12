@@ -89,7 +89,7 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
             SectionTitle(column.Item(), $"Training Week — Week {week.WeekNumber}", 16);
             Metadata(column.Item(), $"Cycle {week.CycleNumber}");
             Note(column.Item(), "Week Notes", week.Notes);
-            Summary(column.Item(), "Weekly Summary", week.Summary);
+            Summary(column.Item(), "Weekly Summary", week.Summary, week.DailySteps);
             foreach (var workout in week.Workouts)
             {
                 column.Item().PaddingTop(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
