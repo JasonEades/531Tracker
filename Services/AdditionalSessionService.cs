@@ -118,8 +118,13 @@ public sealed class AdditionalSessionService(AppDbContext db, ICurrentUserServic
     public async Task<CardioEntry?> AddCardioEntryAsync(int sessionId, int accessoryId, double quantity, CardioUnit unit, string? notes)
     {
         if (quantity <= 0 || !Enum.IsDefined(unit)) return null;
-        var session = await OwnedQuery(await userContext.GetUserIdAsync()).SingleOrDefaultAsync(s => s.Id == sessionId);
-        var accessory = await db.Accessories.SingleOrDefaultAsync(a => a.Id == accessoryId && a.IsActive && a.Category == AccessoryCategory.Cardio);
+        var userId = await userContext.GetUserIdAsync();
+        var session = await OwnedQuery(userId).SingleOrDefaultAsync(s => s.Id == sessionId);
+        var accessory = await db.Accessories.SingleOrDefaultAsync(a =>
+            a.Id == accessoryId &&
+            a.IsActive &&
+            a.Category == AccessoryCategory.Cardio &&
+            (a.UserId == null || a.UserId == userId));
         if (session is null || session.SessionType != SessionType.Cardio || accessory is null) return null;
         var entry = new CardioEntry { AdditionalSessionId = sessionId, AccessoryId = accessoryId, Quantity = quantity, Unit = unit, Notes = string.IsNullOrWhiteSpace(notes) ? null : notes.Trim() };
         db.CardioEntries.Add(entry);
@@ -130,6 +135,16 @@ public sealed class AdditionalSessionService(AppDbContext db, ICurrentUserServic
     private async Task<AdditionalSession> CreateAsync(AdditionalSession session, SessionType type, DateTime occurredOn, string? name, string? notes)
     {
         if (type == SessionType.ProgrammedWorkout) throw new ArgumentException("Additional sessions must be custom strength or cardio.", nameof(type));
+        var userId = await userContext.GetUserIdAsync();
+        var ownsParent = session.WeekId is not null
+            ? await db.Weeks.AnyAsync(w => w.Id == session.WeekId && w.Cycle.UserId == userId)
+            : session.CycleId is not null
+                ? await db.Cycles.AnyAsync(c => c.Id == session.CycleId && c.UserId == userId)
+                : session.PplWeekId is not null &&
+                  await db.PplWeeks.AnyAsync(w => w.Id == session.PplWeekId && w.Program.UserId == userId);
+        if (!ownsParent)
+            throw new InvalidOperationException("The parent training record is not available to the current user.");
+
         session.SessionType = type;
         session.OccurredOn = DateTime.SpecifyKind(occurredOn.Date, DateTimeKind.Utc);
         session.CreatedAt = DateTime.UtcNow;

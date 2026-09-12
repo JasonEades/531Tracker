@@ -24,6 +24,7 @@ public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : 
 {
     public async Task<Workout?> GetWorkoutWithDetailsAsync(int workoutId)
     {
+        var userId = await userContext.GetUserIdAsync();
         return await db.Workouts
             .Include(w => w.Week)
                 .ThenInclude(wk => wk.Cycle)
@@ -32,12 +33,17 @@ public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : 
             .Include(w => w.WorkoutAccessories)
                 .ThenInclude(wa => wa.Accessory)
             .Include(w => w.Bar)
-            .FirstOrDefaultAsync(w => w.Id == workoutId);
+            .FirstOrDefaultAsync(w => w.Id == workoutId && w.Week.Cycle.UserId == userId);
     }
 
     public async Task UpdateSetAsync(int setId, double? actualWeight, int? actualReps, bool isCompleted)
     {
-        var set = await db.WorkoutSets.FindAsync(setId);
+        var userId = await userContext.GetUserIdAsync();
+        var set = await db.WorkoutSets
+            .Include(s => s.Workout)
+                .ThenInclude(w => w.Week)
+                    .ThenInclude(w => w.Cycle)
+            .FirstOrDefaultAsync(s => s.Id == setId && s.Workout.Week.Cycle.UserId == userId);
         if (set is not null)
         {
             set.ActualWeight = actualWeight;
@@ -123,7 +129,7 @@ public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : 
 
     public async Task UpdateWorkoutNotesAsync(int workoutId, string? notes)
     {
-        var workout = await db.Workouts.FindAsync(workoutId);
+        var workout = await GetOwnedWorkoutAsync(workoutId);
         if (workout is null) return;
 
         workout.Notes = string.IsNullOrWhiteSpace(notes) ? null : notes;
@@ -132,7 +138,7 @@ public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : 
 
     public async Task StartWorkoutAsync(int workoutId)
     {
-        var workout = await db.Workouts.FindAsync(workoutId);
+        var workout = await GetOwnedWorkoutAsync(workoutId);
         if (workout is not null && workout.Status == WorkoutStatus.NotStarted)
         {
             workout.Status = WorkoutStatus.InProgress;
@@ -142,7 +148,7 @@ public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : 
 
     public async Task CompleteWorkoutAsync(int workoutId)
     {
-        var workout = await db.Workouts.FindAsync(workoutId);
+        var workout = await GetOwnedWorkoutAsync(workoutId);
         if (workout is not null)
         {
             workout.Status = WorkoutStatus.Completed;
@@ -153,7 +159,7 @@ public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : 
 
     public async Task ReopenWorkoutAsync(int workoutId)
     {
-        var workout = await db.Workouts.FindAsync(workoutId);
+        var workout = await GetOwnedWorkoutAsync(workoutId);
         if (workout is not null && workout.Status == WorkoutStatus.Completed)
         {
             workout.Status = WorkoutStatus.InProgress;
@@ -179,7 +185,7 @@ public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : 
 
     public async Task UpdateWorkoutBarAsync(int workoutId, int? barId)
     {
-        var workout = await db.Workouts.FindAsync(workoutId);
+        var workout = await GetOwnedWorkoutAsync(workoutId);
         if (workout is null) return;
 
         if (barId.HasValue)

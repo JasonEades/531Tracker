@@ -430,7 +430,7 @@ public sealed class WorkoutExportTests
         await using (var context = new AppDbContext(options))
         {
             await context.Database.EnsureCreatedAsync();
-            var cycle = new Cycle { Name = "Test Cycle" };
+            var cycle = new Cycle { Name = "Test Cycle", UserId = "test-user" };
             var week = new Week { Cycle = cycle, WeekNumber = WeekNumber.Week1 };
             context.Workouts.AddRange(
                 new Workout { Week = week, MainLiftType = LiftType.BenchPress },

@@ -113,7 +113,10 @@ public class CycleService(
         BbbMode? bbbMode = null, double? bbbPercentage = null, bool? includeWarmup = null,
         bool? isFivesPro = null, bool? includeFsl = null)
     {
-        var previousCycle = await db.Cycles.FindAsync(previousCycleId);
+        var userId = await userContext.GetUserIdAsync();
+        var previousCycle = await db.Cycles
+            .FirstOrDefaultAsync(c => c.Id == previousCycleId && c.UserId == userId)
+            ?? throw new InvalidOperationException("The previous cycle was not found.");
         var lifts = await liftService.GetAllLiftsAsync();
 
         foreach (var lift in lifts)
