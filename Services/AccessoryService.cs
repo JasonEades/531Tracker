@@ -14,7 +14,7 @@ public interface IAccessoryService
     Task<WorkoutAccessory> AddAccessoryToWorkoutAsync(int workoutId, int accessoryId, double weight, int reps, int sets, string? notes);
     Task UpdateWorkoutAccessoryAsync(int id, double weight, int reps, int sets, string? notes, bool isCompleted);
     Task RemoveWorkoutAccessoryAsync(int id);
-    Task<AccessoryHistory?> GetSuggestedUsageAsync(int accessoryId);
+    Task<AccessoryUsageSuggestion?> GetSuggestedUsageAsync(int accessoryId);
     Task RecordAccessoryHistoryAsync(int accessoryId, double weight, int reps, int sets);
 }
 
@@ -149,12 +149,21 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
     private static string? NormalizeNotes(string? notes) =>
         string.IsNullOrWhiteSpace(notes) ? null : notes.Trim();
 
-    public async Task<AccessoryHistory?> GetSuggestedUsageAsync(int accessoryId)
+    public async Task<AccessoryUsageSuggestion?> GetSuggestedUsageAsync(int accessoryId)
     {
         var userId = await userContext.GetUserIdAsync();
-        return await db.AccessoryHistory
-            .Where(h => h.AccessoryId == accessoryId && h.UserId == userId)
-            .OrderByDescending(h => h.RecordedAt)
+        return await db.WorkoutAccessories
+            .AsNoTracking()
+            .Where(w => w.AccessoryId == accessoryId && w.Workout.Week.Cycle.UserId == userId)
+            .OrderByDescending(w => w.Workout.OccurredOn)
+            .ThenByDescending(w => w.Id)
+            .Select(w => new AccessoryUsageSuggestion
+            {
+                Weight = w.Weight,
+                Reps = w.Reps,
+                Sets = w.Sets,
+                Notes = w.Notes
+            })
             .FirstOrDefaultAsync();
     }
 

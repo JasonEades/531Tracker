@@ -622,7 +622,7 @@ else
     private int newAccReps = 10;
     private int newAccSets = 3;
     private string? newAccNotes;
-    private AccessoryHistory? suggestedUsage;
+    private AccessoryUsageSuggestion? suggestedUsage;
     private int editingAccessoryId;
     private double editAccessoryWeight;
     private int editAccessoryReps;
@@ -809,12 +809,17 @@ else
         if (int.TryParse(e.Value?.ToString(), out var id) && id > 0)
         {
             selectedAccessoryId = id;
+            newAccWeight = 0;
+            newAccReps = 10;
+            newAccSets = 3;
+            newAccNotes = null;
             suggestedUsage = await AccessoryService.GetSuggestedUsageAsync(id);
             if (suggestedUsage is not null)
             {
                 newAccWeight = suggestedUsage.Weight;
                 newAccReps = suggestedUsage.Reps;
                 newAccSets = suggestedUsage.Sets;
+                newAccNotes = suggestedUsage.Notes;
             }
         }
         else

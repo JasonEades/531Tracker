@@ -131,7 +131,12 @@ public sealed class WorkoutExportService(
     private static CycleExportModel MapCycle(Cycle cycle, List<DailyStepExportModel> dailySteps)
     {
         var weeks = cycle.Weeks.OrderBy(w => w.WeekNumber).Select(w => MapWeek(w)).ToList();
-        var additional = cycle.AdditionalSessions.OrderBy(s => s.OccurredOn).ThenBy(s => s.CreatedAt).Select(MapAdditionalSession).ToList();
+        var additional = cycle.AdditionalSessions
+            .Where(s => !IsImportedStepSession(s))
+            .OrderBy(s => s.OccurredOn)
+            .ThenBy(s => s.CreatedAt)
+            .Select(MapAdditionalSession)
+            .ToList();
         return new CycleExportModel
         {
             Id = cycle.Id,
@@ -150,7 +155,12 @@ public sealed class WorkoutExportService(
     private static WeekExportModel MapWeek(Week week, List<DailyStepExportModel>? dailySteps = null)
     {
         var workouts = week.Workouts.OrderBy(w => w.OccurredOn).ThenBy(w => w.CreatedAt).ThenBy(w => w.MainLiftType).Select(w => MapWorkout(w)).ToList();
-        var additional = week.AdditionalSessions.OrderBy(s => s.OccurredOn).ThenBy(s => s.CreatedAt).Select(MapAdditionalSession).ToList();
+        var additional = week.AdditionalSessions
+            .Where(s => !IsImportedStepSession(s))
+            .OrderBy(s => s.OccurredOn)
+            .ThenBy(s => s.CreatedAt)
+            .Select(MapAdditionalSession)
+            .ToList();
         return new WeekExportModel
         {
             Id = week.Id,
@@ -177,6 +187,10 @@ public sealed class WorkoutExportService(
         }).ToList(),
         CardioEntries = session.CardioEntries.OrderBy(e => e.Id).Select(e => new CardioExportModel { Exercise = e.Accessory.Name, Quantity = e.Quantity, Unit = e.Unit.ToString(), Notes = e.Notes, Source = e.Source }).ToList()
     };
+
+    private static bool IsImportedStepSession(AdditionalSession session) =>
+        session.SessionType == SessionType.Cardio &&
+        session.Name == "Google Health — Steps";
 
     private static WorkoutExportModel MapWorkout(Workout workout, List<DailyStepExportModel>? dailySteps = null)
     {

@@ -68,8 +68,7 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
             SectionTitle(column.Item(), $"Training Cycle — {cycle.Name}", 18);
             Metadata(column.Item(), $"Cycle {cycle.CycleNumber}  |  Created {cycle.CreatedAt:yyyy-MM-dd}  |  {(cycle.IsCompleted ? "Completed" : "In progress")}");
             Note(column.Item(), "Cycle Notes", cycle.Notes);
-            Summary(column.Item(), "Cycle Summary", cycle.Summary);
-            RenderDailySteps(column.Item(), cycle.DailySteps);
+            Summary(column.Item(), "Cycle Summary", cycle.Summary, cycle.DailySteps);
             foreach (var session in cycle.AdditionalSessions)
             {
                 column.Item().PaddingTop(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
@@ -91,7 +90,6 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
             Metadata(column.Item(), $"Cycle {week.CycleNumber}");
             Note(column.Item(), "Week Notes", week.Notes);
             Summary(column.Item(), "Weekly Summary", week.Summary);
-            RenderDailySteps(column.Item(), week.DailySteps);
             foreach (var workout in week.Workouts)
             {
                 column.Item().PaddingTop(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
@@ -154,7 +152,6 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
             SectionTitle(column.Item(), $"Workout — {workout.WorkoutName}", 14);
             Metadata(column.Item(), $"Date: {(workout.WorkoutDate?.ToString("yyyy-MM-dd") ?? "—")}  |  Cycle: {workout.CycleNumber}  |  Week: {workout.WeekNumber}  |  Status: {workout.Status}");
             Note(column.Item(), "Workout Notes", workout.Notes);
-            RenderDailySteps(column.Item(), workout.DailySteps);
             foreach (var exercise in workout.Exercises)
             {
                 column.Item().PaddingTop(8).Text($"{exercise.Category} — {exercise.Name}").Bold().FontSize(11);
@@ -181,34 +178,6 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
             }
 
             Summary(column.Item(), "Workout Summary", workout.Summary);
-        });
-    }
-
-    private static void RenderDailySteps(IContainer container, IEnumerable<DailyStepExportModel> steps)
-    {
-        var rows = steps.OrderBy(x => x.Date).ToList();
-        if (rows.Count == 0)
-            return;
-
-        container.PaddingTop(8).Column(column =>
-        {
-            column.Item().Text("Daily Steps").Bold().FontSize(11);
-            column.Item().Table(table =>
-            {
-                table.ColumnsDefinition(columns =>
-                {
-                    columns.RelativeColumn(2);
-                    columns.RelativeColumn(1);
-                    columns.RelativeColumn(2);
-                });
-                Header(table, "Date", "Steps", "Provider");
-                foreach (var step in rows)
-                {
-                    table.Cell().Element(Cell).Text(step.Date.ToString("yyyy-MM-dd"));
-                    table.Cell().Element(Cell).Text(step.Steps.ToString("N0"));
-                    table.Cell().Element(Cell).Text(step.Provider);
-                }
-            });
         });
     }
 
@@ -256,12 +225,23 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
         return notes.Count == 0 ? "—" : string.Join(" · ", notes);
     }
 
-    private static void Summary(IContainer container, string title, ExportSummaryModel summary)
+    private static void Summary(
+        IContainer container,
+        string title,
+        ExportSummaryModel summary,
+        IEnumerable<DailyStepExportModel>? dailySteps = null)
     {
         container.PaddingTop(6).Background(Colors.Grey.Lighten4).Padding(7).Column(column =>
         {
             column.Item().Text(title).Bold();
             column.Item().Text($"Workouts: {summary.CompletedWorkoutCount}/{summary.WorkoutCount}  |  Exercises: {summary.ExerciseCount}  |  Sets: {summary.CompletedSetCount}/{summary.SetCount}  |  Reps: {summary.TotalReps}  |  Volume: {Weight(summary.TotalVolume)}");
+            if (dailySteps is not null)
+            {
+                var steps = dailySteps.ToList();
+                var totalSteps = steps.Sum(x => x.Steps);
+                var averageDailySteps = steps.Count == 0 ? 0 : steps.Average(x => x.Steps);
+                column.Item().Text($"Steps: {totalSteps:N0}  |  Avg Daily Steps: {averageDailySteps:N0}");
+            }
         });
     }
 
