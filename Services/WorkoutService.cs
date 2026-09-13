@@ -18,6 +18,12 @@ public interface IWorkoutService
     Task UpdateWorkoutBarAsync(int workoutId, int? barId);
     Task UpdateWorkoutNotesAsync(int workoutId, string? notes);
     Task UpdateWorkoutDateAsync(int workoutId, DateTime occurredOn);
+
+    /// <summary>
+    /// Returns the main-lift working sets (by SetNumber) from the previous cycle's corresponding
+    /// week/lift workout, for motivational weight-comparison purposes. Empty if there is no prior cycle.
+    /// </summary>
+    Task<Dictionary<int, double>> GetPreviousCycleMainSetWeightsAsync(int workoutId);
 }
 
 public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : IWorkoutService
@@ -197,6 +203,32 @@ public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : 
 
         workout.BarId = barId;
         await db.SaveChangesAsync();
+    }
+
+    public async Task<Dictionary<int, double>> GetPreviousCycleMainSetWeightsAsync(int workoutId)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var current = await db.Workouts
+            .Include(w => w.Week).ThenInclude(wk => wk.Cycle)
+            .FirstOrDefaultAsync(w => w.Id == workoutId && w.Week.Cycle.UserId == userId);
+        if (current is null) return [];
+
+        var previousCycleNumber = current.Week.Cycle.CycleNumber - 1;
+        if (previousCycleNumber < 1) return [];
+
+        var previousSets = await db.WorkoutSets
+            .Include(s => s.Workout).ThenInclude(w => w.Week).ThenInclude(w => w.Cycle)
+            .Where(s => !s.IsAdditional
+                     && s.SetType == SetType.Main
+                     && s.Workout.MainLiftType == current.MainLiftType
+                     && s.Workout.Week.WeekNumber == current.Week.WeekNumber
+                     && s.Workout.Week.Cycle.CycleNumber == previousCycleNumber
+                     && s.Workout.Week.Cycle.UserId == userId)
+            .ToListAsync();
+
+        return previousSets
+            .GroupBy(s => s.SetNumber)
+            .ToDictionary(g => g.Key, g => g.First().PrescribedWeight);
     }
 
     private async Task<Workout?> GetOwnedWorkoutAsync(int workoutId)

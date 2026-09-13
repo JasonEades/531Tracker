@@ -195,6 +195,11 @@ else
                     <div class="set-reps-label">
                         × @(isAmrap ? $"{set.PrescribedReps}+" : set.PrescribedReps.ToString()) reps
                     </div>
+                    @{ var blurb = GetProgressBlurb(set); }
+                    @if (blurb is not null)
+                    {
+                        <div class="set-blurb @(blurb.Value.Positive ? "set-blurb-positive" : "")">@blurb.Value.Text</div>
+                    }
                     @if (plateMap.TryGetValue(set.PrescribedWeight, out var plates) && plates.Count > 0)
                     {
                         <div class="plate-chips-inline">
@@ -607,6 +612,22 @@ else
     }
     private int SetsPct   => SetsTotal > 0 ? (int)(SetsDone * 100.0 / SetsTotal) : 0;
     private Dictionary<double, List<PlateLoadingResult>> plateMap = [];
+    private Dictionary<int, double> previousCycleMainSetWeights = [];
+
+    private (string Text, bool Positive)? GetProgressBlurb(WorkoutSet set)
+    {
+        if (workout is null) return null;
+        if (!previousCycleMainSetWeights.TryGetValue(set.SetNumber, out var prevWeight)) return null;
+
+        var diff = set.PrescribedWeight - prevWeight;
+        var prevCycleNumber = workout.Week.Cycle.CycleNumber - 1;
+        return diff switch
+        {
+            > 0 => ($"🎉 Nice! This is {diff:0.#} lbs more than Cycle {prevCycleNumber}!", true),
+            < 0 => ($"{Math.Abs(diff):0.#} lbs less than Cycle {prevCycleNumber}.", false),
+            _   => ($"Same as Cycle {prevCycleNumber}.", false)
+        };
+    }
 
     private List<Bar> bars = [];
     private Bar? defaultBar;
@@ -655,6 +676,8 @@ else
             plateMap = [];
             foreach (var w in allWeights)
                 plateMap[w] = await PlateCalc.CalculatePlates(w, CurrentBarWeight);
+
+            previousCycleMainSetWeights = await WorkoutService.GetPreviousCycleMainSetWeightsAsync(WorkoutId);
         }
     }
 

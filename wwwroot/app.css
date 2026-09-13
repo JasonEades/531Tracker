@@ -881,6 +881,8 @@ select.form-control { appearance: auto; cursor: pointer; }
 .set-info { flex: 1; min-width: 0; }
 .set-weight-label { font-size: var(--text-xl); font-weight: 700; color: var(--color-text); line-height: 1.1; }
 .set-reps-label { font-size: var(--text-sm); color: var(--color-text-muted); margin-top: 2px; }
+.set-blurb { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 4px; font-style: italic; }
+.set-blurb-positive { color: var(--color-success); font-weight: 600; }
 
 .set-inputs { display: flex; gap: var(--space-2); align-items: center; }
 
