@@ -40,7 +40,12 @@ public interface IBodyMetricService
     Task<List<ProgressPhotoInfo>> GetPhotosAsync();
     Task<PhotoUploadResult> AddPhotoAsync(Stream upload, long uploadLength, DateTime takenOn, string? caption, CancellationToken ct = default);
     Task<bool> DeletePhotoAsync(int id, CancellationToken ct = default);
-    Task<(byte[] Content, string ContentType)?> OpenPhotoAsync(int id, bool thumbnail, CancellationToken ct = default);
+
+    /// <summary>
+    /// Reads photo bytes for an explicit user. The owner is passed in because this is called
+    /// from a plain HTTP endpoint, where the Razor component auth state is not available.
+    /// </summary>
+    Task<(byte[] Content, string ContentType)?> OpenPhotoAsync(int id, bool thumbnail, string userId, CancellationToken ct = default);
 }
 
 public sealed class BodyMetricService(
@@ -255,9 +260,9 @@ public sealed class BodyMetricService(
         return true;
     }
 
-    public async Task<(byte[] Content, string ContentType)?> OpenPhotoAsync(int id, bool thumbnail, CancellationToken ct = default)
+    public async Task<(byte[] Content, string ContentType)?> OpenPhotoAsync(int id, bool thumbnail, string userId, CancellationToken ct = default)
     {
-        var userId = await userContext.GetUserIdAsync();
+        if (string.IsNullOrEmpty(userId)) return null;
 
         var photo = await db.ProgressPhotos.AsNoTracking()
             .Where(x => x.Id == id && x.UserId == userId)

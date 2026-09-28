@@ -365,11 +365,15 @@ app.MapGet("/logout", async (SignInManager<ApplicationUser> signInManager, HttpC
     ctx.Response.Redirect("/login");
 });
 
-// Progress photos live in the database; the service resolves them only for the signed-in owner.
+// Progress photos live in the database. This is a plain HTTP endpoint rather than a Razor
+// component, so the owner is read from the request principal, not the component auth state.
 app.MapGet("/api/progress-photos/{id:int}", async (
-    int id, bool? thumb, IBodyMetricService bodyMetrics, CancellationToken ct) =>
+    int id, bool? thumb, HttpContext ctx, IBodyMetricService bodyMetrics, CancellationToken ct) =>
 {
-    var photo = await bodyMetrics.OpenPhotoAsync(id, thumb ?? false, ct);
+    var userId = ctx.User.FindFirstValue(ClaimTypes.NameIdentifier);
+    if (string.IsNullOrEmpty(userId)) return Results.Unauthorized();
+
+    var photo = await bodyMetrics.OpenPhotoAsync(id, thumb ?? false, userId, ct);
     return photo is null
         ? Results.NotFound()
         : Results.Bytes(photo.Value.Content, photo.Value.ContentType);

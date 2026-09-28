@@ -140,8 +140,8 @@ public sealed class BodyMetricTests
         var upload = await fixture.Service.AddPhotoAsync(CreateJpeg(1600, 1200), 0, DateTime.Today, "front");
         Assert.True(upload.Success);
 
-        var full = await fixture.Service.OpenPhotoAsync(upload.Photo!.Id, thumbnail: false);
-        var thumb = await fixture.Service.OpenPhotoAsync(upload.Photo.Id, thumbnail: true);
+        var full = await fixture.Service.OpenPhotoAsync(upload.Photo!.Id, thumbnail: false, "test-user");
+        var thumb = await fixture.Service.OpenPhotoAsync(upload.Photo.Id, thumbnail: true, "test-user");
 
         Assert.NotNull(full);
         Assert.NotNull(thumb);
@@ -195,7 +195,7 @@ public sealed class BodyMetricTests
 
         var foreignId = fixture.Context.ProgressPhotos.Single(x => x.UserId == "other-user").Id;
 
-        Assert.Null(await fixture.Service.OpenPhotoAsync(foreignId, thumbnail: false));
+        Assert.Null(await fixture.Service.OpenPhotoAsync(foreignId, thumbnail: false, "test-user"));
         Assert.False(await fixture.Service.DeletePhotoAsync(foreignId));
     }
 
