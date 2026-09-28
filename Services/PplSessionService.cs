@@ -11,6 +11,7 @@ public interface IPplSessionService
     Task CompleteSessionAsync(int sessionId);
     Task ReopenSessionAsync(int sessionId);
     Task UpdateSessionDateAsync(int sessionId, DateTime occurredOn);
+    Task UpdateRestSecondsAsync(int sessionId, int restSeconds);
     Task UpdateSetAsync(int setId, double? actualWeight, int? actualReps, bool isCompleted);
     Task SetStartingWeightAsync(int exerciseSlotId, double weight);
     Task<List<PplSession>> GetSessionHistoryAsync(int programId, int take = 30);
@@ -55,6 +56,17 @@ public class PplSessionService(AppDbContext db, ICurrentUserService userContext)
         if (session is null) return;
 
         session.OccurredOn = DateTime.SpecifyKind(occurredOn.Date, DateTimeKind.Utc);
+        await db.SaveChangesAsync();
+    }
+
+    public async Task UpdateRestSecondsAsync(int sessionId, int restSeconds)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var session = await db.PplSessions.Include(s => s.Program)
+            .FirstOrDefaultAsync(s => s.Id == sessionId && s.Program.UserId == userId);
+        if (session is null) return;
+
+        session.RestSeconds = Math.Clamp(restSeconds, 0, 600);
         await db.SaveChangesAsync();
     }
 

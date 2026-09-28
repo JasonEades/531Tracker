@@ -18,6 +18,7 @@ public interface IWorkoutService
     Task UpdateWorkoutBarAsync(int workoutId, int? barId);
     Task UpdateWorkoutNotesAsync(int workoutId, string? notes);
     Task UpdateWorkoutDateAsync(int workoutId, DateTime occurredOn);
+    Task UpdateRestSecondsAsync(int workoutId, int restSeconds);
 
     /// <summary>
     /// Returns the main-lift working sets (by SetNumber) from the previous cycle's corresponding
@@ -65,6 +66,15 @@ public class WorkoutService(AppDbContext db, ICurrentUserService userContext) : 
         if (workout is null) return;
 
         workout.OccurredOn = DateTime.SpecifyKind(occurredOn.Date, DateTimeKind.Utc);
+        await db.SaveChangesAsync();
+    }
+
+    public async Task UpdateRestSecondsAsync(int workoutId, int restSeconds)
+    {
+        var workout = await GetOwnedWorkoutAsync(workoutId);
+        if (workout is null) return;
+
+        workout.RestSeconds = Math.Clamp(restSeconds, 0, 600);
         await db.SaveChangesAsync();
     }
 

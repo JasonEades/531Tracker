@@ -1,6 +1,7 @@
 @page "/workout/{WorkoutId:int}"
 @attribute [Authorize]
 @rendermode InteractiveServer
+@implements IAsyncDisposable
 @inject IWorkoutService WorkoutService
 @inject IAccessoryService AccessoryService
 @inject IBbbMappingService BbbMapping
@@ -71,6 +72,18 @@ else
         <button class="btn btn-outline btn-sm" @onclick="SaveWorkoutDate" disabled="@savingWorkoutDate">
             @(savingWorkoutDate ? "Saving…" : "Save Date")
         </button>
+    </div>
+
+    <div class="session-date-row animate-fade-in">
+        <label for="workout-rest">Rest timer</label>
+        <input id="workout-rest" class="form-control form-control-sm" type="number" min="0" max="600" step="5"
+               value="@restSeconds" @onchange="SaveRestSeconds" />
+        <span class="text-muted">seconds</span>
+        @if (restRemaining > 0)
+        {
+            <span class="badge badge-warning">@FormatRest(restRemaining)</span>
+            <button class="btn btn-outline btn-sm" @onclick="StopRestTimer">Stop</button>
+        }
     </div>
 
     @* ── Bar Selector ─────────────────────────────────── *@
@@ -549,6 +562,9 @@ else
     private bool savingWorkoutDate;
     private string? exportError;
     private DateTime workoutDate = DateTime.Today;
+    private int restSeconds = 90;
+    private int restRemaining;
+    private Timer? restTimer;
 
     private List<WorkoutSet> mainSets = [];
     private List<WorkoutSet> bbbSets = [];
@@ -664,6 +680,7 @@ else
         workout = await WorkoutService.GetWorkoutWithDetailsAsync(WorkoutId);
         if (workout is not null)
         {
+            restSeconds = Math.Clamp(workout.RestSeconds, 0, 600);
             warmupSets  = workout.Sets.Where(s => s.SetType == SetType.Warmup).OrderBy(s => s.SetNumber).ToList();
             mainSets    = workout.Sets.Where(s => !s.IsAdditional && s.SetType == SetType.Main).OrderBy(s => s.SetNumber).ToList();
             bbbSets     = workout.Sets.Where(s => s.SetType == SetType.Bbb).OrderBy(s => s.SetNumber).ToList();
@@ -693,6 +710,15 @@ else
         finally
         {
             savingWorkoutDate = false;
+        }
+    }
+
+    private async Task SaveRestSeconds(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var seconds))
+        {
+            restSeconds = Math.Clamp(seconds, 0, 600);
+            await WorkoutService.UpdateRestSecondsAsync(WorkoutId, restSeconds);
         }
     }
 
@@ -777,12 +803,14 @@ else
 
     private async Task CompleteWorkout()
     {
+        StopRestTimer();
         await WorkoutService.CompleteWorkoutAsync(WorkoutId);
         await LoadWorkout();
     }
 
     private async Task ReopenWorkout()
     {
+        StopRestTimer();
         await WorkoutService.ReopenWorkoutAsync(WorkoutId);
         await LoadWorkout();
     }
@@ -809,6 +837,7 @@ else
 
     private async Task ToggleSet(WorkoutSet set)
     {
+        var wasCompleted = set.IsCompleted;
         set.IsCompleted = !set.IsCompleted;
         if (set.IsCompleted)
         {
@@ -817,6 +846,48 @@ else
         }
         await WorkoutService.UpdateSetAsync(set.Id, set.ActualWeight, set.ActualReps, set.IsCompleted);
         await AutoStartIfNeeded();
+        if (!wasCompleted && set.IsCompleted)
+            StartRestTimer();
+    }
+
+    private void StartRestTimer()
+    {
+        StopRestTimer();
+        restRemaining = restSeconds;
+        if (restRemaining <= 0) return;
+        restTimer = new Timer(async _ => await TickRestTimer(), null, 1000, 1000);
+    }
+
+    private async Task TickRestTimer()
+    {
+        await InvokeAsync(() =>
+        {
+            if (restRemaining <= 1)
+            {
+                restRemaining = 0;
+                StopRestTimer();
+            }
+            else
+            {
+                restRemaining--;
+            }
+            StateHasChanged();
+        });
+    }
+
+    private void StopRestTimer()
+    {
+        restTimer?.Dispose();
+        restTimer = null;
+        restRemaining = 0;
+    }
+
+    private static string FormatRest(int seconds) => $"{seconds / 60}:{seconds % 60:D2}";
+
+    public ValueTask DisposeAsync()
+    {
+        StopRestTimer();
+        return ValueTask.CompletedTask;
     }
 
     private async Task ToggleAccessory(WorkoutAccessory wa)

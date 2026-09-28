@@ -12,6 +12,8 @@ public class PplSession
 
     public WorkoutStatus Status { get; set; } = WorkoutStatus.NotStarted;
 
+    public int RestSeconds { get; set; } = 90;
+
     public int? PplWeekId { get; set; }
     public PplWeek? Week { get; set; }
 

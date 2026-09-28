@@ -52,7 +52,7 @@ public sealed class DashboardAnalyticsService(
                 CycleNumber = w.Week.Cycle.CycleNumber,
                 LiftType = w.MainLiftType,
                 Sets = w.Sets.Where(s => s.IsCompleted && s.ActualWeight.HasValue && s.ActualReps.HasValue)
-                    .Select(s => new ActualSetRow { Weight = s.ActualWeight!.Value, Reps = s.ActualReps!.Value, LiftName = s.Lift.Name })
+                    .Select(s => new ActualSetRow { Weight = s.ActualWeight!.Value, Reps = s.ActualReps!.Value, LiftName = s.Lift.Name, IsWarmup = s.SetType == SetType.Warmup })
                     .ToList()
             })
             .ToListAsync();
@@ -110,6 +110,7 @@ public sealed class DashboardAnalyticsService(
             MonthlyTraining = BuildMonthly(yearStart.Year, yearWorkouts, yearPpl, yearAdditional),
             StrengthProgress = BuildStrengthProgress(workouts, pplSessions, today, currentCycle?.Id),
             RecentRecords = BuildRecords(workouts, pplSessions),
+            PersonalRecords = BuildPersonalRecords(workouts, pplSessions, additional),
             Steps = BuildSteps(stepRecords, today, weekStart, yearStart, hasGoogleHealth)
         };
     }
@@ -218,6 +219,47 @@ public sealed class DashboardAnalyticsService(
         => workouts.SelectMany(w => w.Sets.Select(s => new PerformanceRecord { ExerciseName = s.LiftName, Date = w.Date, Weight = s.Weight, Reps = s.Reps }))
             .Concat(ppl.SelectMany(s => s.Exercises.SelectMany(e => e.Sets.Select(x => new PerformanceRecord { ExerciseName = e.Name, Date = s.Date, Weight = x.Weight, Reps = x.Reps })))).OrderByDescending(x => x.Date).Take(5).ToList();
 
+    private List<PersonalRecord> BuildPersonalRecords(List<WorkoutRow> workouts, List<PplSessionRow> ppl, List<AdditionalRow> additional)
+    {
+        var observations = workouts.SelectMany(w => w.Sets.Where(s => !s.IsWarmup)
+                .Select(s => new RecordObservation(s.LiftName, w.Date, s.Weight, s.Reps)))
+            .Concat(ppl.SelectMany(s => s.Exercises.SelectMany(e => e.Sets
+                .Select(x => new RecordObservation(e.Name, s.Date, x.Weight, x.Reps)))))
+            .Concat(additional.SelectMany(s => s.StrengthSets
+                .Select(x => new RecordObservation(x.LiftName, s.Date, x.Weight, x.Reps))))
+            .Where(x => x.Weight > 0 && x.Reps > 0)
+            .ToList();
+
+        return observations
+            .GroupBy(x => x.ExerciseName, StringComparer.OrdinalIgnoreCase)
+            .SelectMany(group =>
+            {
+                var bestEstimated = group.OrderByDescending(x => weightCalculator.CalculateEstimated1RM(x.Weight, x.Reps)).First();
+                var bestWeight = group.OrderByDescending(x => x.Weight).First();
+                var bestRep = group.OrderByDescending(x => x.Reps).ThenByDescending(x => x.Weight).First();
+                var bestVolume = group.GroupBy(x => x.Date.Date)
+                    .Select(day => new
+                    {
+                        Date = day.Key,
+                        Volume = day.Sum(x => x.Weight * x.Reps),
+                        Best = day.OrderByDescending(x => x.Weight).First()
+                    })
+                    .OrderByDescending(x => x.Volume)
+                    .First();
+
+                return new[]
+                {
+                    new PersonalRecord { ExerciseName = bestEstimated.ExerciseName, RecordType = "Estimated 1RM", Value = weightCalculator.CalculateEstimated1RM(bestEstimated.Weight, bestEstimated.Reps), Weight = bestEstimated.Weight, Reps = bestEstimated.Reps, Date = bestEstimated.Date },
+                    new PersonalRecord { ExerciseName = bestWeight.ExerciseName, RecordType = "Heaviest weight", Value = bestWeight.Weight, Weight = bestWeight.Weight, Reps = bestWeight.Reps, Date = bestWeight.Date },
+                    new PersonalRecord { ExerciseName = bestRep.ExerciseName, RecordType = "Rep PR", Value = bestRep.Reps, Weight = bestRep.Weight, Reps = bestRep.Reps, Date = bestRep.Date },
+                    new PersonalRecord { ExerciseName = bestVolume.Best.ExerciseName, RecordType = "Session volume", Value = bestVolume.Volume, Weight = bestVolume.Best.Weight, Reps = bestVolume.Best.Reps, Date = bestVolume.Date }
+                };
+            })
+            .OrderBy(x => x.ExerciseName)
+            .ThenBy(x => x.RecordType)
+            .ToList();
+    }
+
     private static double? AtOrBefore(List<Observation> items, DateTime date) => items.Where(x => x.Date.Date <= date.Date).Select(x => (double?)x.Value).LastOrDefault();
     private static bool InYear(DateTime date, DateTime start) => date >= start && date < start.AddYears(1);
     private static DateTime StartOfWeek(DateTime date) => date.AddDays(-(int)date.DayOfWeek + (int)DayOfWeek.Monday).Date;
@@ -227,7 +269,8 @@ public sealed class DashboardAnalyticsService(
     private sealed class PplSessionRow { public DateTime Date { get; init; } public List<PplExerciseRow> Exercises { get; init; } = []; }
     private sealed class PplExerciseRow { public string Key { get; init; } = ""; public string Name { get; init; } = ""; public List<ActualSetRow> Sets { get; init; } = []; }
     private sealed class AdditionalRow { public DateTime Date { get; init; } public SessionType Type { get; init; } public List<CardioRow> Cardio { get; init; } = []; public List<ActualSetRow> StrengthSets { get; init; } = []; }
-    private sealed class ActualSetRow { public double Weight { get; init; } public int Reps { get; init; } public string LiftName { get; init; } = ""; }
+    private sealed class ActualSetRow { public double Weight { get; init; } public int Reps { get; init; } public string LiftName { get; init; } = ""; public bool IsWarmup { get; init; } }
+    private sealed record RecordObservation(string ExerciseName, DateTime Date, double Weight, int Reps);
     private sealed class CardioRow { public double Quantity { get; init; } public CardioUnit Unit { get; init; } }
     private sealed class Observation { public string Key { get; init; } = ""; public string Name { get; init; } = ""; public DateTime Date { get; init; } public int? CycleId { get; init; } public double Value { get; init; } }
 }

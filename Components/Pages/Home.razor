@@ -260,7 +260,7 @@ else
     <div class="dashboard-analytics-grid animate-fade-in">
         <div class="card analytics-card">
             <div class="card-header">Today's Activity</div>
-            <div class="analytics-stat-grid"><div><strong>@analytics.Steps.Today.ToString("N0")</strong><span>steps</span></div><div><strong>@analytics.Steps.ThisWeekTotal.ToString("N0")</strong><span>this week</span></div></div>
+            <div class="analytics-stat-grid"><div><strong>@analytics.Steps.Today.ToString("N0")</strong><span>steps today</span></div><div><strong>@analytics.Steps.ThisWeekAverage.ToString("N0")</strong><span>daily avg this week</span></div></div>
             <div class="analytics-muted">Cardio · @analytics.Steps.Today.ToString("N0") Steps · Google Health</div>
         </div>
         <div class="card analytics-card">
@@ -275,7 +275,7 @@ else
     {
         <div class="card analytics-card">
             <div class="card-header">Steps This Week</div>
-            <div class="analytics-muted">Total @analytics.Steps.ThisWeekTotal.ToString("N0") · Average @analytics.Steps.ThisWeekAverage.ToString("N0")/day · @analytics.Steps.ThisWeekDaysWithData days with data</div>
+            <div class="analytics-muted">Average @analytics.Steps.ThisWeekAverage.ToString("N0")/day · @analytics.Steps.ThisWeekDaysWithData days with data</div>
             <div class="analytics-muted">Highest @analytics.Steps.ThisWeekHighest.ToString("N0") · Lowest @analytics.Steps.ThisWeekLowest.ToString("N0")</div>
             <div class="monthly-chart" aria-label="Weekly steps chart">
                 @foreach (var point in analytics.Steps.ThisWeek)
@@ -301,7 +301,7 @@ else
     {
         <div class="card analytics-card analytics-chart-card">
             <div class="card-header">Steps — Last 30 Days</div>
-            <div class="analytics-muted">Daily totals from Google Health</div>
+            <div class="analytics-muted">Daily steps from Google Health</div>
             <div class="steps-30-day-chart" aria-label="Google Health steps for the last 30 days">
                 @foreach (var point in analytics.Steps.Last30Days)
                 {
@@ -333,35 +333,57 @@ else
     @if (analytics.StrengthProgress.Count > 0)
     {
         <div class="card analytics-card">
-            <div class="card-header">Strength Progress</div>
+            <div class="card-header">Estimated 1RM by Lift</div>
             <p class="analytics-description">Estimated 1RM uses the existing rounded Epley formula and actual completed sets.</p>
-            <select class="form-control analytics-select" @bind="selectedStrengthKey" aria-label="Exercise for strength progress">
-                @foreach (var item in analytics.StrengthProgress)
-                {
-                    <option value="@item.ExerciseKey">@item.ExerciseName</option>
-                }
-            </select>
-            @if (SelectedStrength is not null)
-            {
-                <div class="strength-summary">
-                    <div><span>Current</span><strong>@FormatWeight(SelectedStrength.Current)</strong></div>
-                    <div><span>3 months</span><strong>@FormatWeight(SelectedStrength.ThreeMonthsAgo)</strong></div>
-                    <div><span>6 months</span><strong>@FormatWeight(SelectedStrength.SixMonthsAgo)</strong></div>
-                    <div><span>1 year</span><strong>@FormatWeight(SelectedStrength.OneYearAgo)</strong></div>
-                </div>
-                <div class="strength-sparkline" aria-label="@GetStrengthSummary(SelectedStrength)">
-                    @foreach (var point in SelectedStrength.History)
-                    {
-                        <span title="@point.Date.ToString("d"): @point.Value.ToString("N0") lb" style="height:@(Math.Max(8, point.Value / Math.Max(1, SelectedStrength.History.Max(x => x.Value)) * 100))%"></span>
-                    }
-                </div>
-                <p class="analytics-summary">@GetStrengthSummary(SelectedStrength)</p>
-            }
+            <div class="estimated-1rm-table-wrapper">
+                <table class="estimated-1rm-table">
+                    <thead>
+                        <tr>
+                            <th scope="col">Lift</th>
+                            <th scope="col">Current</th>
+                            <th scope="col">3 months</th>
+                            <th scope="col">6 months</th>
+                            <th scope="col">1 year</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var item in analytics.StrengthProgress)
+                        {
+                            <tr>
+                                <th scope="row">@item.ExerciseName</th>
+                                <td>@FormatWeight(item.Current)</td>
+                                <td>@FormatWeight(item.ThreeMonthsAgo)</td>
+                                <td>@FormatWeight(item.SixMonthsAgo)</td>
+                                <td>@FormatWeight(item.OneYearAgo)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
     }
     else
     {
         <div class="card analytics-card empty-analytics"><div class="card-header">Strength Progress</div><p>Complete a few workouts to start seeing strength trends here.</p></div>
+    }
+
+    @if (analytics.PersonalRecords.Count > 0)
+    {
+        <div class="card analytics-card">
+            <div class="card-header">Personal Records</div>
+            <div class="performance-records">
+                @foreach (var record in analytics.PersonalRecords.Take(12))
+                {
+                    <div class="performance-record">
+                        <div>
+                            <strong>@record.ExerciseName</strong>
+                            <div class="analytics-muted">@record.RecordType · @record.Date.ToLocalTime().ToString("MMM d, yyyy")</div>
+                        </div>
+                        <span class="badge badge-success">@FormatPersonalRecord(record)</span>
+                    </div>
+                }
+            </div>
+        </div>
     }
 
     @if (analytics.YearToDate.CardioSessions > 0)
@@ -381,7 +403,6 @@ else
     private PplSession? nextPplSession;
     private bool loading = true;
     private DashboardAnalytics? analytics;
-    private string? selectedStrengthKey;
     private bool showSetup;
     private bool enableBbb;
     private bool enableWarmup;
@@ -407,7 +428,6 @@ else
     private async Task LoadData()
     {
         analytics = await DashboardAnalyticsService.GetDashboardAsync();
-        selectedStrengthKey ??= analytics.StrengthProgress.FirstOrDefault()?.ExerciseKey;
         currentCycle = await CycleService.GetCurrentCycleAsync();
         if (analytics.Program.ProgramType == "5/3/1")
         {
@@ -442,10 +462,14 @@ else
         }
     }
 
-    private StrengthAnalytics? SelectedStrength => analytics?.StrengthProgress.FirstOrDefault(x => x.ExerciseKey == selectedStrengthKey);
     private static string FormatWeight(double? value) => value is null ? "No data" : $"{value:N0} lb";
     private string GetActivitySummary() => analytics is null ? "" : $"{analytics.YearToDate.TotalSessions} sessions logged this year.";
-    private static string GetStrengthSummary(StrengthAnalytics item) => item.Current is null ? "No completed strength data yet." : item.SixMonthsAgo is null ? $"Current estimated 1RM: {item.Current:N0} lb. Not enough six-month history for a comparison." : $"{item.ExerciseName} estimated 1RM is {item.Current:N0} lb, {item.Current.Value - item.SixMonthsAgo.Value:+#;-#;0} lb vs 6 months ago.";
+    private static string FormatPersonalRecord(PersonalRecord record) => record.RecordType switch
+    {
+        "Rep PR" => $"{record.Value:N0} reps",
+        "Session volume" => $"{record.Value:N0} lb",
+        _ => $"{record.Value:N0} lb"
+    };
 
     private async Task CreateFirstCycle()
     {

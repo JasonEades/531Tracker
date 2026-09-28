@@ -8,6 +8,7 @@ public sealed class DashboardAnalytics
     public IReadOnlyList<MonthlyTrainingPoint> MonthlyTraining { get; init; } = [];
     public IReadOnlyList<StrengthAnalytics> StrengthProgress { get; init; } = [];
     public IReadOnlyList<PerformanceRecord> RecentRecords { get; init; } = [];
+    public IReadOnlyList<PersonalRecord> PersonalRecords { get; init; } = [];
     public StepAnalytics Steps { get; init; } = new();
 }
 
@@ -108,6 +109,16 @@ public sealed class PerformanceRecord
     public double Weight { get; init; }
     public int Reps { get; init; }
     public double? Estimated1Rm { get; init; }
+}
+
+public sealed class PersonalRecord
+{
+    public string ExerciseName { get; init; } = string.Empty;
+    public string RecordType { get; init; } = string.Empty;
+    public double Value { get; init; }
+    public double Weight { get; init; }
+    public int Reps { get; init; }
+    public DateTime Date { get; init; }
 }
 
 public static class DashboardMetricDefinitions

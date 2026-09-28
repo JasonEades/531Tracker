@@ -1182,6 +1182,41 @@ input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--color-pr
 }
 .alert-link { color: inherit; font-weight: 700; text-decoration: underline; }
 
+.performance-records { display: grid; gap: var(--space-2); }
+.performance-record {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    padding: var(--space-2) 0;
+    border-bottom: 1px solid var(--color-border);
+}
+.performance-record:last-child { border-bottom: 0; }
+
+.estimated-1rm-table-wrapper { overflow-x: auto; }
+.estimated-1rm-table {
+    border-collapse: collapse;
+    min-width: 620px;
+    width: 100%;
+}
+.estimated-1rm-table th,
+.estimated-1rm-table td {
+    border-bottom: 1px solid var(--color-border);
+    padding: var(--space-3) var(--space-2);
+    text-align: right;
+    white-space: nowrap;
+}
+.estimated-1rm-table th:first-child,
+.estimated-1rm-table td:first-child { text-align: left; }
+.estimated-1rm-table thead th {
+    color: var(--color-text-muted);
+    font-size: var(--text-sm);
+    font-weight: 600;
+}
+.estimated-1rm-table tbody th { font-weight: 600; }
+.estimated-1rm-table tbody tr:last-child th,
+.estimated-1rm-table tbody tr:last-child td { border-bottom: 0; }
+
 /* ── Blazor error UI ─────────────────────────────────────── */
 #blazor-error-ui {
     background: var(--color-surface-2);

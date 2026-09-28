@@ -21,11 +21,11 @@
     <div class="history-steps-header">
         <div>
             <h2>Daily Steps</h2>
-            <p>Google Health totals for the last 14 days</p>
+            <p>Google Health daily average for the last 14 days</p>
         </div>
         @if (stepHistory.Count > 0)
         {
-            <strong>@stepHistory.Sum(x => x.Steps).ToString("N0")</strong>
+            <strong>@AverageSteps.ToString("N0")/day</strong>
         }
     </div>
     @if (stepHistory.All(x => x.Steps == 0))
@@ -260,6 +260,7 @@ else
     private BbbMode selectedBbbMode = BbbMode.OppositeDay;
     private double selectedBbbPct = 50;
     private double StepMaximum => Math.Max(1, stepHistory.Max(x => x.Steps));
+    private double AverageSteps => stepHistory.Where(x => x.Steps > 0).Select(x => (double)x.Steps).DefaultIfEmpty().Average();
 
     protected override async Task OnInitializedAsync()
     {

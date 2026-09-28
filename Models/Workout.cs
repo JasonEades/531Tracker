@@ -11,6 +11,8 @@ public class Workout
 
     public WorkoutStatus Status { get; set; } = WorkoutStatus.NotStarted;
 
+    public int RestSeconds { get; set; } = 90;
+
     public DateTime OccurredOn { get; set; } = DateTime.UtcNow;
 
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;

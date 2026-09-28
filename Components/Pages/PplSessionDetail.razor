@@ -1,6 +1,7 @@
 @page "/ppl/session/{SessionId:int}"
 @attribute [Authorize]
 @rendermode InteractiveServer
+@implements IAsyncDisposable
 @inject IPplSessionService SessionService
 @inject IPplProgressionService Progression
 @inject IPlateCalculatorService PlateCalc
@@ -55,6 +56,18 @@ else
         <button class="btn btn-outline btn-sm" @onclick="SaveSessionDate" disabled="@savingSessionDate">
             @(savingSessionDate ? "Saving…" : "Save Date")
         </button>
+    </div>
+
+    <div class="session-date-row animate-fade-in">
+        <label for="ppl-session-rest">Rest timer</label>
+        <input id="ppl-session-rest" class="form-control form-control-sm" type="number" min="0" max="600" step="5"
+               value="@restSeconds" @onchange="SaveRestSeconds" />
+        <span class="text-muted">seconds</span>
+        @if (restRemaining > 0)
+        {
+            <span class="badge badge-warning">@FormatRest(restRemaining)</span>
+            <button class="btn btn-outline btn-sm" @onclick="StopRestTimer">Stop</button>
+        }
     </div>
 
     @* ── Progress bar ────────────────────────────────────────── *@
@@ -162,6 +175,9 @@ else
     private bool loading = true;
     private bool savingSessionDate;
     private DateTime sessionDate = DateTime.Today;
+    private int restSeconds = 90;
+    private int restRemaining;
+    private Timer? restTimer;
     private Dictionary<double, List<PlateLoadingResult>> plateMap = [];
 
     private int SetsTotal => session?.Exercises.Sum(e => e.Sets.Count) ?? 0;
@@ -179,6 +195,7 @@ else
         session = await SessionService.GetSessionWithDetailsAsync(SessionId);
         if (session is not null)
         {
+            restSeconds = Math.Clamp(session.RestSeconds, 0, 600);
             await BuildPlateMap();
         }
     }
@@ -219,14 +236,25 @@ else
         }
     }
 
+    private async Task SaveRestSeconds(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var seconds))
+        {
+            restSeconds = Math.Clamp(seconds, 0, 600);
+            await SessionService.UpdateRestSecondsAsync(SessionId, restSeconds);
+        }
+    }
+
     private async Task CompleteSession()
     {
+        StopRestTimer();
         await SessionService.CompleteSessionAsync(SessionId);
         await LoadSession();
     }
 
     private async Task ReopenSession()
     {
+        StopRestTimer();
         await SessionService.ReopenSessionAsync(SessionId);
         await LoadSession();
     }
@@ -260,6 +288,7 @@ else
 
     private async Task ToggleSet(PplSessionSet set, PplSessionExercise exercise)
     {
+        var wasCompleted = set.IsCompleted;
         set.IsCompleted = !set.IsCompleted;
         if (set.IsCompleted)
         {
@@ -268,6 +297,48 @@ else
         }
         await SessionService.UpdateSetAsync(set.Id, set.ActualWeight, set.ActualReps, set.IsCompleted);
         await AutoStart();
+        if (!wasCompleted && set.IsCompleted)
+            StartRestTimer();
+    }
+
+    private void StartRestTimer()
+    {
+        StopRestTimer();
+        restRemaining = restSeconds;
+        if (restRemaining <= 0) return;
+        restTimer = new Timer(async _ => await TickRestTimer(), null, 1000, 1000);
+    }
+
+    private async Task TickRestTimer()
+    {
+        await InvokeAsync(() =>
+        {
+            if (restRemaining <= 1)
+            {
+                restRemaining = 0;
+                StopRestTimer();
+            }
+            else
+            {
+                restRemaining--;
+            }
+            StateHasChanged();
+        });
+    }
+
+    private void StopRestTimer()
+    {
+        restTimer?.Dispose();
+        restTimer = null;
+        restRemaining = 0;
+    }
+
+    private static string FormatRest(int seconds) => $"{seconds / 60}:{seconds % 60:D2}";
+
+    public ValueTask DisposeAsync()
+    {
+        StopRestTimer();
+        return ValueTask.CompletedTask;
     }
 
     private async Task ApplyProgression(int slotId)
