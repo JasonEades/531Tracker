@@ -44,7 +44,7 @@ var adminEmail = builder.Configuration["App:AdminEmail"] ?? "";
 var databaseUrl = Environment.GetEnvironmentVariable("DATABASE_URL")
     ?? builder.Configuration.GetConnectionString("Postgres");
 
-builder.Services.AddDbContext<AppDbContext>(options =>
+void ConfigureDatabase(DbContextOptionsBuilder options)
 {
     if (!string.IsNullOrEmpty(databaseUrl))
     {
@@ -60,7 +60,10 @@ builder.Services.AddDbContext<AppDbContext>(options =>
             sqliteConnection = $"Data Source={dbPath}";
         options.UseSqlite(sqliteConnection);
     }
-});
+}
+
+builder.Services.AddDbContext<AppDbContext>(ConfigureDatabase);
+builder.Services.AddDbContextFactory<AppDbContext>(ConfigureDatabase);
 
 // Data Protection \u2014 persist keys to DB so they survive container restarts on DO App Platform.
 // Without this, every redeploy generates new keys and invalidates all auth cookies/OAuth state.

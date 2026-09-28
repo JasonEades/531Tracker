@@ -23,7 +23,8 @@ public class CycleService(
     ILiftService liftService,
     IBbbMappingService bbbMapping,
     IWeightCalculator weightCalc,
-    ICurrentUserService userContext) : ICycleService
+    ICurrentUserService userContext,
+    IDbContextFactory<AppDbContext>? dbFactory = null) : ICycleService
 {
     public async Task<Cycle?> GetCurrentCycleAsync()
     {
@@ -47,7 +48,9 @@ public class CycleService(
     public async Task<Cycle?> GetCycleWithDetailsAsync(int cycleId)
     {
         var userId = await userContext.GetUserIdAsync();
-        return await db.Cycles
+        await using var readDb = dbFactory is null ? null : await dbFactory.CreateDbContextAsync();
+        var queryDb = readDb ?? db;
+        return await queryDb.Cycles
             .Include(c => c.Weeks)
                 .ThenInclude(w => w.Workouts)
                     .ThenInclude(wo => wo.Sets)

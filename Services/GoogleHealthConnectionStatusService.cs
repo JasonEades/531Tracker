@@ -14,14 +14,16 @@ public interface IGoogleHealthConnectionStatusService
 
 public sealed class GoogleHealthConnectionStatusService(
     AppDbContext db,
-    ICurrentUserService userContext) : IGoogleHealthConnectionStatusService
+    ICurrentUserService userContext,
+    IDbContextFactory<AppDbContext>? dbFactory = null) : IGoogleHealthConnectionStatusService
 {
     private static readonly TimeSpan StaleSyncThreshold = TimeSpan.FromDays(14);
     private static readonly TimeSpan WarningInterval = TimeSpan.FromDays(7);
 
     public async Task<GoogleHealthWarning?> GetWarningAsync(CancellationToken cancellationToken = default)
     {
-        var connection = await GetConnectionAsync(cancellationToken);
+        await using var operationDb = dbFactory is null ? null : await dbFactory.CreateDbContextAsync(cancellationToken);
+        var connection = await GetConnectionAsync(operationDb ?? db, cancellationToken);
         if (connection is null || connection.Status == HealthConnectionStatus.Revoked)
             return null;
 
@@ -44,20 +46,23 @@ public sealed class GoogleHealthConnectionStatusService(
 
     public async Task MarkWarningShownAsync(CancellationToken cancellationToken = default)
     {
-        var connection = await GetConnectionAsync(cancellationToken, tracked: true);
+        await using var operationDb = dbFactory is null ? null : await dbFactory.CreateDbContextAsync(cancellationToken);
+        var writeDb = operationDb ?? db;
+        var connection = await GetConnectionAsync(writeDb, cancellationToken, tracked: true);
         if (connection is null || connection.Status == HealthConnectionStatus.Revoked)
             return;
 
         connection.LastReconnectWarningAtUtc = DateTime.UtcNow;
-        await db.SaveChangesAsync(cancellationToken);
+        await writeDb.SaveChangesAsync(cancellationToken);
     }
 
     private async Task<GoogleHealthConnection?> GetConnectionAsync(
+        AppDbContext queryDb,
         CancellationToken cancellationToken,
         bool tracked = false)
     {
         var userId = await userContext.GetUserIdAsync();
-        var query = db.GoogleHealthConnections.AsQueryable();
+        var query = queryDb.GoogleHealthConnections.AsQueryable();
         if (!tracked)
             query = query.AsNoTracking();
         return await query.SingleOrDefaultAsync(x => x.UserId == userId, cancellationToken);

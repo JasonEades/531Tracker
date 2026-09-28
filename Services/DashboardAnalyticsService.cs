@@ -200,11 +200,15 @@ public sealed class DashboardAnalyticsService(
 
     private List<StrengthAnalytics> BuildStrengthProgress(List<WorkoutRow> workouts, List<PplSessionRow> ppl, DateTime today, int? currentCycleId)
     {
-        var observations = workouts.SelectMany(w => w.Sets.Select(s => new Observation { Key = $"531:{w.LiftType}", Name = s.LiftName, Date = w.Date, CycleId = w.CycleId, Value = weightCalculator.CalculateEstimated1RM(s.Weight, s.Reps) }))
+        var observations = workouts.SelectMany(w => w.Sets.Where(s => !s.IsWarmup).Select(s => new Observation { Key = $"531:{w.LiftType}", Name = s.LiftName, Date = w.Date, CycleId = w.CycleId, Value = weightCalculator.CalculateEstimated1RM(s.Weight, s.Reps) }))
             .Concat(ppl.SelectMany(s => s.Exercises.SelectMany(e => e.Sets.Select(x => new Observation { Key = $"ppl:{e.Key}", Name = e.Name, Date = s.Date, Value = weightCalculator.CalculateEstimated1RM(x.Weight, x.Reps) })))).GroupBy(x => x.Key);
         return observations.Select(group =>
         {
-            var items = group.OrderBy(x => x.Date).ToList();
+            var items = group
+                .GroupBy(x => x.Date.Date)
+                .Select(session => session.OrderByDescending(x => x.Value).First())
+                .OrderBy(x => x.Date)
+                .ToList();
             return new StrengthAnalytics
             {
                 ExerciseKey = group.Key, ExerciseName = items.Last().Name, Current = items.Last().Value,
@@ -237,22 +241,12 @@ public sealed class DashboardAnalyticsService(
                 var bestEstimated = group.OrderByDescending(x => weightCalculator.CalculateEstimated1RM(x.Weight, x.Reps)).First();
                 var bestWeight = group.OrderByDescending(x => x.Weight).First();
                 var bestRep = group.OrderByDescending(x => x.Reps).ThenByDescending(x => x.Weight).First();
-                var bestVolume = group.GroupBy(x => x.Date.Date)
-                    .Select(day => new
-                    {
-                        Date = day.Key,
-                        Volume = day.Sum(x => x.Weight * x.Reps),
-                        Best = day.OrderByDescending(x => x.Weight).First()
-                    })
-                    .OrderByDescending(x => x.Volume)
-                    .First();
 
                 return new[]
                 {
                     new PersonalRecord { ExerciseName = bestEstimated.ExerciseName, RecordType = "Estimated 1RM", Value = weightCalculator.CalculateEstimated1RM(bestEstimated.Weight, bestEstimated.Reps), Weight = bestEstimated.Weight, Reps = bestEstimated.Reps, Date = bestEstimated.Date },
                     new PersonalRecord { ExerciseName = bestWeight.ExerciseName, RecordType = "Heaviest weight", Value = bestWeight.Weight, Weight = bestWeight.Weight, Reps = bestWeight.Reps, Date = bestWeight.Date },
-                    new PersonalRecord { ExerciseName = bestRep.ExerciseName, RecordType = "Rep PR", Value = bestRep.Reps, Weight = bestRep.Weight, Reps = bestRep.Reps, Date = bestRep.Date },
-                    new PersonalRecord { ExerciseName = bestVolume.Best.ExerciseName, RecordType = "Session volume", Value = bestVolume.Volume, Weight = bestVolume.Best.Weight, Reps = bestVolume.Best.Reps, Date = bestVolume.Date }
+                    new PersonalRecord { ExerciseName = bestRep.ExerciseName, RecordType = "Rep PR", Value = bestRep.Reps, Weight = bestRep.Weight, Reps = bestRep.Reps, Date = bestRep.Date }
                 };
             })
             .OrderBy(x => x.ExerciseName)

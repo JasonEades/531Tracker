@@ -467,7 +467,6 @@ else
     private static string FormatPersonalRecord(PersonalRecord record) => record.RecordType switch
     {
         "Rep PR" => $"{record.Value:N0} reps",
-        "Session volume" => $"{record.Value:N0} lb",
         _ => $"{record.Value:N0} lb"
     };
 
