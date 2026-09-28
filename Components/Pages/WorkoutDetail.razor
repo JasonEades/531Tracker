@@ -664,7 +664,6 @@ else
         workout = await WorkoutService.GetWorkoutWithDetailsAsync(WorkoutId);
         if (workout is not null)
         {
-            workoutDate = workout.OccurredOn.ToLocalTime().Date;
             warmupSets  = workout.Sets.Where(s => s.SetType == SetType.Warmup).OrderBy(s => s.SetNumber).ToList();
             mainSets    = workout.Sets.Where(s => !s.IsAdditional && s.SetType == SetType.Main).OrderBy(s => s.SetNumber).ToList();
             bbbSets     = workout.Sets.Where(s => s.SetType == SetType.Bbb).OrderBy(s => s.SetNumber).ToList();

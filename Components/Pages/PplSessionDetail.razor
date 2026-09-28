@@ -179,7 +179,6 @@ else
         session = await SessionService.GetSessionWithDetailsAsync(SessionId);
         if (session is not null)
         {
-            sessionDate = session.OccurredOn.ToLocalTime().Date;
             await BuildPlateMap();
         }
     }
