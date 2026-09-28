@@ -109,23 +109,70 @@
 
             @if (photos.Count > 0)
             {
-                <div class="body-photo-grid mt-3">
-                    @foreach (var photo in photos)
+                <div class="photo-timeline mt-4">
+                    @foreach (var year in photos.GroupBy(x => x.TakenOn.Year).OrderByDescending(x => x.Key))
                     {
-                        <figure class="body-photo">
-                            <a href="@($"/api/progress-photos/{photo.Id}")" target="_blank" rel="noopener">
-                                <img src="@($"/api/progress-photos/{photo.Id}?thumb=true")"
-                                     alt="@(photo.Caption ?? "Progress photo")" loading="lazy" />
-                            </a>
-                            <figcaption>
-                                <span>@photo.TakenOn.ToString("MMM d, yyyy")</span>
-                                @if (!string.IsNullOrWhiteSpace(photo.Caption))
-                                {
-                                    <em>@photo.Caption</em>
-                                }
-                                <button class="btn btn-sm" @onclick="() => DeletePhotoAsync(photo.Id)">Delete</button>
-                            </figcaption>
-                        </figure>
+                        <div class="photo-timeline-year">@year.Key</div>
+
+                        @foreach (var month in year.GroupBy(x => x.TakenOn.Month).OrderByDescending(x => x.Key))
+                        {
+                            <div class="photo-timeline-month">
+                                <span>@MonthName(month.Key)</span>
+                                <small>@month.Count() photo@(month.Count() == 1 ? "" : "s")</small>
+                            </div>
+
+                            @foreach (var photo in month.OrderByDescending(x => x.TakenOn).ThenByDescending(x => x.Id))
+                            {
+                                <div class="photo-timeline-item">
+                                    <div class="photo-timeline-marker"></div>
+                                    <div class="photo-timeline-body">
+                                        <div class="photo-timeline-date">
+                                            @photo.TakenOn.ToString("dddd, MMM d")
+                                            <small>@DescribeAge(photo.TakenOn)</small>
+                                        </div>
+                                        <a href="@PhotoUrl(photo, thumb: false)" target="_blank" rel="noopener">
+                                            <img class="photo-timeline-image" src="@PhotoUrl(photo, thumb: true)"
+                                                 alt="@(photo.Caption ?? "Progress photo")" loading="lazy" />
+                                        </a>
+                                        @if (editingCaptionId == photo.Id)
+                                        {
+                                            <div class="photo-timeline-caption-edit">
+                                                <input class="form-control" type="text" maxlength="200"
+                                                       placeholder="Add a caption"
+                                                       @bind="captionDraft" @bind:event="oninput"
+                                                       @onkeydown="e => CaptionKeyDown(e, photo.Id)" />
+                                                <div class="photo-timeline-actions">
+                                                    <button class="btn btn-sm btn-primary"
+                                                            @onclick="() => SaveCaptionAsync(photo.Id)">Save</button>
+                                                    <button class="btn btn-sm" @onclick="CancelCaptionEdit">Cancel</button>
+                                                </div>
+                                            </div>
+                                        }
+                                        else
+                                        {
+                                            @if (!string.IsNullOrWhiteSpace(photo.Caption))
+                                            {
+                                                <div class="photo-timeline-caption">@photo.Caption</div>
+                                            }
+                                            <div class="photo-timeline-actions">
+                                                <button class="btn btn-sm" @onclick="() => BeginCaptionEdit(photo)">
+                                                    @(string.IsNullOrWhiteSpace(photo.Caption) ? "Add caption" : "Edit caption")
+                                                </button>
+                                                <button class="btn btn-sm" title="Rotate left"
+                                                        disabled="@(busyPhotoId == photo.Id)"
+                                                        @onclick="() => RotateAsync(photo.Id, clockwise: false)">⟲ Left</button>
+                                                <button class="btn btn-sm" title="Rotate right"
+                                                        disabled="@(busyPhotoId == photo.Id)"
+                                                        @onclick="() => RotateAsync(photo.Id, clockwise: true)">⟳ Right</button>
+                                                <button class="btn btn-sm" style="color:var(--color-danger)"
+                                                        disabled="@(busyPhotoId == photo.Id)"
+                                                        @onclick="() => DeletePhotoAsync(photo.Id)">Delete</button>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        }
                     }
                 </div>
             }
@@ -188,6 +235,9 @@
     private bool loading = true;
     private bool saving;
     private bool uploading;
+    private int? busyPhotoId;
+    private int? editingCaptionId;
+    private string captionDraft = string.Empty;
 
     protected override async Task OnInitializedAsync()
     {
@@ -277,9 +327,88 @@
 
     private async Task DeletePhotoAsync(int id)
     {
-        await BodyMetrics.DeletePhotoAsync(id);
+        busyPhotoId = id;
+        try
+        {
+            await BodyMetrics.DeletePhotoAsync(id);
+            photoMessage = null;
+            await ReloadAsync();
+        }
+        finally
+        {
+            busyPhotoId = null;
+        }
+    }
+
+    private async Task RotateAsync(int id, bool clockwise)
+    {
+        busyPhotoId = id;
+        try
+        {
+            if (!await BodyMetrics.RotatePhotoAsync(id, clockwise))
+            {
+                photoMessage = "That photo couldn't be rotated.";
+                return;
+            }
+
+            photoMessage = null;
+            await ReloadAsync();
+        }
+        finally
+        {
+            busyPhotoId = null;
+        }
+    }
+
+    private void BeginCaptionEdit(ProgressPhotoInfo photo)
+    {
+        editingCaptionId = photo.Id;
+        captionDraft = photo.Caption ?? string.Empty;
         photoMessage = null;
+    }
+
+    private void CancelCaptionEdit()
+    {
+        editingCaptionId = null;
+        captionDraft = string.Empty;
+    }
+
+    private async Task CaptionKeyDown(KeyboardEventArgs e, int id)
+    {
+        if (e.Key == "Enter") await SaveCaptionAsync(id);
+        else if (e.Key == "Escape") CancelCaptionEdit();
+    }
+
+    private async Task SaveCaptionAsync(int id)
+    {
+        if (!await BodyMetrics.UpdatePhotoCaptionAsync(id, captionDraft))
+        {
+            photoMessage = "That caption couldn't be saved.";
+            return;
+        }
+
+        CancelCaptionEdit();
         await ReloadAsync();
+    }
+
+    // The version token forces the browser to refetch after a rotation instead of reusing its cache.
+    private static string PhotoUrl(ProgressPhotoInfo photo, bool thumb) =>
+        $"/api/progress-photos/{photo.Id}?thumb={(thumb ? "true" : "false")}&v={photo.Version}";
+
+    private static string MonthName(int month) =>
+        System.Globalization.CultureInfo.CurrentCulture.DateTimeFormat.GetMonthName(month);
+
+    private static string DescribeAge(DateTime takenOn)
+    {
+        var days = (int)(DateTime.Today - takenOn.Date).TotalDays;
+        return days switch
+        {
+            <= 0 => "today",
+            1 => "yesterday",
+            < 30 => $"{days} days ago",
+            < 365 => $"{days / 30} month{(days / 30 == 1 ? "" : "s")} ago",
+            _ => $"{days / 365} year{(days / 365 == 1 ? "" : "s")} ago"
+        };
     }
 
     private static string FormatValue(double? value) => value.HasValue ? value.Value.ToString("0.#") : "—";

@@ -15,6 +15,9 @@ public sealed record ProcessedPhoto(
 public interface IProgressPhotoProcessor
 {
     ProcessedPhoto Process(Stream upload);
+
+    /// <summary>Rotates an already-stored image by 90 degrees and regenerates its thumbnail.</summary>
+    ProcessedPhoto Rotate(byte[] stored, bool clockwise);
 }
 
 public sealed class ProgressPhotoProcessor(IOptions<ProgressPhotoOptions> options) : IProgressPhotoProcessor
@@ -32,6 +35,22 @@ public sealed class ProgressPhotoProcessor(IOptions<ProgressPhotoOptions> option
 
         Downscale(image, _options.MaxDimension);
 
+        return Render(image);
+    }
+
+    public ProcessedPhoto Rotate(byte[] stored, bool clockwise)
+    {
+        using var image = Image.Load(stored);
+        image.Mutate(ctx => ctx.Rotate(clockwise ? RotateMode.Rotate90 : RotateMode.Rotate270));
+
+        // Rotation swaps the edges, so re-apply the bound in case the new long edge exceeds it.
+        Downscale(image, _options.MaxDimension);
+
+        return Render(image);
+    }
+
+    private ProcessedPhoto Render(Image image)
+    {
         var full = Encode(image, Math.Clamp(_options.JpegQuality, 1, 100));
 
         using var thumbnail = image.Clone(ctx => { });

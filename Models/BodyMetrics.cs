@@ -69,4 +69,7 @@ public sealed class ProgressPhoto
     public string? Caption { get; set; }
 
     public DateTime CreatedAtUtc { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Bumped whenever the bytes change (e.g. rotation) so cached URLs are invalidated.</summary>
+    public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 }

@@ -26,7 +26,11 @@ public sealed class PhotoQuota
 public sealed record PhotoUploadResult(bool Success, string? Error, ProgressPhoto? Photo);
 
 /// <summary>Photo metadata without the image bytes, for gallery listings.</summary>
-public sealed record ProgressPhotoInfo(int Id, DateTime TakenOn, string? Caption, long SizeBytes);
+public sealed record ProgressPhotoInfo(int Id, DateTime TakenOn, string? Caption, long SizeBytes, DateTime UpdatedAtUtc)
+{
+    /// <summary>Cache-busting token so a rotated photo is refetched instead of served from cache.</summary>
+    public long Version => UpdatedAtUtc.Ticks;
+}
 
 public interface IBodyMetricService
 {
@@ -40,6 +44,12 @@ public interface IBodyMetricService
     Task<List<ProgressPhotoInfo>> GetPhotosAsync();
     Task<PhotoUploadResult> AddPhotoAsync(Stream upload, long uploadLength, DateTime takenOn, string? caption, CancellationToken ct = default);
     Task<bool> DeletePhotoAsync(int id, CancellationToken ct = default);
+
+    /// <summary>Rotates a stored photo 90 degrees and regenerates its thumbnail.</summary>
+    Task<bool> RotatePhotoAsync(int id, bool clockwise, CancellationToken ct = default);
+
+    /// <summary>Sets or clears a photo's caption after it was uploaded.</summary>
+    Task<bool> UpdatePhotoCaptionAsync(int id, string? caption, CancellationToken ct = default);
 
     /// <summary>
     /// Reads photo bytes for an explicit user. The owner is passed in because this is called
@@ -55,6 +65,9 @@ public sealed class BodyMetricService(
     IOptions<ProgressPhotoOptions> options) : IBodyMetricService
 {
     private readonly ProgressPhotoOptions _options = options.Value;
+
+    /// <summary>Matches the <see cref="ProgressPhoto.Caption"/> column length.</summary>
+    private const int MaxCaptionLength = 200;
 
     public async Task<List<BodyMetricEntry>> GetEntriesAsync(int take = 180)
     {
@@ -186,7 +199,7 @@ public sealed class BodyMetricService(
             .Where(x => x.UserId == userId)
             .OrderByDescending(x => x.TakenOn)
             .ThenByDescending(x => x.Id)
-            .Select(x => new ProgressPhotoInfo(x.Id, x.TakenOn, x.Caption, x.SizeBytes))
+            .Select(x => new ProgressPhotoInfo(x.Id, x.TakenOn, x.Caption, x.SizeBytes, x.UpdatedAtUtc))
             .ToListAsync();
     }
 
@@ -240,13 +253,20 @@ public sealed class BodyMetricService(
             ThumbnailSizeBytes = processed.Thumbnail.Length,
             Width = processed.Width,
             Height = processed.Height,
-            Caption = string.IsNullOrWhiteSpace(caption) ? null : caption.Trim()
+            Caption = NormalizeCaption(caption)
         };
 
         db.ProgressPhotos.Add(photo);
         await db.SaveChangesAsync(ct);
 
         return new PhotoUploadResult(true, null, photo);
+    }
+
+    private static string? NormalizeCaption(string? caption)
+    {
+        if (string.IsNullOrWhiteSpace(caption)) return null;
+        var trimmed = caption.Trim();
+        return trimmed.Length > MaxCaptionLength ? trimmed[..MaxCaptionLength] : trimmed;
     }
 
     public async Task<bool> DeletePhotoAsync(int id, CancellationToken ct = default)
@@ -256,6 +276,51 @@ public sealed class BodyMetricService(
         if (photo is null) return false;
 
         db.ProgressPhotos.Remove(photo);
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> RotatePhotoAsync(int id, bool clockwise, CancellationToken ct = default)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var photo = await db.ProgressPhotos.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
+        if (photo is null || photo.ImageData.Length == 0) return false;
+
+        ProcessedPhoto rotated;
+        try
+        {
+            rotated = processor.Rotate(photo.ImageData, clockwise);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            return false;
+        }
+
+        photo.ImageData = rotated.Image;
+        photo.ThumbnailData = rotated.Thumbnail;
+        photo.SizeBytes = rotated.Image.Length;
+        photo.ThumbnailSizeBytes = rotated.Thumbnail.Length;
+        photo.Width = rotated.Width;
+        photo.Height = rotated.Height;
+
+        // Must strictly increase: the clock's granularity is coarser than a fast rotate/reload,
+        // and a repeated value would leave the browser showing the pre-rotation image.
+        var now = DateTime.UtcNow;
+        photo.UpdatedAtUtc = now > photo.UpdatedAtUtc ? now : photo.UpdatedAtUtc.AddTicks(1);
+
+        await db.SaveChangesAsync(ct);
+        return true;
+    }
+
+    public async Task<bool> UpdatePhotoCaptionAsync(int id, string? caption, CancellationToken ct = default)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var photo = await db.ProgressPhotos.FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
+        if (photo is null) return false;
+
+        var trimmed = NormalizeCaption(caption);
+
+        photo.Caption = trimmed;
         await db.SaveChangesAsync(ct);
         return true;
     }

@@ -180,6 +180,96 @@ public sealed class BodyMetricTests
     }
 
     [Fact]
+    public async Task RotatingAPhotoSwapsItsDimensionsAndBumpsTheCacheVersion()
+    {
+        await using var fixture = await TestFixture.CreateAsync(new ProgressPhotoOptions
+        {
+            MaxDimension = 640,
+            ThumbnailDimension = 160
+        });
+
+        var upload = await fixture.Service.AddPhotoAsync(CreateJpeg(640, 480), 0, DateTime.Today, null);
+        Assert.True(upload.Success);
+
+        var id = upload.Photo!.Id;
+        var originalVersion = (await fixture.Service.GetPhotosAsync())[0].Version;
+
+        Assert.True(await fixture.Service.RotatePhotoAsync(id, clockwise: true));
+
+        var rotated = fixture.Context.ProgressPhotos.AsNoTracking().Single(x => x.Id == id);
+        Assert.Equal(480, rotated.Width);
+        Assert.Equal(640, rotated.Height);
+        Assert.Equal(rotated.ImageData.Length, rotated.SizeBytes);
+
+        var rotatedVersion = (await fixture.Service.GetPhotosAsync())[0].Version;
+        Assert.True(rotatedVersion > originalVersion);
+
+        // Rotating back restores the original orientation and still advances the version.
+        Assert.True(await fixture.Service.RotatePhotoAsync(id, clockwise: false));
+        var restored = fixture.Context.ProgressPhotos.AsNoTracking().Single(x => x.Id == id);
+        Assert.Equal(640, restored.Width);
+        Assert.Equal(480, restored.Height);
+        Assert.True((await fixture.Service.GetPhotosAsync())[0].Version > rotatedVersion);
+    }
+
+    [Fact]
+    public async Task RotationKeepsImagesWithinTheConfiguredBound()
+    {
+        await using var fixture = await TestFixture.CreateAsync(new ProgressPhotoOptions
+        {
+            MaxDimension = 600,
+            ThumbnailDimension = 160
+        });
+
+        // Landscape source is capped at 600 wide; rotating must not push the new long edge past 600.
+        var upload = await fixture.Service.AddPhotoAsync(CreateJpeg(1800, 1200), 0, DateTime.Today, null);
+        Assert.True(await fixture.Service.RotatePhotoAsync(upload.Photo!.Id, clockwise: true));
+
+        var rotated = fixture.Context.ProgressPhotos.AsNoTracking().Single(x => x.Id == upload.Photo.Id);
+        Assert.True(Math.Max(rotated.Width, rotated.Height) <= 600);
+    }
+
+    [Fact]
+    public async Task CaptionsCanBeAddedChangedAndClearedAfterUpload()
+    {
+        await using var fixture = await TestFixture.CreateAsync(new ProgressPhotoOptions
+        {
+            MaxDimension = 640,
+            ThumbnailDimension = 160
+        });
+
+        var upload = await fixture.Service.AddPhotoAsync(CreateJpeg(400, 400), 0, DateTime.Today, null);
+        var id = upload.Photo!.Id;
+        Assert.Null((await fixture.Service.GetPhotosAsync())[0].Caption);
+
+        Assert.True(await fixture.Service.UpdatePhotoCaptionAsync(id, "  week 1 front  "));
+        Assert.Equal("week 1 front", (await fixture.Service.GetPhotosAsync())[0].Caption);
+
+        Assert.True(await fixture.Service.UpdatePhotoCaptionAsync(id, "week 1 back"));
+        Assert.Equal("week 1 back", (await fixture.Service.GetPhotosAsync())[0].Caption);
+
+        // Blank input clears the caption rather than storing whitespace.
+        Assert.True(await fixture.Service.UpdatePhotoCaptionAsync(id, "   "));
+        Assert.Null((await fixture.Service.GetPhotosAsync())[0].Caption);
+    }
+
+    [Fact]
+    public async Task OverlongCaptionsAreTruncatedToFitTheColumn()
+    {
+        await using var fixture = await TestFixture.CreateAsync(new ProgressPhotoOptions
+        {
+            MaxDimension = 640,
+            ThumbnailDimension = 160
+        });
+
+        var upload = await fixture.Service.AddPhotoAsync(CreateJpeg(400, 400), 0, DateTime.Today, new string('x', 400));
+        Assert.Equal(200, upload.Photo!.Caption!.Length);
+
+        Assert.True(await fixture.Service.UpdatePhotoCaptionAsync(upload.Photo.Id, new string('y', 500)));
+        Assert.Equal(200, (await fixture.Service.GetPhotosAsync())[0].Caption!.Length);
+    }
+
+    [Fact]
     public async Task PhotosCannotBeReadOrDeletedByAnotherUser()
     {
         await using var fixture = await TestFixture.CreateAsync();
@@ -197,6 +287,8 @@ public sealed class BodyMetricTests
 
         Assert.Null(await fixture.Service.OpenPhotoAsync(foreignId, thumbnail: false, "test-user"));
         Assert.False(await fixture.Service.DeletePhotoAsync(foreignId));
+        Assert.False(await fixture.Service.RotatePhotoAsync(foreignId, clockwise: true));
+        Assert.False(await fixture.Service.UpdatePhotoCaptionAsync(foreignId, "hacked"));
     }
 
     private static MemoryStream CreateJpeg(int width, int height)
