@@ -1,0 +1,134 @@
+@page "/exercises/{Key}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IExerciseHistoryService HistoryService
+@inject NavigationManager Nav
+
+<PageTitle>@(history?.Name ?? "Exercise") — The Lifting Lab</PageTitle>
+
+<div class="animate-fade-in">
+    @if (loading)
+    {
+        <div class="loading"><div class="spinner"></div></div>
+    }
+    else if (history is null)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">🔍</div>
+            <h3>Exercise not found</h3>
+            <p>No completed sets have been logged for this exercise.</p>
+            <button class="btn btn-primary mt-2" @onclick='() => Nav.NavigateTo("/exercises")'>Back to exercises</button>
+        </div>
+    }
+    else
+    {
+        <div class="page-header mb-3">
+            <h1>@history.Name</h1>
+            <button class="btn btn-sm" @onclick='() => Nav.NavigateTo("/exercises")'>All exercises</button>
+        </div>
+
+        <div class="exercise-record-grid mb-4">
+            <div class="exercise-record-card">
+                <div class="exercise-record-label">Best e1RM</div>
+                <div class="exercise-record-value">@FormatWeight(history.Best1Rm)</div>
+            </div>
+            <div class="exercise-record-card">
+                <div class="exercise-record-label">Heaviest</div>
+                <div class="exercise-record-value">@FormatWeight(history.HeaviestWeight)</div>
+            </div>
+            <div class="exercise-record-card">
+                <div class="exercise-record-label">Most reps</div>
+                <div class="exercise-record-value">@history.MostReps</div>
+            </div>
+            <div class="exercise-record-card">
+                <div class="exercise-record-label">Best volume</div>
+                <div class="exercise-record-value">@FormatWeight(history.BestVolume)</div>
+            </div>
+        </div>
+
+        @if (history.Latest is not null && history.Previous is not null)
+        {
+            <div class="exercise-compare mb-4">
+                <div class="exercise-compare-title">Last session vs previous</div>
+                <div class="exercise-compare-rows">
+                    <div class="exercise-compare-row">
+                        <span>Estimated 1RM</span>
+                        <span>@FormatWeight(history.Latest.Best1Rm) @RenderDelta(history.Latest.Change1RmVsPrevious)</span>
+                    </div>
+                    <div class="exercise-compare-row">
+                        <span>Volume</span>
+                        <span>@FormatWeight(history.Latest.Volume) @RenderDelta(history.Latest.ChangeVolumeVsPrevious)</span>
+                    </div>
+                    <div class="exercise-compare-row">
+                        <span>Top set</span>
+                        <span>@FormatWeight(history.Latest.HeaviestWeight) · @history.Latest.TotalReps total reps</span>
+                    </div>
+                </div>
+            </div>
+        }
+
+        <div class="exercise-session-list">
+            @foreach (var session in history.Sessions)
+            {
+                <div class="exercise-session @(session.IsBest1Rm ? "is-pr" : "")">
+                    <div class="exercise-session-head">
+                        <div>
+                            <div class="exercise-session-date">@session.Date.ToString("ddd, MMM d, yyyy")</div>
+                            <div class="exercise-session-meta">@session.Source · @session.SetCount sets · @FormatWeight(session.Volume) volume</div>
+                        </div>
+                        <div class="exercise-session-top">
+                            @if (session.IsBest1Rm)
+                            {
+                                <span class="badge badge-success">PR</span>
+                            }
+                            <span class="exercise-session-1rm">@FormatWeight(session.Best1Rm)</span>
+                            @RenderDelta(session.Change1RmVsPrevious)
+                        </div>
+                    </div>
+                    <div class="exercise-set-chips">
+                        @foreach (var set in session.Sets)
+                        {
+                            <span class="exercise-set-chip">
+                                @FormatWeight(set.Weight) × @set.Reps
+                                @if (!string.IsNullOrEmpty(set.SetLabel) && set.SetLabel != "Main")
+                                {
+                                    <em>@set.SetLabel</em>
+                                }
+                            </span>
+                        }
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Key { get; set; } = string.Empty;
+
+    private ExerciseHistory? history;
+    private bool loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        history = await HistoryService.GetExerciseHistoryAsync(Key);
+        loading = false;
+    }
+
+    private static string FormatWeight(double value) => value <= 0 ? "—" : $"{Math.Round(value):0} lb";
+
+    private RenderFragment? RenderDelta(double? delta)
+    {
+        if (delta is null || Math.Abs(delta.Value) < 0.5) return null;
+        var positive = delta.Value > 0;
+        var text = $"{(positive ? "+" : "−")}{Math.Abs(Math.Round(delta.Value)):0}";
+        return builder =>
+        {
+            builder.OpenElement(0, "span");
+            builder.AddAttribute(1, "class", positive ? "exercise-delta up" : "exercise-delta down");
+            builder.AddContent(2, text);
+            builder.CloseElement();
+        };
+    }
+}

@@ -34,6 +34,10 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 builder.Services.AddScoped<IWorkoutExportService, WorkoutExportService>();
 builder.Services.AddScoped<IAdditionalSessionService, AdditionalSessionService>();
 builder.Services.AddScoped<IDashboardAnalyticsService, DashboardAnalyticsService>();
+builder.Services.AddScoped<IExerciseHistoryService, ExerciseHistoryService>();
+builder.Services.Configure<ProgressPhotoOptions>(builder.Configuration.GetSection(ProgressPhotoOptions.SectionName));
+builder.Services.AddSingleton<IProgressPhotoProcessor, ProgressPhotoProcessor>();
+builder.Services.AddScoped<IBodyMetricService, BodyMetricService>();
 builder.Services.AddScoped<IWorkoutExportRenderer, MarkdownWorkoutExporter>();
 builder.Services.AddScoped<IWorkoutExportRenderer, PdfWorkoutExporter>();
 
@@ -62,7 +66,9 @@ void ConfigureDatabase(DbContextOptionsBuilder options)
     }
 }
 
-builder.Services.AddDbContext<AppDbContext>(ConfigureDatabase);
+// The scoped DbContext and the factory share one options instance, so the options must be
+// registered as a singleton — a singleton factory cannot consume scoped options.
+builder.Services.AddDbContext<AppDbContext>(ConfigureDatabase, optionsLifetime: ServiceLifetime.Singleton);
 builder.Services.AddDbContextFactory<AppDbContext>(ConfigureDatabase);
 
 // Data Protection \u2014 persist keys to DB so they survive container restarts on DO App Platform.
@@ -358,6 +364,16 @@ app.MapGet("/logout", async (SignInManager<ApplicationUser> signInManager, HttpC
     await signInManager.SignOutAsync();
     ctx.Response.Redirect("/login");
 });
+
+// Progress photos live in the database; the service resolves them only for the signed-in owner.
+app.MapGet("/api/progress-photos/{id:int}", async (
+    int id, bool? thumb, IBodyMetricService bodyMetrics, CancellationToken ct) =>
+{
+    var photo = await bodyMetrics.OpenPhotoAsync(id, thumb ?? false, ct);
+    return photo is null
+        ? Results.NotFound()
+        : Results.Bytes(photo.Value.Content, photo.Value.ContentType);
+}).RequireAuthorization();
 
 // Client-side error reporting — mobile browsers have no accessible console, so JS errors
 // (window.onerror / unhandledrejection) are POSTed here and logged server-side.

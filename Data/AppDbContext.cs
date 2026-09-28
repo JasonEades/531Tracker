@@ -30,6 +30,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<GoogleHealthConnection> GoogleHealthConnections => Set<GoogleHealthConnection>();
     public DbSet<DailyStepRecord> DailyStepRecords => Set<DailyStepRecord>();
 
+    // ── Body metrics ─────────────────────────────────────────────────────────
+    public DbSet<BodyMetricEntry> BodyMetricEntries => Set<BodyMetricEntry>();
+    public DbSet<ProgressPhoto> ProgressPhotos => Set<ProgressPhoto>();
+
     // ── PPL ──────────────────────────────────────────────────────────────────
     public DbSet<PplProgram> PplPrograms => Set<PplProgram>();
     public DbSet<PplDayTemplate> PplDayTemplates => Set<PplDayTemplate>();
@@ -244,6 +248,26 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
                   .HasForeignKey(e => e.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
             entity.Property(e => e.LocalDate).HasColumnType("date");
+        });
+
+        modelBuilder.Entity<BodyMetricEntry>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.RecordedOn }).IsUnique();
+            entity.HasOne(e => e.User)
+                  .WithMany()
+                  .HasForeignKey(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(e => e.RecordedOn).HasColumnType("date");
+        });
+
+        modelBuilder.Entity<ProgressPhoto>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.TakenOn });
+            entity.HasOne(e => e.User)
+                  .WithMany()
+                  .HasForeignKey(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(e => e.TakenOn).HasColumnType("date");
         });
 
         modelBuilder.Entity<AdditionalStrengthExercise>(entity =>

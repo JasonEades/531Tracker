@@ -1,0 +1,76 @@
+@page "/exercises"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IExerciseHistoryService HistoryService
+@inject NavigationManager Nav
+
+<PageTitle>Exercises — The Lifting Lab</PageTitle>
+
+<div class="animate-fade-in">
+    <div class="page-header mb-4">
+        <h1>Exercises</h1>
+    </div>
+
+    @if (loading)
+    {
+        <div class="loading"><div class="spinner"></div></div>
+    }
+    else if (exercises.Count == 0)
+    {
+        <div class="empty-state">
+            <div class="empty-state-icon">📈</div>
+            <h3>No completed work yet</h3>
+            <p>Log and complete some sets and every exercise you train will show up here.</p>
+        </div>
+    }
+    else
+    {
+        <div class="mb-3">
+            <input class="form-control" type="search" placeholder="Search exercises…"
+                   value="@search" @oninput="OnSearch" />
+        </div>
+
+        <div class="exercise-index">
+            @foreach (var exercise in Filtered)
+            {
+                <button class="exercise-index-row" @onclick="() => Open(exercise.Key)">
+                    <div class="exercise-index-main">
+                        <div class="exercise-index-name">@exercise.Name</div>
+                        <div class="exercise-index-meta">
+                            @exercise.SessionCount session@(exercise.SessionCount == 1 ? "" : "s")
+                            · last @exercise.LastPerformed.ToString("MMM d, yyyy")
+                            · @string.Join(" / ", exercise.Sources)
+                        </div>
+                    </div>
+                    <div class="exercise-index-stats">
+                        <div class="exercise-index-value">@FormatWeight(exercise.Best1Rm)</div>
+                        <div class="exercise-index-label">best e1RM</div>
+                    </div>
+                </button>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<ExerciseSummary> exercises = [];
+    private string search = string.Empty;
+    private bool loading = true;
+
+    private IEnumerable<ExerciseSummary> Filtered =>
+        string.IsNullOrWhiteSpace(search)
+            ? exercises
+            : exercises.Where(x => x.Name.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase));
+
+    protected override async Task OnInitializedAsync()
+    {
+        exercises = await HistoryService.GetExerciseSummariesAsync();
+        loading = false;
+    }
+
+    private void OnSearch(ChangeEventArgs e) => search = e.Value?.ToString() ?? string.Empty;
+
+    private void Open(string key) => Nav.NavigateTo($"/exercises/{key}");
+
+    private static string FormatWeight(double value) => value <= 0 ? "—" : $"{Math.Round(value):0} lb";
+}

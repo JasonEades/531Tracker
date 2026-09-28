@@ -374,13 +374,14 @@ else
             <div class="performance-records">
                 @foreach (var record in analytics.PersonalRecords.Take(12))
                 {
-                    <div class="performance-record">
+                    <a class="performance-record performance-record-link"
+                       href="@($"/exercises/{ExerciseHistoryService.BuildKey(record.ExerciseName)}")">
                         <div>
                             <strong>@record.ExerciseName</strong>
                             <div class="analytics-muted">@record.RecordType · @record.Date.ToLocalTime().ToString("MMM d, yyyy")</div>
                         </div>
                         <span class="badge badge-success">@FormatPersonalRecord(record)</span>
-                    </div>
+                    </a>
                 }
             </div>
         </div>

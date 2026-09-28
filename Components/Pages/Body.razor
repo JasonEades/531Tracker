@@ -1,0 +1,293 @@
+@page "/body"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IBodyMetricService BodyMetrics
+
+<PageTitle>Body — The Lifting Lab</PageTitle>
+
+<div class="animate-fade-in">
+    <div class="page-header mb-4">
+        <h1>Body</h1>
+    </div>
+
+    @if (loading)
+    {
+        <div class="loading"><div class="spinner"></div></div>
+    }
+    else
+    {
+        @if (trends.Count > 0)
+        {
+            <div class="body-trend-grid mb-4">
+                @foreach (var trend in trends)
+                {
+                    <div class="body-trend-card">
+                        <div class="body-trend-label">@trend.Label</div>
+                        <div class="body-trend-value">@FormatValue(trend.Latest) <small>@trend.Unit</small></div>
+                        <div class="body-trend-deltas">
+                            <span>30d @FormatDelta(trend.ChangeOver30Days)</span>
+                            <span>90d @FormatDelta(trend.ChangeOver90Days)</span>
+                        </div>
+                    </div>
+                }
+            </div>
+        }
+
+        <div class="card mb-4">
+            <div class="card-header">Log measurements</div>
+            <EditForm Model="form" OnValidSubmit="SaveAsync" FormName="body-metrics">
+                <div class="body-form-grid">
+                    <label>Date
+                        <InputDate class="form-control" @bind-Value="form.RecordedOn" />
+                    </label>
+                    <label>Weight (lb)
+                        <InputNumber class="form-control" @bind-Value="form.WeightLb" step="0.1" />
+                    </label>
+                    <label>Body fat (%)
+                        <InputNumber class="form-control" @bind-Value="form.BodyFatPercent" step="0.1" />
+                    </label>
+                    <label>Neck (in)
+                        <InputNumber class="form-control" @bind-Value="form.NeckInches" step="0.1" />
+                    </label>
+                    <label>Chest (in)
+                        <InputNumber class="form-control" @bind-Value="form.ChestInches" step="0.1" />
+                    </label>
+                    <label>Waist (in)
+                        <InputNumber class="form-control" @bind-Value="form.WaistInches" step="0.1" />
+                    </label>
+                    <label>Hips (in)
+                        <InputNumber class="form-control" @bind-Value="form.HipsInches" step="0.1" />
+                    </label>
+                    <label>Thigh (in)
+                        <InputNumber class="form-control" @bind-Value="form.ThighInches" step="0.1" />
+                    </label>
+                    <label>Arm (in)
+                        <InputNumber class="form-control" @bind-Value="form.ArmInches" step="0.1" />
+                    </label>
+                </div>
+                <label class="body-form-notes">Notes
+                    <InputTextArea class="form-control" rows="2" @bind-Value="form.Notes" />
+                </label>
+                <div class="flex items-center gap-2 mt-3">
+                    <button class="btn btn-primary" type="submit" disabled="@saving">Save entry</button>
+                    @if (!string.IsNullOrEmpty(saveMessage))
+                    {
+                        <span class="analytics-muted">@saveMessage</span>
+                    }
+                </div>
+            </EditForm>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">
+                Progress photos
+                @if (quota is not null)
+                {
+                    <span class="badge badge-muted">@quota.Used / @quota.Limit</span>
+                }
+            </div>
+
+            <p class="analytics-muted">
+                Photos are resized and compressed on upload to save space, and you can keep up to
+                @quota?.Limit at a time. Delete an older photo to make room.
+            </p>
+
+            <div class="body-photo-upload">
+                <label>Photo date
+                    <input class="form-control" type="date" @bind="photoDate" />
+                </label>
+                <label>Caption
+                    <input class="form-control" type="text" maxlength="200" @bind="photoCaption" placeholder="Optional" />
+                </label>
+                <InputFile OnChange="UploadPhotoAsync" accept="image/*" disabled="@(uploading || quota?.IsFull == true)" />
+            </div>
+
+            @if (!string.IsNullOrEmpty(photoMessage))
+            {
+                <div class="analytics-muted mt-2">@photoMessage</div>
+            }
+
+            @if (photos.Count > 0)
+            {
+                <div class="body-photo-grid mt-3">
+                    @foreach (var photo in photos)
+                    {
+                        <figure class="body-photo">
+                            <a href="@($"/api/progress-photos/{photo.Id}")" target="_blank" rel="noopener">
+                                <img src="@($"/api/progress-photos/{photo.Id}?thumb=true")"
+                                     alt="@(photo.Caption ?? "Progress photo")" loading="lazy" />
+                            </a>
+                            <figcaption>
+                                <span>@photo.TakenOn.ToString("MMM d, yyyy")</span>
+                                @if (!string.IsNullOrWhiteSpace(photo.Caption))
+                                {
+                                    <em>@photo.Caption</em>
+                                }
+                                <button class="btn btn-sm" @onclick="() => DeletePhotoAsync(photo.Id)">Delete</button>
+                            </figcaption>
+                        </figure>
+                    }
+                </div>
+            }
+        </div>
+
+        <div class="card">
+            <div class="card-header">History</div>
+            @if (entries.Count == 0)
+            {
+                <p class="analytics-muted">No entries yet. Log your first measurement above.</p>
+            }
+            else
+            {
+                <div class="estimated-1rm-table-wrapper">
+                    <table class="estimated-1rm-table">
+                        <thead>
+                            <tr>
+                                <th>Date</th><th>Weight</th><th>BF%</th><th>Chest</th>
+                                <th>Waist</th><th>Hips</th><th>Thigh</th><th>Arm</th><th></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var entry in entries)
+                            {
+                                <tr>
+                                    <th>@entry.RecordedOn.ToString("MMM d, yyyy")</th>
+                                    <td>@FormatValue(entry.WeightLb)</td>
+                                    <td>@FormatValue(entry.BodyFatPercent)</td>
+                                    <td>@FormatValue(entry.ChestInches)</td>
+                                    <td>@FormatValue(entry.WaistInches)</td>
+                                    <td>@FormatValue(entry.HipsInches)</td>
+                                    <td>@FormatValue(entry.ThighInches)</td>
+                                    <td>@FormatValue(entry.ArmInches)</td>
+                                    <td>
+                                        <button class="btn btn-sm" @onclick="() => EditEntry(entry)">Edit</button>
+                                        <button class="btn btn-sm" style="color:var(--color-danger)"
+                                                @onclick="() => DeleteEntryAsync(entry.Id)">Delete</button>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private readonly BodyMetricEntry form = new() { RecordedOn = DateTime.Today };
+    private List<BodyMetricEntry> entries = [];
+    private List<BodyMetricTrend> trends = [];
+    private List<ProgressPhotoInfo> photos = [];
+    private PhotoQuota? quota;
+
+    private DateTime photoDate = DateTime.Today;
+    private string? photoCaption;
+    private string? photoMessage;
+    private string? saveMessage;
+    private bool loading = true;
+    private bool saving;
+    private bool uploading;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await ReloadAsync();
+        loading = false;
+    }
+
+    private async Task ReloadAsync()
+    {
+        entries = await BodyMetrics.GetEntriesAsync();
+        trends = await BodyMetrics.GetTrendsAsync();
+        photos = await BodyMetrics.GetPhotosAsync();
+        quota = await BodyMetrics.GetPhotoQuotaAsync();
+    }
+
+    private async Task SaveAsync()
+    {
+        saving = true;
+        saveMessage = null;
+        try
+        {
+            if (!form.HasAnyValue)
+            {
+                saveMessage = "Enter at least one measurement.";
+                return;
+            }
+
+            await BodyMetrics.UpsertAsync(form);
+            await ReloadAsync();
+            saveMessage = "Saved.";
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void EditEntry(BodyMetricEntry entry)
+    {
+        form.RecordedOn = entry.RecordedOn;
+        form.WeightLb = entry.WeightLb;
+        form.BodyFatPercent = entry.BodyFatPercent;
+        form.NeckInches = entry.NeckInches;
+        form.ChestInches = entry.ChestInches;
+        form.WaistInches = entry.WaistInches;
+        form.HipsInches = entry.HipsInches;
+        form.ThighInches = entry.ThighInches;
+        form.ArmInches = entry.ArmInches;
+        form.Notes = entry.Notes;
+        saveMessage = null;
+    }
+
+    private async Task DeleteEntryAsync(int id)
+    {
+        await BodyMetrics.DeleteEntryAsync(id);
+        await ReloadAsync();
+    }
+
+    private async Task UploadPhotoAsync(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+
+        uploading = true;
+        photoMessage = null;
+        try
+        {
+            var maxBytes = 25L * 1024 * 1024;
+            await using var stream = file.OpenReadStream(maxBytes);
+            var result = await BodyMetrics.AddPhotoAsync(stream, file.Size, photoDate, photoCaption);
+            photoMessage = result.Success ? "Photo added." : result.Error;
+            if (result.Success)
+            {
+                photoCaption = null;
+                await ReloadAsync();
+            }
+        }
+        catch (IOException)
+        {
+            photoMessage = "That photo is too large to upload.";
+        }
+        finally
+        {
+            uploading = false;
+        }
+    }
+
+    private async Task DeletePhotoAsync(int id)
+    {
+        await BodyMetrics.DeletePhotoAsync(id);
+        photoMessage = null;
+        await ReloadAsync();
+    }
+
+    private static string FormatValue(double? value) => value.HasValue ? value.Value.ToString("0.#") : "—";
+
+    private static string FormatDelta(double? delta)
+    {
+        if (delta is null) return "—";
+        if (Math.Abs(delta.Value) < 0.05) return "0";
+        return (delta.Value > 0 ? "+" : "−") + Math.Abs(delta.Value).ToString("0.#");
+    }
+}
