@@ -51,8 +51,17 @@ public sealed class DashboardAnalyticsService(
                 CycleId = w.Week.CycleId,
                 CycleNumber = w.Week.Cycle.CycleNumber,
                 LiftType = w.MainLiftType,
+                WeekNumber = w.Week.WeekNumber,
                 Sets = w.Sets.Where(s => s.IsCompleted && s.ActualWeight.HasValue && s.ActualReps.HasValue)
-                    .Select(s => new ActualSetRow { Weight = s.ActualWeight!.Value, Reps = s.ActualReps!.Value, LiftName = s.Lift.Name, IsWarmup = s.SetType == SetType.Warmup })
+                    .Select(s => new ActualSetRow
+                    {
+                        Weight = s.ActualWeight!.Value,
+                        Reps = s.ActualReps!.Value,
+                        LiftName = s.Lift.Name,
+                        LiftKey = s.LiftId.ToString(),
+                        IsWarmup = s.SetType == SetType.Warmup,
+                        IsMainWork = s.SetType == SetType.Main
+                    })
                     .ToList()
             })
             .ToListAsync();
@@ -62,39 +71,95 @@ public sealed class DashboardAnalyticsService(
             .Select(x => new DailyStepPoint { Date = x.LocalDate, Steps = x.StepCount })
             .ToListAsync();
 
-        var pplSessions = await db.PplSessions.AsNoTracking()
+        var pplSessionHeaders = await db.PplSessions.AsNoTracking()
             .Where(s => s.Program.UserId == userId && s.Status == WorkoutStatus.Completed && s.OccurredOn >= historyStart)
-            .Select(s => new PplSessionRow
+            .Select(s => new { s.Id, s.OccurredOn })
+            .ToListAsync();
+
+        var pplSetRows = await db.PplSessionSets.AsNoTracking()
+            .Where(x => x.SessionExercise.Session.Program.UserId == userId
+                && x.SessionExercise.Session.Status == WorkoutStatus.Completed
+                && x.SessionExercise.Session.OccurredOn >= historyStart
+                && x.IsCompleted && x.ActualWeight.HasValue && x.ActualReps.HasValue)
+            .Select(x => new
             {
-                Date = s.OccurredOn,
-                Exercises = s.Exercises.Select(e => new PplExerciseRow
-                {
-                    Key = e.PplExerciseSlotId.ToString(),
-                    Name = e.ExerciseName,
-                    Sets = e.Sets.Where(x => x.IsCompleted && x.ActualWeight.HasValue && x.ActualReps.HasValue)
-                        .Select(x => new ActualSetRow { Weight = x.ActualWeight!.Value, Reps = x.ActualReps!.Value, LiftName = e.ExerciseName })
-                        .ToList()
-                }).ToList()
+                SessionId = x.SessionExercise.PplSessionId,
+                SlotId = x.SessionExercise.PplExerciseSlotId,
+                Name = x.SessionExercise.ExerciseName,
+                Weight = x.ActualWeight!.Value,
+                Reps = x.ActualReps!.Value
             })
             .ToListAsync();
 
-        var additional = await db.AdditionalSessions.AsNoTracking()
+        var pplExercisesBySession = pplSetRows
+            .GroupBy(x => x.SessionId)
+            .ToDictionary(
+                session => session.Key,
+                session => session
+                    .GroupBy(x => new { x.SlotId, x.Name })
+                    .Select(exercise => new PplExerciseRow
+                    {
+                        Key = exercise.Key.SlotId.ToString(),
+                        Name = exercise.Key.Name,
+                        Sets = exercise
+                            .Select(x => new ActualSetRow { Weight = x.Weight, Reps = x.Reps, LiftName = exercise.Key.Name, LiftKey = exercise.Key.SlotId.ToString() })
+                            .ToList()
+                    })
+                    .ToList());
+
+        var pplSessions = pplSessionHeaders
+            .Select(s => new PplSessionRow
+            {
+                Date = s.OccurredOn,
+                Exercises = pplExercisesBySession.GetValueOrDefault(s.Id) ?? []
+            })
+            .ToList();
+
+        var additionalHeaders = await db.AdditionalSessions.AsNoTracking()
             .Where(s => s.Status == WorkoutStatus.Completed &&
                 ((s.WeekId != null && s.Week!.Cycle.UserId == userId) ||
                  (s.CycleId != null && s.Cycle!.UserId == userId) ||
                  (s.PplWeekId != null && s.PplWeek!.Program.UserId == userId)) &&
                 s.OccurredOn >= historyStart)
+            .Select(s => new { s.Id, s.OccurredOn, s.SessionType })
+            .ToListAsync();
+
+        var additionalSessionIds = additionalHeaders.Select(s => s.Id).ToList();
+
+        var cardioRows = await db.CardioEntries.AsNoTracking()
+            .Where(e => additionalSessionIds.Contains(e.AdditionalSessionId))
+            .Select(e => new { e.AdditionalSessionId, e.Quantity, e.Unit })
+            .ToListAsync();
+
+        var additionalStrengthRows = await db.AdditionalStrengthSets.AsNoTracking()
+            .Where(x => additionalSessionIds.Contains(x.Exercise.AdditionalSessionId)
+                && x.Weight.HasValue && x.Reps.HasValue)
+            .Select(x => new
+            {
+                x.Exercise.AdditionalSessionId,
+                Name = x.Exercise.ExerciseName,
+                Weight = x.Weight!.Value,
+                Reps = x.Reps!.Value
+            })
+            .ToListAsync();
+
+        var cardioBySession = cardioRows
+            .GroupBy(x => x.AdditionalSessionId)
+            .ToDictionary(g => g.Key, g => g.Select(x => new CardioRow { Quantity = x.Quantity, Unit = x.Unit }).ToList());
+
+        var strengthSetsBySession = additionalStrengthRows
+            .GroupBy(x => x.AdditionalSessionId)
+            .ToDictionary(g => g.Key, g => g.Select(x => new ActualSetRow { Weight = x.Weight, Reps = x.Reps, LiftName = x.Name, LiftKey = x.Name }).ToList());
+
+        var additional = additionalHeaders
             .Select(s => new AdditionalRow
             {
                 Date = s.OccurredOn,
                 Type = s.SessionType,
-                Cardio = s.CardioEntries.Select(e => new CardioRow { Quantity = e.Quantity, Unit = e.Unit }).ToList(),
-                StrengthSets = s.StrengthExercises.SelectMany(e => e.Sets
-                    .Where(x => x.Weight.HasValue && x.Reps.HasValue)
-                    .Select(x => new ActualSetRow { Weight = x.Weight!.Value, Reps = x.Reps!.Value, LiftName = e.ExerciseName }))
-                    .ToList()
+                Cardio = cardioBySession.GetValueOrDefault(s.Id) ?? [],
+                StrengthSets = strengthSetsBySession.GetValueOrDefault(s.Id) ?? []
             })
-            .ToListAsync();
+            .ToList();
 
         var currentProgram = BuildCurrentProgram(currentCycle, pplSessions, additional, today);
         var allSessions = workouts.Select(w => w.Date).Concat(pplSessions.Select(s => s.Date)).Concat(additional.Select(s => s.Date));
@@ -200,8 +265,14 @@ public sealed class DashboardAnalyticsService(
 
     private List<StrengthAnalytics> BuildStrengthProgress(List<WorkoutRow> workouts, List<PplSessionRow> ppl, DateTime today, int? currentCycleId)
     {
-        var observations = workouts.SelectMany(w => w.Sets.Where(s => !s.IsWarmup).Select(s => new Observation { Key = $"531:{w.LiftType}", Name = s.LiftName, Date = w.Date, CycleId = w.CycleId, Value = weightCalculator.CalculateEstimated1RM(s.Weight, s.Reps) }))
-            .Concat(ppl.SelectMany(s => s.Exercises.SelectMany(e => e.Sets.Select(x => new Observation { Key = $"ppl:{e.Key}", Name = e.Name, Date = s.Date, Value = weightCalculator.CalculateEstimated1RM(x.Weight, x.Reps) })))).GroupBy(x => x.Key);
+        var observations = workouts
+            .Where(w => w.WeekNumber != WeekNumber.Week4)
+            .SelectMany(w => w.Sets
+                .Where(s => s.IsMainWork)
+                .Select(s => new Observation { Key = $"531:{s.LiftKey}", Name = s.LiftName, Date = w.Date, CycleId = w.CycleId, Value = weightCalculator.CalculateEstimated1RM(s.Weight, s.Reps) }))
+            .Concat(ppl.SelectMany(s => s.Exercises.SelectMany(e => e.Sets.Select(x => new Observation { Key = $"ppl:{e.Key}", Name = e.Name, Date = s.Date, Value = weightCalculator.CalculateEstimated1RM(x.Weight, x.Reps) }))))
+            .Where(x => x.Value > 0)
+            .GroupBy(x => x.Key);
         return observations.Select(group =>
         {
             var items = group
@@ -259,11 +330,11 @@ public sealed class DashboardAnalyticsService(
     private static DateTime StartOfWeek(DateTime date) => date.AddDays(-(int)date.DayOfWeek + (int)DayOfWeek.Monday).Date;
 
     private sealed class CurrentCycleRow { public int Id { get; init; } public string Name { get; init; } = ""; public string? CurrentWeek { get; init; } public int Planned { get; init; } public int Completed { get; init; } public int Additional { get; init; } }
-    private sealed class WorkoutRow { public DateTime Date { get; init; } public int CycleId { get; init; } public int CycleNumber { get; init; } public LiftType LiftType { get; init; } public List<ActualSetRow> Sets { get; init; } = []; }
+    private sealed class WorkoutRow { public DateTime Date { get; init; } public int CycleId { get; init; } public int CycleNumber { get; init; } public LiftType LiftType { get; init; } public WeekNumber WeekNumber { get; init; } public List<ActualSetRow> Sets { get; init; } = []; }
     private sealed class PplSessionRow { public DateTime Date { get; init; } public List<PplExerciseRow> Exercises { get; init; } = []; }
     private sealed class PplExerciseRow { public string Key { get; init; } = ""; public string Name { get; init; } = ""; public List<ActualSetRow> Sets { get; init; } = []; }
     private sealed class AdditionalRow { public DateTime Date { get; init; } public SessionType Type { get; init; } public List<CardioRow> Cardio { get; init; } = []; public List<ActualSetRow> StrengthSets { get; init; } = []; }
-    private sealed class ActualSetRow { public double Weight { get; init; } public int Reps { get; init; } public string LiftName { get; init; } = ""; public bool IsWarmup { get; init; } }
+    private sealed class ActualSetRow { public double Weight { get; init; } public int Reps { get; init; } public string LiftName { get; init; } = ""; public string LiftKey { get; init; } = ""; public bool IsWarmup { get; init; } public bool IsMainWork { get; init; } }
     private sealed record RecordObservation(string ExerciseName, DateTime Date, double Weight, int Reps);
     private sealed class CardioRow { public double Quantity { get; init; } public CardioUnit Unit { get; init; } }
     private sealed class Observation { public string Key { get; init; } = ""; public string Name { get; init; } = ""; public DateTime Date { get; init; } public int? CycleId { get; init; } public double Value { get; init; } }
