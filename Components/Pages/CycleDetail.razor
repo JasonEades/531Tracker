@@ -3,7 +3,6 @@
 @rendermode InteractiveServer
 @inject ICycleService CycleService
 @inject IAdditionalSessionService SessionService
-@inject ILiftService LiftService
 @inject IWorkoutExportService ExportService
 @inject IJSRuntime JS
 @inject NavigationManager Nav
@@ -63,7 +62,7 @@ else
                 </button>
                 @if (!cycle.IsCompleted && AllWorkoutsCompleted)
                 {
-                    <button class="btn btn-success btn-sm" @onclick="ShowCompletion">✓ Complete</button>
+                    <button class="btn btn-success btn-sm" @onclick="CompleteCycle" disabled="@completing">✓ Complete</button>
                 }
                 @if (cycle.IsCompleted && !showProgression)
                 {
@@ -90,31 +89,6 @@ else
             <div class="progress-bar-fill" style="width:@CyclePct%"></div>
         </div>
     </div>
-
-    @* ── Completion form ──────────────────────────────────── *@
-    @if (showCompletion)
-    {
-        <div class="setup-sheet animate-slide-up mb-4">
-            <div class="setup-sheet-header">
-                <h3>🎉 Complete Cycle</h3>
-                <button class="btn btn-ghost btn-sm" @onclick="() => showCompletion = false">✕</button>
-            </div>
-            <p class="text-muted mb-3" style="font-size:var(--text-sm)">Review your training maxes before completing. These carry forward to the next cycle.</p>
-            @foreach (var entry in completionEntries)
-            {
-                <div class="tm-adjust-row">
-                    <div class="tm-adjust-name">@entry.Name</div>
-                    <div class="tm-adjust-current">@entry.CurrentTm lbs</div>
-                    <input type="number" class="form-control form-control-sm tm-adjust-input"
-                           inputmode="numeric" @bind="entry.NewTm" step="5" />
-                </div>
-            }
-            <div class="flex gap-1 mt-3">
-                <button class="btn btn-success flex-1" @onclick="ConfirmCompletion" disabled="@completing">✓ Confirm & Complete</button>
-                <button class="btn btn-outline" @onclick="() => showCompletion = false">Cancel</button>
-            </div>
-        </div>
-    }
 
     @* ── Next cycle progression form ──────────────────────── *@
     @if (showProgression)
@@ -280,9 +254,7 @@ else
     private int CycleTotal => cycle?.Weeks.SelectMany(w => w.Workouts).Count() ?? 0;
     private int CycleDone  => cycle?.Weeks.SelectMany(w => w.Workouts).Count(w => w.Status == WorkoutStatus.Completed) ?? 0;
     private int CyclePct   => CycleTotal > 0 ? (int)(CycleDone * 100.0 / CycleTotal) : 0;
-    private bool showCompletion;
     private bool completing;
-    private List<CompletionEntry> completionEntries = [];
     private bool showProgression;
     private bool creating;
     private List<ProgressionEntry> progressionEntries = [];
@@ -300,39 +272,21 @@ else
         loading = false;
     }
 
-    private void ShowCompletion()
+    private async Task CompleteCycle()
     {
-        if (cycle is null) return;
-        var lifts = cycle.Weeks
-            .SelectMany(w => w.Workouts)
-            .SelectMany(w => w.Sets)
-            .Where(s => s.SetType == SetType.Main)
-            .Select(s => s.Lift)
-            .DistinctBy(l => l.Id)
-            .ToList();
-        completionEntries = lifts.Select(l => new CompletionEntry
-        {
-            LiftId    = l.Id,
-            LiftType  = l.LiftType,
-            Name      = l.Name,
-            CurrentTm = l.TrainingMax,
-            NewTm     = l.TrainingMax
-        }).ToList();
-        showCompletion = true;
-    }
+        if (cycle is null || completing) return;
+        if (!await JS.InvokeAsync<bool>("confirm", "Complete this cycle? Training max progression is handled in the Next Cycle step.")) return;
 
-    private async Task ConfirmCompletion()
-    {
         completing = true;
-        foreach (var entry in completionEntries)
+        try
         {
-            if (Math.Abs(entry.NewTm - entry.CurrentTm) > 0.01)
-                await LiftService.UpdateTrainingMaxAsync(entry.LiftId, entry.NewTm);
+            await CycleService.CompleteCycleAsync(CycleId);
+            cycle = await CycleService.GetCycleWithDetailsAsync(CycleId);
         }
-        await CycleService.CompleteCycleAsync(CycleId);
-        showCompletion = false;
-        completing = false;
-        cycle = await CycleService.GetCycleWithDetailsAsync(CycleId);
+        finally
+        {
+            completing = false;
+        }
     }
 
     private async Task DeleteCycle()
@@ -449,15 +403,6 @@ else
         WorkoutStatus.InProgress => "badge-warning",
         _                        => "badge-muted"
     };
-
-    private class CompletionEntry
-    {
-        public int LiftId { get; set; }
-        public LiftType LiftType { get; set; }
-        public string Name { get; set; } = "";
-        public double CurrentTm { get; set; }
-        public double NewTm { get; set; }
-    }
 
     private class ProgressionEntry
     {
