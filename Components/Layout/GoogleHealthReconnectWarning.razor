@@ -1,0 +1,21 @@
+@inject IGoogleHealthConnectionStatusService HealthStatus
+
+@if (warning is not null)
+{
+    <div class="alert alert-warning mt-3" role="alert">
+        <strong>Google Health needs attention.</strong>
+        @warning.Message
+        <a href="/settings" class="alert-link">Reconnect in Account Settings.</a>
+    </div>
+}
+
+@code {
+    private GoogleHealthWarning? warning;
+
+    protected override async Task OnInitializedAsync()
+    {
+        warning = await HealthStatus.GetWarningAsync();
+        if (warning is not null)
+            await HealthStatus.MarkWarningShownAsync();
+    }
+}

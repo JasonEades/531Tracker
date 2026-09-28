@@ -226,6 +226,7 @@ builder.Services.AddHttpClient("GoogleHealth", client =>
 builder.Services.AddScoped<IGoogleHealthAuthorizationService, GoogleHealthAuthorizationService>();
 builder.Services.AddScoped<IGoogleHealthApiClient, GoogleHealthApiClient>();
 builder.Services.AddScoped<IGoogleHealthSyncService, GoogleHealthSyncService>();
+builder.Services.AddScoped<IGoogleHealthConnectionStatusService, GoogleHealthConnectionStatusService>();
 builder.Services.AddHostedService<GoogleHealthSyncHostedService>();
 builder.Services.AddScoped<IWorkoutService, WorkoutService>();
 builder.Services.AddScoped<IProtocolService, ProtocolService>();
@@ -370,4 +371,3 @@ app.MapPost("/api/client-log", (ClientLogEntry entry, HttpContext ctx, ILoggerFa
 app.Run();
 
 record ClientLogEntry(string Message, string? Source, int? Line, int? Column, string? Url, string? Stack);
-

@@ -35,7 +35,18 @@ public sealed class GoogleHealthSyncService(
         if (endDate.Date < startDate.Date)
             throw new ArgumentException("The sync end date must not precede the start date.");
 
-        var payload = await apiClient.GetDailyStepsPayloadAsync(connection, startDate.Date, endDate.Date, cancellationToken);
+        string payload;
+        try
+        {
+            payload = await apiClient.GetDailyStepsPayloadAsync(connection, startDate.Date, endDate.Date, cancellationToken);
+        }
+        catch (GoogleHealthReconnectRequiredException ex)
+        {
+            connection.Status = HealthConnectionStatus.RequiresReconnect;
+            connection.LastSyncError = ex.Message;
+            await db.SaveChangesAsync(cancellationToken);
+            throw;
+        }
         var incoming = ParseRecords(payload, startDate.Date, endDate.Date);
         var imported = 0;
         var updated = 0;

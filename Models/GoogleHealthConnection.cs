@@ -36,4 +36,5 @@ public sealed class GoogleHealthConnection
     public DateTime? LastSyncedAtUtc { get; set; }
     public DateTime? RevokedAtUtc { get; set; }
     public string? LastSyncError { get; set; }
+    public DateTime? LastReconnectWarningAtUtc { get; set; }
 }

@@ -26,15 +26,21 @@
             <div class="eyebrow">HEALTH INTEGRATIONS</div>
             <h2>Google Health</h2>
         </div>
-        <span class="badge @(connection?.Status == HealthConnectionStatus.Connected ? "badge-success" : "badge-muted")">
-            @(connection?.Status == HealthConnectionStatus.Connected ? "Connected" : "Not connected")
+        <span class="badge @(connection?.Status == HealthConnectionStatus.Connected ? "badge-success" : connection?.Status == HealthConnectionStatus.RequiresReconnect ? "badge-warning" : "badge-muted")">
+            @(connection?.Status == HealthConnectionStatus.Connected ? "Connected" : connection?.Status == HealthConnectionStatus.RequiresReconnect ? "Reconnect required" : "Not connected")
         </span>
     </div>
     <div class="card-body health-integration-body">
         <p class="text-muted">Daily Google Health step totals are automatically added to your training weeks as Cardio → Steps.</p>
 
-        @if (connection?.Status == HealthConnectionStatus.Connected)
+        @if (connection?.Status is HealthConnectionStatus.Connected or HealthConnectionStatus.RequiresReconnect)
         {
+            @if (connection.Status == HealthConnectionStatus.RequiresReconnect)
+            {
+                <div class="alert alert-warning mt-3" role="alert">
+                    Google Health authorization has expired or was revoked. Reconnect to resume daily step imports.
+                </div>
+            }
             <div class="settings-grid mt-3">
                 <div><strong>Daily Steps</strong><br /><span class="text-muted">Read access granted</span></div>
                 <div><strong>Last synced</strong><br /><span class="text-muted">@(connection.LastSyncedAtUtc?.ToLocalTime().ToString("g") ?? "Not yet synced")</span></div>
@@ -300,6 +306,7 @@ else if (equipment is not null)
         catch (Exception ex)
         {
             error = ex.Message;
+            await LoadAsync();
         }
         finally
         {

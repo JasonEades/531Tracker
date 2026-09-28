@@ -13,6 +13,8 @@ using Microsoft.Extensions.Options;
 
 namespace FiveThreeOneTracker.Services;
 
+public sealed class GoogleHealthReconnectRequiredException(string message) : InvalidOperationException(message);
+
 public sealed class GoogleHealthOptions
 {
     public const string SectionName = "Authentication:GoogleHealth";
@@ -152,6 +154,7 @@ public sealed class GoogleHealthAuthorizationService(
         connection.ConnectedAtUtc = DateTime.UtcNow;
         connection.RevokedAtUtc = null;
         connection.LastSyncError = null;
+        connection.LastReconnectWarningAtUtc = null;
         await db.SaveChangesAsync();
         logger.LogInformation("Google Health OAuth connection saved for application user.");
         return connection;
@@ -222,7 +225,7 @@ public sealed class GoogleHealthApiClient(
         if (connection.AccessTokenExpiresAtUtc <= DateTime.UtcNow.AddMinutes(1))
         {
             if (string.IsNullOrWhiteSpace(connection.EncryptedRefreshToken))
-                throw new InvalidOperationException("Google Health authorization requires reconnecting.");
+                throw new GoogleHealthReconnectRequiredException("Google Health authorization requires reconnecting.");
 
             var refreshToken = protector.Unprotect(connection.EncryptedRefreshToken);
             using var tokenResponse = await client.PostAsync(options.Value.TokenEndpoint,
@@ -233,7 +236,8 @@ public sealed class GoogleHealthApiClient(
                     ["refresh_token"] = refreshToken,
                     ["grant_type"] = "refresh_token"
                 }), cancellationToken);
-            tokenResponse.EnsureSuccessStatusCode();
+            if (!tokenResponse.IsSuccessStatusCode)
+                throw new GoogleHealthReconnectRequiredException("Google Health authorization requires reconnecting.");
             var refreshed = await tokenResponse.Content.ReadFromJsonAsync<RefreshedToken>(cancellationToken: cancellationToken)
                 ?? throw new InvalidOperationException("Google returned an empty refresh response.");
             token = refreshed.AccessToken;
@@ -261,6 +265,9 @@ public sealed class GoogleHealthApiClient(
         using var response = await client.SendAsync(request, cancellationToken);
         if (!response.IsSuccessStatusCode)
         {
+            if (response.StatusCode is System.Net.HttpStatusCode.Unauthorized or System.Net.HttpStatusCode.Forbidden)
+                throw new GoogleHealthReconnectRequiredException("Google Health authorization requires reconnecting.");
+
             var providerError = await response.Content.ReadAsStringAsync(cancellationToken);
             if (string.IsNullOrWhiteSpace(providerError))
                 providerError = response.ReasonPhrase ?? "No response details were returned.";

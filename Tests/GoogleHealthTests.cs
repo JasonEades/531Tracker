@@ -81,4 +81,77 @@ public sealed class GoogleHealthTests
         Assert.Equal(100, analytics.CompletionPercent);
         Assert.Equal(7, analytics.AdditionalSessions);
     }
+
+    [Fact]
+    public async Task GoogleHealthWarningDetectsStaleSyncAndThrottlesForSevenDays()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+        await using var db = new AppDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+
+        db.Users.Add(new ApplicationUser { Id = "test-user", UserName = "test-user", NormalizedUserName = "TEST-USER" });
+        db.GoogleHealthConnections.Add(new GoogleHealthConnection
+        {
+            UserId = "test-user",
+            GoogleSubject = "subject",
+            EncryptedAccessToken = "token",
+            AccessTokenExpiresAtUtc = DateTime.UtcNow.AddHours(1),
+            GrantedScopes = "scope",
+            ConnectedAtUtc = DateTime.UtcNow.AddDays(-30),
+            LastSyncedAtUtc = DateTime.UtcNow.AddDays(-15)
+        });
+        await db.SaveChangesAsync();
+
+        var service = new GoogleHealthConnectionStatusService(db, new TestCurrentUserService());
+
+        Assert.NotNull(await service.GetWarningAsync());
+        await service.MarkWarningShownAsync();
+        Assert.Null(await service.GetWarningAsync());
+
+        var stored = await db.GoogleHealthConnections.SingleAsync();
+        stored.LastReconnectWarningAtUtc = DateTime.UtcNow.AddDays(-8);
+        await db.SaveChangesAsync();
+
+        Assert.NotNull(await service.GetWarningAsync());
+    }
+
+    [Fact]
+    public async Task GoogleHealthWarningDetectsReconnectRequiredButNotRevoked()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+        await using var db = new AppDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+
+        db.Users.Add(new ApplicationUser { Id = "test-user", UserName = "test-user", NormalizedUserName = "TEST-USER" });
+        db.GoogleHealthConnections.Add(new GoogleHealthConnection
+        {
+            UserId = "test-user",
+            GoogleSubject = "subject",
+            EncryptedAccessToken = "token",
+            AccessTokenExpiresAtUtc = DateTime.UtcNow.AddHours(1),
+            GrantedScopes = "scope",
+            Status = HealthConnectionStatus.RequiresReconnect,
+            LastSyncedAtUtc = DateTime.UtcNow.AddHours(-1)
+        });
+        await db.SaveChangesAsync();
+
+        var service = new GoogleHealthConnectionStatusService(db, new TestCurrentUserService());
+        Assert.Contains("no longer authorized", (await service.GetWarningAsync())!.Message);
+
+        var stored = await db.GoogleHealthConnections.SingleAsync();
+        stored.Status = HealthConnectionStatus.Revoked;
+        await db.SaveChangesAsync();
+
+        Assert.Null(await service.GetWarningAsync());
+    }
+
+    private sealed class TestCurrentUserService : ICurrentUserService
+    {
+        public Task<string> GetUserIdAsync() => Task.FromResult("test-user");
+        public Task<string?> GetUserIdOrNullAsync() => Task.FromResult<string?>("test-user");
+    }
 }
