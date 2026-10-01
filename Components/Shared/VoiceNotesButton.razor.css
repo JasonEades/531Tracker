@@ -67,3 +67,9 @@
         bottom: max(1rem, env(safe-area-inset-bottom, 0px));
     }
 }
+
+@media (min-width: 900px) {
+    .voice-notes-control {
+        left: calc(220px + var(--space-5));
+    }
+}
