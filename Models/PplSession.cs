@@ -25,5 +25,7 @@ public class PplSession
 
     public DateTime? CompletedAt { get; set; }
 
+    public string? Notes { get; set; }
+
     public ICollection<PplSessionExercise> Exercises { get; set; } = [];
 }

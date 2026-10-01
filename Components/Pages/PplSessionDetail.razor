@@ -72,6 +72,25 @@ else
 
     <RestTimerOverlay RemainingSeconds="restRemaining" OnStop="StopRestTimer" />
 
+    <div class="workout-notes-section animate-slide-up">
+        <div class="section-heading-row">
+            <div>
+                <h2 class="section-heading">Workout Notes</h2>
+                <p class="section-subtitle">Use Voice Notes from anywhere on this page; dictated phrases save automatically.</p>
+            </div>
+            <button class="btn btn-sm btn-primary" @onclick="SaveSessionNotes" disabled="@savingSessionNotes">
+                @(savingSessionNotes ? "Saving…" : "Save Notes")
+            </button>
+        </div>
+        <textarea class="form-control workout-notes-input" rows="5" @bind="session.Notes"
+                  placeholder="How did this workout feel? Record form cues, pain, energy, recovery, or changes."></textarea>
+    </div>
+
+    @if (session.Status != WorkoutStatus.Completed)
+    {
+        <VoiceNotesButton OnTranscript="AppendVoiceNotes" Disabled="@savingVoiceNotes" />
+    }
+
     @* ── Progress bar ────────────────────────────────────────── *@
     <div class="sets-progress mb-3 animate-fade-in">
         <div class="flex items-center justify-between mb-1">
@@ -176,6 +195,8 @@ else
     private PplSession? session;
     private bool loading = true;
     private bool savingSessionDate;
+    private bool savingSessionNotes;
+    private bool savingVoiceNotes;
     private DateTime sessionDate = DateTime.Today;
     private int restSeconds = 90;
     private int restRemaining;
@@ -244,6 +265,40 @@ else
         {
             restSeconds = Math.Clamp(seconds, 0, 600);
             await SessionService.UpdateRestSecondsAsync(SessionId, restSeconds);
+        }
+    }
+
+    private async Task SaveSessionNotes()
+    {
+        if (session is null) return;
+
+        savingSessionNotes = true;
+        try
+        {
+            await SessionService.UpdateSessionNotesAsync(session.Id, session.Notes);
+        }
+        finally
+        {
+            savingSessionNotes = false;
+        }
+    }
+
+    private async Task AppendVoiceNotes(string transcript)
+    {
+        if (session is null || string.IsNullOrWhiteSpace(transcript))
+            return;
+
+        var separator = string.IsNullOrWhiteSpace(session.Notes) ? string.Empty : " ";
+        session.Notes = $"{session.Notes}{separator}{transcript}";
+
+        savingVoiceNotes = true;
+        try
+        {
+            await SessionService.UpdateSessionNotesAsync(session.Id, session.Notes);
+        }
+        finally
+        {
+            savingVoiceNotes = false;
         }
     }
 

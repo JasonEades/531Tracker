@@ -134,6 +134,11 @@ else
                   placeholder="How did this workout feel? Record energy, recovery, changes, or anything unusual."></textarea>
     </div>
 
+    @if (workout.Status != WorkoutStatus.Completed)
+    {
+        <VoiceNotesButton OnTranscript="AppendVoiceNotes" Disabled="@savingVoiceNotes" />
+    }
+
     @* ── Warmup Sets ──────────────────────────────────── *@
     @if (warmupSets.Count > 0)
     {
@@ -561,6 +566,7 @@ else
     private bool loading = true;
     private bool exporting;
     private bool savingWorkoutNotes;
+    private bool savingVoiceNotes;
     private bool savingWorkoutDate;
     private string? exportError;
     private DateTime workoutDate = DateTime.Today;
@@ -800,6 +806,25 @@ else
         finally
         {
             savingWorkoutNotes = false;
+        }
+    }
+
+    private async Task AppendVoiceNotes(string transcript)
+    {
+        if (workout is null || string.IsNullOrWhiteSpace(transcript))
+            return;
+
+        var separator = string.IsNullOrWhiteSpace(workout.Notes) ? string.Empty : " ";
+        workout.Notes = $"{workout.Notes}{separator}{transcript}";
+
+        savingVoiceNotes = true;
+        try
+        {
+            await WorkoutService.UpdateWorkoutNotesAsync(workout.Id, workout.Notes);
+        }
+        finally
+        {
+            savingVoiceNotes = false;
         }
     }
 

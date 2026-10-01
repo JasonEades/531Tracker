@@ -1,0 +1,103 @@
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+<div class="voice-notes-control">
+    @if (listening || !string.IsNullOrWhiteSpace(error))
+    {
+        <div class="voice-notes-status @(error is not null ? "error" : "")">
+            @if (!string.IsNullOrWhiteSpace(error))
+            {
+                @error
+            }
+            else if (!string.IsNullOrWhiteSpace(interimText))
+            {
+                @interimText
+            }
+            else
+            {
+                <span>Listening… Speak naturally; notes save as you talk.</span>
+            }
+        </div>
+    }
+
+    <button class="voice-notes-fab @(listening ? "listening" : "")"
+            @onclick="Toggle" disabled="@Disabled"
+            aria-label="@(listening ? "Stop voice notes" : "Start voice notes")">
+        <span class="voice-notes-fab-icon">@(listening ? "■" : "🎙")</span>
+        <span>@(listening ? "Stop Dictation" : "Voice Notes")</span>
+    </button>
+</div>
+
+@code {
+    [Parameter] public EventCallback<string> OnTranscript { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+
+    private bool listening;
+    private string? interimText;
+    private string? error;
+    private DotNetObjectReference<VoiceNotesButton>? reference;
+
+    private async Task Toggle()
+    {
+        if (listening)
+        {
+            await JS.InvokeVoidAsync("voiceNotes.stop");
+            listening = false;
+            interimText = null;
+            return;
+        }
+
+        error = null;
+        reference ??= DotNetObjectReference.Create(this);
+        var started = await JS.InvokeAsync<bool>("voiceNotes.start", reference);
+        if (!started)
+        {
+            error = "Voice dictation is not supported by this browser. Try the installed app in Chrome or Safari.";
+            return;
+        }
+
+        listening = true;
+    }
+
+    [JSInvokable]
+    public async Task ReceiveVoiceTranscript(string finalText, string interim)
+    {
+        interimText = interim;
+        if (!string.IsNullOrWhiteSpace(finalText))
+            await OnTranscript.InvokeAsync(finalText.Trim());
+        await InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task VoiceNotesStopped()
+    {
+        listening = false;
+        interimText = null;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    [JSInvokable]
+    public Task VoiceNotesFailed(string message)
+    {
+        listening = false;
+        interimText = null;
+        error = message;
+        return InvokeAsync(StateHasChanged);
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (reference is not null)
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("voiceNotes.dispose");
+            }
+            catch (JSDisconnectedException)
+            {
+            }
+        }
+
+        reference?.Dispose();
+    }
+}
