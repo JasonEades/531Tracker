@@ -149,9 +149,32 @@ public sealed class GoogleHealthTests
         Assert.Null(await service.GetWarningAsync());
     }
 
+    [Fact]
+    public async Task GoogleHealthWarningDoesNothingForAnonymousUsers()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+        await using var db = new AppDbContext(options);
+        await db.Database.EnsureCreatedAsync();
+
+        var service = new GoogleHealthConnectionStatusService(db, new AnonymousCurrentUserService());
+
+        Assert.Null(await service.GetWarningAsync());
+        await service.MarkWarningShownAsync();
+    }
+
     private sealed class TestCurrentUserService : ICurrentUserService
     {
         public Task<string> GetUserIdAsync() => Task.FromResult("test-user");
         public Task<string?> GetUserIdOrNullAsync() => Task.FromResult<string?>("test-user");
+    }
+
+    private sealed class AnonymousCurrentUserService : ICurrentUserService
+    {
+        public Task<string> GetUserIdAsync() =>
+            throw new InvalidOperationException("User is not authenticated.");
+
+        public Task<string?> GetUserIdOrNullAsync() => Task.FromResult<string?>(null);
     }
 }

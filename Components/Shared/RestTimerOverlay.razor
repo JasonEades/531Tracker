@@ -1,0 +1,29 @@
+@* Persistent, always-visible rest-timer badge plus a big center-screen flash
+   during the last moments of the rest period, so the timer is never missed
+   even if the user has scrolled away from the inline timer controls. *@
+
+@if (RemainingSeconds > 0)
+{
+    <div class="rest-timer-float @(IsUrgent ? "urgent" : "")" @onclick="OnStopClicked">
+        <span class="rest-timer-float-label">Rest</span>
+        <span class="rest-timer-float-value">@FormatRest(RemainingSeconds)</span>
+    </div>
+
+    @if (IsUrgent)
+    {
+        <div class="rest-timer-flash" @key="RemainingSeconds" aria-hidden="true">
+            <span>@RemainingSeconds</span>
+        </div>
+    }
+}
+
+@code {
+    [Parameter] public int RemainingSeconds { get; set; }
+    [Parameter] public EventCallback OnStop { get; set; }
+
+    private bool IsUrgent => RemainingSeconds is > 0 and <= 10;
+
+    private static string FormatRest(int seconds) => $"{seconds / 60}:{seconds % 60:D2}";
+
+    private Task OnStopClicked() => OnStop.InvokeAsync();
+}

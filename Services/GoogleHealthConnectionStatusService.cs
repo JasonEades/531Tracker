@@ -61,7 +61,10 @@ public sealed class GoogleHealthConnectionStatusService(
         CancellationToken cancellationToken,
         bool tracked = false)
     {
-        var userId = await userContext.GetUserIdAsync();
+        var userId = await userContext.GetUserIdOrNullAsync();
+        if (userId is null)
+            return null;
+
         var query = queryDb.GoogleHealthConnections.AsQueryable();
         if (!tracked)
             query = query.AsNoTracking();
