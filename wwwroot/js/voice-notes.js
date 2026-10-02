@@ -4,6 +4,51 @@ window.voiceNotes = (() => {
     let shouldContinue = false;
     let stoppedNotified = false;
     let callbackQueue = Promise.resolve();
+    let processedFinalResults = new Set();
+    let emittedWords = [];
+    let lastEmissionAt = 0;
+
+    function normalizeWord(word) {
+        return word.toLocaleLowerCase().replace(/^[^\p{L}\p{N}]+|[^\p{L}\p{N}]+$/gu, "");
+    }
+
+    function removeRecentOverlap(text) {
+        const words = text.trim().split(/\s+/).filter(Boolean);
+        if (words.length === 0) {
+            return "";
+        }
+
+        const normalizedWords = words.map(normalizeWord);
+        const now = Date.now();
+        let overlap = 0;
+
+        // SpeechRecognition implementations can resend a cumulative final phrase.
+        // Only remove overlap from immediately adjacent results so users can
+        // intentionally repeat a phrase later in the same recording.
+        if (now - lastEmissionAt < 8000) {
+            const maxOverlap = Math.min(emittedWords.length, normalizedWords.length);
+            for (let length = maxOverlap; length > 0; length--) {
+                const previousStart = emittedWords.length - length;
+                const matches = normalizedWords
+                    .slice(0, length)
+                    .every((word, index) => word === emittedWords[previousStart + index]);
+                if (matches) {
+                    overlap = length;
+                    break;
+                }
+            }
+        }
+
+        if (overlap === words.length) {
+            return "";
+        }
+
+        const newWords = words.slice(overlap);
+        emittedWords.push(...newWords.map(normalizeWord));
+        emittedWords = emittedWords.slice(-150);
+        lastEmissionAt = now;
+        return newWords.join(" ");
+    }
 
     function notifyStopped() {
         if (stoppedNotified || !dotNetReference) {
@@ -40,18 +85,22 @@ window.voiceNotes = (() => {
         instance.lang = document.documentElement.lang || navigator.language || "en-US";
 
         instance.onresult = event => {
-            let finalText = "";
+            const finalParts = [];
             let interimText = "";
 
             for (let index = event.resultIndex; index < event.results.length; index++) {
                 const text = event.results[index][0].transcript;
                 if (event.results[index].isFinal) {
-                    finalText += text;
+                    if (!processedFinalResults.has(index)) {
+                        processedFinalResults.add(index);
+                        finalParts.push(text);
+                    }
                 } else {
-                    interimText += text;
+                    interimText += `${text} `;
                 }
             }
 
+            const finalText = removeRecentOverlap(finalParts.join(" "));
             if (dotNetReference) {
                 callbackQueue = callbackQueue.catch(() => {}).then(() =>
                     dotNetReference?.invokeMethodAsync(
@@ -78,6 +127,7 @@ window.voiceNotes = (() => {
                     }
 
                     try {
+                        processedFinalResults.clear();
                         recognition.start();
                     } catch {
                         shouldContinue = false;
@@ -107,6 +157,9 @@ window.voiceNotes = (() => {
             dotNetReference = dotNetRef;
             shouldContinue = true;
             stoppedNotified = false;
+            processedFinalResults.clear();
+            emittedWords = [];
+            lastEmissionAt = 0;
 
             try {
                 recognition.start();
