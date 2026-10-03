@@ -22,17 +22,10 @@
 }
 
 .login-logo {
-    width: 120px;
-    height: 120px;
+    width: 220px;
+    height: 220px;
     object-fit: contain;
     border-radius: var(--radius-lg, 16px);
-}
-
-.login-title {
-    font-size: var(--text-2xl, 1.5rem);
-    font-weight: 800;
-    color: var(--color-text);
-    margin: 0;
 }
 
 .login-subtitle {
