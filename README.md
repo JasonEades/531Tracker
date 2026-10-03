@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🏋️ The Lifting Lab
+# 🏋️ Jason's Garage Lab
 
 **A mobile-first workout tracker for 5/3/1 and Push/Pull/Legs strength training.**
 
