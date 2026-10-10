@@ -22,7 +22,14 @@ else if (entry is null)
 else
 {
     <article class="public-content-detail">
-        <a class="content-back-link" href="@BackUrl">← @(IsReviews ? "All reviews" : "All posts")</a>
+        <div class="content-detail-actions">
+            <a class="content-back-link" href="@BackUrl">← @(IsReviews ? "All reviews" : "All posts")</a>
+            <AuthorizeView Policy="@ContentEditorPolicy.Name">
+                <Authorized>
+                    <a class="btn btn-outline" href="@($"/admin/content?edit={Uri.EscapeDataString(entry.Slug)}")">Edit</a>
+                </Authorized>
+            </AuthorizeView>
+        </div>
         @if (entry.Type == SiteContentType.ProductReview)
         {
             <div class="eyebrow">@(entry.Brand is null ? entry.ProductName : $"{entry.Brand} · {entry.ProductName}")</div>

@@ -378,6 +378,14 @@ body:has(.writing-workspace.fullscreen) {
     align-self: center;
 }
 
+.content-detail-actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-3);
+    margin-bottom: var(--space-5);
+}
+
 .public-content-card h2 {
     margin: var(--space-2) 0;
 }
@@ -431,9 +439,8 @@ body:has(.writing-workspace.fullscreen) {
     margin: var(--space-3) 0 var(--space-2);
 }
 
-.public-content-detail .content-back-link {
-    display: inline-block;
-    margin-bottom: var(--space-5);
+.content-detail-actions .content-back-link {
+    margin: 0;
 }
 
 .public-content-detail .public-content-summary {

@@ -6,6 +6,8 @@
 @using FiveThreeOneTracker.Data
 @using FiveThreeOneTracker.Models
 @inject AppDbContext Db
+@inject NavigationManager Nav
+@inject ILogger<ContentManagement> Logger
 
 <PageTitle>Content Studio — Admin</PageTitle>
 
@@ -23,6 +25,37 @@
     <div class="alert @(messageIsError ? "alert-danger" : "alert-success")" role="status">@message</div>
 }
 
+@if (draftPreview is not null)
+{
+    <article class="card content-draft-preview">
+        <div class="card-header">
+            <div>
+                <span class="content-status draft">Draft · private</span>
+                <h2>@draftPreview.Title</h2>
+            </div>
+            <button class="btn btn-primary" @onclick="EditDraft">Edit draft</button>
+        </div>
+        <div class="card-body">
+            @if (!string.IsNullOrWhiteSpace(draftPreview.FeaturedImageUrl))
+            {
+                <figure class="content-article-featured-image">
+                    <img src="@draftPreview.FeaturedImageUrl" alt="@draftPreview.FeaturedImageCaption" />
+                    @if (!string.IsNullOrWhiteSpace(draftPreview.FeaturedImageCaption))
+                    {
+                        <figcaption>@draftPreview.FeaturedImageCaption</figcaption>
+                    }
+                </figure>
+            }
+            @if (!string.IsNullOrWhiteSpace(draftPreview.Summary))
+            {
+                <p class="public-content-summary">@draftPreview.Summary</p>
+            }
+            <div class="markdown-content">@((MarkupString)SiteContentMarkdown.ToSafeHtml(draftPreview.Body))</div>
+        </div>
+    </article>
+}
+else
+{
 <div class="content-studio-grid">
     <section class="card content-list-card">
         <div class="card-header"><h2>All content</h2></div>
@@ -206,11 +239,19 @@
         }
     </section>
 </div>
+}
 
 @code {
+    [SupplyParameterFromQuery(Name = "draft")]
+    public string? DraftSlug { get; set; }
+
+    [SupplyParameterFromQuery(Name = "edit")]
+    public string? EditSlug { get; set; }
+
     [Inject] private IJSRuntime JS { get; set; } = default!;
     private List<SiteContent> entries = [];
     private ContentEditor? editor;
+    private SiteContent? draftPreview;
     private bool loading = true;
     private bool saving;
     private bool confirmDelete;
@@ -223,7 +264,39 @@
     {
         await LoadEntries();
         loading = false;
-        NewContent();
+        editor = new ContentEditor();
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (!string.IsNullOrWhiteSpace(DraftSlug))
+        {
+            draftPreview = await Db.SiteContents.AsNoTracking().SingleOrDefaultAsync(item =>
+                item.Slug == DraftSlug && item.Status == SiteContentStatus.Draft);
+            editor = null;
+            if (draftPreview is null)
+                SetError("That draft could not be found.");
+            return;
+        }
+
+        if (!string.IsNullOrWhiteSpace(EditSlug))
+        {
+            var entry = await Db.SiteContents.AsNoTracking().SingleOrDefaultAsync(item =>
+                item.Slug == EditSlug && item.Status == SiteContentStatus.Published);
+            if (entry is not null)
+            {
+                editor = ContentEditor.From(entry);
+                draftPreview = null;
+            }
+            else
+            {
+                SetError("That published post could not be found.");
+            }
+            return;
+        }
+
+        draftPreview = null;
+        editor ??= new ContentEditor();
     }
 
     private async Task LoadEntries()
@@ -236,9 +309,24 @@
     private void NewContent()
     {
         editor = new ContentEditor();
+        draftPreview = null;
         confirmDelete = false;
         message = null;
         messageIsError = false;
+        Nav.NavigateTo("/admin/content", replace: true);
+    }
+
+    private void EditDraft()
+    {
+        if (draftPreview is null)
+            return;
+
+        editor = ContentEditor.From(draftPreview);
+        draftPreview = null;
+        confirmDelete = false;
+        message = null;
+        messageIsError = false;
+        Nav.NavigateTo("/admin/content", replace: true);
     }
 
     private int WordCount => string.IsNullOrWhiteSpace(editor?.Body)
@@ -304,6 +392,7 @@
         }
 
         editor = ContentEditor.From(entry);
+        draftPreview = null;
         confirmDelete = false;
         message = null;
         messageIsError = false;
@@ -335,15 +424,15 @@
             SetError("Featured photo URL must use HTTPS or a path within this site.");
             return;
         }
-        if (await Db.SiteContents.AnyAsync(entry => entry.Slug == slug && entry.Id != editor.Id))
-        {
-            SetError("That URL slug is already in use. Choose a different slug.");
-            return;
-        }
-
         saving = true;
         try
         {
+            if (await Db.SiteContents.AnyAsync(item => item.Slug == slug && item.Id != editor.Id))
+            {
+                SetError("That URL slug is already in use. Choose a different slug.");
+                return;
+            }
+
             var now = DateTime.UtcNow;
             SiteContent entry;
             if (editor.Id is int id)
@@ -378,13 +467,26 @@
             editor.Id = entry.Id;
             editor.Slug = entry.Slug;
             confirmDelete = false;
-            message = entry.Status == SiteContentStatus.Published ? "Content saved and published." : "Draft saved.";
-            messageIsError = false;
             await LoadEntries();
+            if (entry.Status == SiteContentStatus.Published)
+            {
+                Nav.NavigateTo($"/{(entry.Type == SiteContentType.BlogPost ? "blog" : "reviews")}/{Uri.EscapeDataString(entry.Slug)}");
+            }
+            else
+            {
+                Nav.NavigateTo($"/admin/content?draft={Uri.EscapeDataString(entry.Slug)}");
+            }
         }
-        catch (DbUpdateException)
+        catch (DbUpdateException ex)
         {
+            Logger.LogError(ex, "Database rejected content save for slug {Slug}.", slug);
             SetError("Could not save this content. Check that its URL slug is unique and try again.");
+            Db.ChangeTracker.Clear();
+        }
+        catch (Exception ex)
+        {
+            Logger.LogError(ex, "Could not save content with slug {Slug}.", slug);
+            SetError("Could not save this content. Please try again. If the problem continues, check the application logs.");
         }
         finally
         {
