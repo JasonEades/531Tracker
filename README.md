@@ -74,6 +74,15 @@ timer remains available if audio is blocked or unsupported.
 Turn off **Settings > Rest Timer > Rest countdown beeps** to mute both timers.
 This preference defaults to on and is saved in the current browser.
 
+### Publishing
+
+Only the Admin account `jason.eades1@gmail.com` can access **Admin > Content** to
+write, save drafts, edit, and publish training articles and product reviews.
+The editor includes formatting tools, live Markdown preview, split view, and
+fullscreen writing. Published articles are available at `/blog` and reviews at
+`/reviews`; unpublished drafts remain private. Raw HTML and unsafe link
+destinations are disabled.
+
 ### Additional primary-lift sets
 
 Additional work can be recorded directly from a primary-lift workout without changing the programmed prescription. Each additional set supports:

@@ -1,0 +1,476 @@
+@page "/admin/content"
+@attribute [Authorize(Policy = ContentEditorPolicy.Name)]
+@rendermode InteractiveServer
+@using System.Text.RegularExpressions
+@using Microsoft.EntityFrameworkCore
+@using FiveThreeOneTracker.Data
+@using FiveThreeOneTracker.Models
+@inject AppDbContext Db
+
+<PageTitle>Content Studio — Admin</PageTitle>
+
+<div class="page-header">
+    <div>
+        <div class="eyebrow">ADMIN</div>
+        <h1>Content Studio</h1>
+        <p class="text-muted">Write blog posts and product reviews. Drafts stay private until published.</p>
+    </div>
+    <button class="btn btn-primary" @onclick="NewContent">New content</button>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(message))
+{
+    <div class="alert @(messageIsError ? "alert-danger" : "alert-success")" role="status">@message</div>
+}
+
+<div class="content-studio-grid">
+    <section class="card content-list-card">
+        <div class="card-header"><h2>All content</h2></div>
+        @if (loading)
+        {
+            <div class="card-body text-muted">Loading content…</div>
+        }
+        else if (entries.Count == 0)
+        {
+            <div class="card-body text-muted">No content yet. Create a post or review to get started.</div>
+        }
+        else
+        {
+            <div class="content-list">
+                @foreach (var entry in entries)
+                {
+                    <div class="content-list-item @(editor?.Id == entry.Id ? "selected" : "")">
+                        <button class="content-list-select" @onclick="() => EditContent(entry.Id)">
+                            <strong>@entry.Title</strong>
+                            <span>@(entry.Type == SiteContentType.BlogPost ? "Blog post" : "Product review")</span>
+                        </button>
+                        <span class="content-status @(entry.Status == SiteContentStatus.Published ? "published" : "draft")">@entry.Status</span>
+                    </div>
+                }
+            </div>
+        }
+    </section>
+
+    <section class="card content-editor-card">
+        <div class="card-header"><h2>@(editor?.Id is null ? "Create content" : "Edit content")</h2></div>
+        @if (editor is not null)
+        {
+            <div class="card-body content-editor">
+                <div class="form-group">
+                    <label class="form-label" for="content-type">Content type</label>
+                    <select id="content-type" class="form-control" @bind="editor.Type">
+                        <option value="@SiteContentType.BlogPost">Blog post</option>
+                        <option value="@SiteContentType.ProductReview">Product review</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="content-title">Title</label>
+                    <input id="content-title" class="form-control" @bind="editor.Title" maxlength="160" required />
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="content-slug">URL slug</label>
+                    <input id="content-slug" class="form-control" @bind="editor.Slug" maxlength="180" required />
+                    <small class="text-muted">Public URL: /@(editor.Type == SiteContentType.BlogPost ? "blog" : "reviews")/@editor.Slug</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="content-summary">Short description</label>
+                    <textarea id="content-summary" class="form-control" @bind="editor.Summary" maxlength="400" rows="2"></textarea>
+                </div>
+                <div class="content-featured-image-fields">
+                    <div class="form-group">
+                        <label class="form-label" for="content-featured-image">Featured photo URL</label>
+                        <input id="content-featured-image" class="form-control" @bind="editor.FeaturedImageUrl" maxlength="1000" placeholder="https://… or /images/…" />
+                        <small class="text-muted">Shown on the dashboard and article. Use an HTTPS URL or a path within this site.</small>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="content-featured-caption">Photo caption</label>
+                        <input id="content-featured-caption" class="form-control" @bind="editor.FeaturedImageCaption" maxlength="240" placeholder="A brief caption for the photo" />
+                    </div>
+                </div>
+                @if (!string.IsNullOrWhiteSpace(editor.FeaturedImageUrl) && IsAllowedFeaturedImageUrl(editor.FeaturedImageUrl))
+                {
+                    <figure class="content-featured-preview">
+                        <img src="@editor.FeaturedImageUrl" alt="@editor.FeaturedImageCaption" />
+                        @if (!string.IsNullOrWhiteSpace(editor.FeaturedImageCaption))
+                        {
+                            <figcaption>@editor.FeaturedImageCaption</figcaption>
+                        }
+                    </figure>
+                }
+                @if (editor.Type == SiteContentType.ProductReview)
+                {
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label" for="product-name">Product</label>
+                            <input id="product-name" class="form-control" @bind="editor.ProductName" maxlength="160" required />
+                        </div>
+                        <div class="form-group">
+                            <label class="form-label" for="product-brand">Brand</label>
+                            <input id="product-brand" class="form-control" @bind="editor.Brand" maxlength="120" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="form-label" for="product-rating">Rating</label>
+                        <select id="product-rating" class="form-control" @bind="editor.Rating">
+                            <option value="">Choose a rating</option>
+                            @for (var rating = 1; rating <= 5; rating++)
+                            {
+                                <option value="@rating">@rating / 5</option>
+                            }
+                        </select>
+                    </div>
+                }
+                <div class="form-group">
+                    <div class="editor-heading">
+                        <label class="form-label" for="content-body">Article / review</label>
+                        <div class="editor-view-switch" role="group" aria-label="Editor layout">
+                            <button class="editor-view-button @(editorView == EditorView.Write ? "active" : "")" @onclick="() => SetEditorView(EditorView.Write)">Write</button>
+                            <button class="editor-view-button @(editorView == EditorView.Split ? "active" : "")" @onclick="() => SetEditorView(EditorView.Split)">Split</button>
+                            <button class="editor-view-button @(editorView == EditorView.Preview ? "active" : "")" @onclick="() => SetEditorView(EditorView.Preview)">Preview</button>
+                        </div>
+                    </div>
+                    <div class="writing-workspace @(isFullscreen ? "fullscreen" : "")">
+                        <div class="writing-toolbar" role="toolbar" aria-label="Formatting">
+                            <div class="writing-tool-group">
+                                <button type="button" title="Bold (Ctrl+B)" aria-label="Bold" @onclick="InsertBold"><strong>B</strong></button>
+                                <button type="button" title="Italic (Ctrl+I)" aria-label="Italic" @onclick="InsertItalic"><em>I</em></button>
+                                <button type="button" title="Strikethrough" aria-label="Strikethrough" @onclick="InsertStrikethrough"><s>S</s></button>
+                                <span class="writing-tool-divider"></span>
+                                <button type="button" title="Heading 2" aria-label="Heading 2" @onclick="InsertHeadingTwo">H2</button>
+                                <button type="button" title="Heading 3" aria-label="Heading 3" @onclick="InsertHeadingThree">H3</button>
+                            </div>
+                            <div class="writing-tool-group">
+                                <button type="button" title="Bulleted list" aria-label="Bulleted list" @onclick="InsertBulletedList">• List</button>
+                                <button type="button" title="Numbered list" aria-label="Numbered list" @onclick="InsertNumberedList">1. List</button>
+                                <button type="button" title="Quote" aria-label="Quote" @onclick="InsertQuote">❝</button>
+                                <button type="button" title="Inline code" aria-label="Inline code" @onclick="InsertInlineCode">&lt;/&gt;</button>
+                                <button type="button" title="Code block" aria-label="Code block" @onclick="InsertCodeBlock">Code</button>
+                            </div>
+                            <div class="writing-tool-group">
+                                <button type="button" title="Add link" aria-label="Add link" @onclick="InsertLink">↗ Link</button>
+                                <button type="button" title="Add image" aria-label="Add image" @onclick="InsertImage">▧ Image</button>
+                                <button type="button" title="Horizontal rule" aria-label="Horizontal rule" @onclick="InsertHorizontalRule">―</button>
+                            </div>
+                            <div class="writing-tool-group writing-tool-right">
+                                <button type="button" title="Undo" aria-label="Undo" @onclick="UndoEdit">↶</button>
+                                <button type="button" title="Redo" aria-label="Redo" @onclick="RedoEdit">↷</button>
+                                <button type="button" title="Toggle fullscreen" aria-label="Toggle fullscreen" @onclick="ToggleFullscreen">@(isFullscreen ? "× Close" : "⛶ Expand")</button>
+                            </div>
+                        </div>
+                        <div class="writing-panes">
+                            @if (editorView is EditorView.Write or EditorView.Split)
+                            {
+                                <div class="writing-source-pane">
+                                    <textarea id="content-body" class="form-control content-body-editor" @bind="editor.Body" @bind:event="oninput" rows="18" required placeholder="Start writing your article or review in Markdown…"></textarea>
+                                    <div class="writing-status"><span>Markdown</span><span>@WordCount words · @editor.Body.Length characters</span></div>
+                                </div>
+                            }
+                            @if (editorView is EditorView.Preview or EditorView.Split)
+                            {
+                                <div class="writing-preview-pane" aria-label="Live preview">
+                                    @if (string.IsNullOrWhiteSpace(editor.Body))
+                                    {
+                                        <span class="writing-preview-empty">Your formatted content will appear here.</span>
+                                    }
+                                    else
+                                    {
+                                        <div class="markdown-content">@((MarkupString)SiteContentMarkdown.ToSafeHtml(editor.Body))</div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <small class="text-muted">Markdown formatting is supported. Raw HTML and unsafe link destinations are disabled. Shortcuts: Ctrl/⌘+B bold, Ctrl/⌘+I italic.</small>
+                </div>
+                <div class="form-group">
+                    <label class="form-label" for="content-status">Visibility</label>
+                    <select id="content-status" class="form-control" @bind="editor.Status">
+                        <option value="@SiteContentStatus.Draft">Draft — only visible here</option>
+                        <option value="@SiteContentStatus.Published">Published — visible to everyone</option>
+                    </select>
+                </div>
+                <div class="content-editor-actions">
+                    <button class="btn btn-primary" @onclick="SaveContent" disabled="@saving">@(saving ? "Saving…" : "Save")</button>
+                    @if (editor.Id is not null && confirmDelete)
+                    {
+                        <span class="text-muted">Delete this content?</span>
+                        <button class="btn btn-danger" @onclick="DeleteContent" disabled="@saving">Confirm delete</button>
+                        <button class="btn btn-outline" @onclick="() => confirmDelete = false" disabled="@saving">Cancel</button>
+                    }
+                    else if (editor.Id is not null)
+                    {
+                        <button class="btn btn-outline" @onclick="() => confirmDelete = true" disabled="@saving">Delete</button>
+                    }
+                </div>
+            </div>
+        }
+    </section>
+</div>
+
+@code {
+    [Inject] private IJSRuntime JS { get; set; } = default!;
+    private List<SiteContent> entries = [];
+    private ContentEditor? editor;
+    private bool loading = true;
+    private bool saving;
+    private bool confirmDelete;
+    private bool isFullscreen;
+    private EditorView editorView = EditorView.Write;
+    private string? message;
+    private bool messageIsError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadEntries();
+        loading = false;
+        NewContent();
+    }
+
+    private async Task LoadEntries()
+    {
+        entries = await Db.SiteContents.AsNoTracking()
+            .OrderByDescending(entry => entry.UpdatedAtUtc)
+            .ToListAsync();
+    }
+
+    private void NewContent()
+    {
+        editor = new ContentEditor();
+        confirmDelete = false;
+        message = null;
+        messageIsError = false;
+    }
+
+    private int WordCount => string.IsNullOrWhiteSpace(editor?.Body)
+        ? 0
+        : Regex.Matches(editor.Body.Trim(), @"\S+").Count;
+
+    private void SetEditorView(EditorView view) => editorView = view;
+
+    private async Task InsertMarkdown(string prefix, string suffix, string placeholder) =>
+        await JS.InvokeVoidAsync("contentWritingEditor.wrapSelection", prefix, suffix, placeholder);
+
+    private Task InsertBold() => InsertMarkdown("**", "**", "bold text");
+
+    private Task InsertItalic() => InsertMarkdown("*", "*", "italic text");
+
+    private Task InsertStrikethrough() => InsertMarkdown("~~", "~~", "strikethrough");
+
+    private Task InsertInlineCode() => InsertMarkdown("`", "`", "code");
+
+    private async Task InsertMarkdownLine(string prefix, string placeholder) =>
+        await JS.InvokeVoidAsync("contentWritingEditor.insertLinePrefix", prefix, placeholder);
+
+    private Task InsertHeadingTwo() => InsertMarkdownLine("## ", "Heading");
+
+    private Task InsertHeadingThree() => InsertMarkdownLine("### ", "Subheading");
+
+    private Task InsertBulletedList() => InsertMarkdownLine("- ", "List item");
+
+    private Task InsertNumberedList() => InsertMarkdownLine("1. ", "List item");
+
+    private Task InsertQuote() => InsertMarkdownLine("> ", "Quote");
+
+    private async Task InsertMarkdownBlock(string prefix, string suffix, string placeholder) =>
+        await JS.InvokeVoidAsync("contentWritingEditor.insertBlock", prefix, suffix, placeholder);
+
+    private Task InsertCodeBlock() => InsertMarkdownBlock("```\n", "\n```", "code");
+
+    private Task InsertHorizontalRule() => InsertMarkdownBlock("\n", "\n\n---\n\n", "");
+
+    private async Task InsertLink() =>
+        await JS.InvokeVoidAsync("contentWritingEditor.insertLink");
+
+    private async Task InsertImage() =>
+        await JS.InvokeVoidAsync("contentWritingEditor.insertImage");
+
+    private async Task RunEditorCommand(string command) =>
+        await JS.InvokeVoidAsync("contentWritingEditor.command", command);
+
+    private Task UndoEdit() => RunEditorCommand("undo");
+
+    private Task RedoEdit() => RunEditorCommand("redo");
+
+    private void ToggleFullscreen() => isFullscreen = !isFullscreen;
+
+    private async Task EditContent(int id)
+    {
+        var entry = await Db.SiteContents.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id);
+        if (entry is null)
+        {
+            SetError("That content could not be found. Refresh the page and try again.");
+            await LoadEntries();
+            return;
+        }
+
+        editor = ContentEditor.From(entry);
+        confirmDelete = false;
+        message = null;
+        messageIsError = false;
+    }
+
+    private async Task SaveContent()
+    {
+        if (editor is null)
+            return;
+
+        message = null;
+        var title = editor.Title.Trim();
+        var slug = NormalizeSlug(string.IsNullOrWhiteSpace(editor.Slug) ? title : editor.Slug);
+        var body = editor.Body.Trim();
+
+        if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(slug) || string.IsNullOrWhiteSpace(body))
+        {
+            SetError("Title, URL slug, and article/review are required.");
+            return;
+        }
+        if (editor.Type == SiteContentType.ProductReview &&
+            (string.IsNullOrWhiteSpace(editor.ProductName) || editor.Rating is null or < 1 or > 5))
+        {
+            SetError("Product reviews need a product name and a rating from 1 to 5.");
+            return;
+        }
+        if (!string.IsNullOrWhiteSpace(editor.FeaturedImageUrl) && !IsAllowedFeaturedImageUrl(editor.FeaturedImageUrl))
+        {
+            SetError("Featured photo URL must use HTTPS or a path within this site.");
+            return;
+        }
+        if (await Db.SiteContents.AnyAsync(entry => entry.Slug == slug && entry.Id != editor.Id))
+        {
+            SetError("That URL slug is already in use. Choose a different slug.");
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var now = DateTime.UtcNow;
+            SiteContent entry;
+            if (editor.Id is int id)
+            {
+                entry = await Db.SiteContents.SingleOrDefaultAsync(item => item.Id == id)
+                    ?? throw new InvalidOperationException("The content being edited no longer exists.");
+            }
+            else
+            {
+                entry = new SiteContent { CreatedAtUtc = now };
+                Db.SiteContents.Add(entry);
+            }
+
+            entry.Type = editor.Type;
+            entry.Status = editor.Status;
+            entry.Title = title;
+            entry.Slug = slug;
+            entry.Summary = editor.Summary.Trim();
+            entry.FeaturedImageUrl = string.IsNullOrWhiteSpace(editor.FeaturedImageUrl) ? null : editor.FeaturedImageUrl.Trim();
+            entry.FeaturedImageCaption = string.IsNullOrWhiteSpace(editor.FeaturedImageCaption) ? null : editor.FeaturedImageCaption.Trim();
+            entry.Body = body;
+            entry.ProductName = editor.Type == SiteContentType.ProductReview ? editor.ProductName.Trim() : null;
+            entry.Brand = editor.Type == SiteContentType.ProductReview && !string.IsNullOrWhiteSpace(editor.Brand)
+                ? editor.Brand.Trim()
+                : null;
+            entry.Rating = editor.Type == SiteContentType.ProductReview ? editor.Rating : null;
+            entry.UpdatedAtUtc = now;
+            if (entry.Status == SiteContentStatus.Published)
+                entry.PublishedAtUtc ??= now;
+
+            await Db.SaveChangesAsync();
+            editor.Id = entry.Id;
+            editor.Slug = entry.Slug;
+            confirmDelete = false;
+            message = entry.Status == SiteContentStatus.Published ? "Content saved and published." : "Draft saved.";
+            messageIsError = false;
+            await LoadEntries();
+        }
+        catch (DbUpdateException)
+        {
+            SetError("Could not save this content. Check that its URL slug is unique and try again.");
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private async Task DeleteContent()
+    {
+        if (editor?.Id is not int id)
+            return;
+
+        var entry = await Db.SiteContents.SingleOrDefaultAsync(item => item.Id == id);
+        if (entry is null)
+        {
+            SetError("That content could not be found.");
+            await LoadEntries();
+            return;
+        }
+
+        Db.SiteContents.Remove(entry);
+        await Db.SaveChangesAsync();
+        NewContent();
+        message = "Content deleted.";
+        await LoadEntries();
+    }
+
+    private void SetError(string text)
+    {
+        message = text;
+        messageIsError = true;
+    }
+
+    private static string NormalizeSlug(string value)
+    {
+        var slug = value.Trim().ToLowerInvariant();
+        slug = Regex.Replace(slug, @"[^a-z0-9]+", "-").Trim('-');
+        return slug.Length > 180 ? slug[..180].TrimEnd('-') : slug;
+    }
+
+    private static bool IsAllowedFeaturedImageUrl(string value)
+    {
+        var url = value.Trim();
+        return url.StartsWith("/", StringComparison.Ordinal) &&
+                !url.StartsWith("//", StringComparison.Ordinal) &&
+                !url.Any(char.IsControl)
+            || Uri.TryCreate(url, UriKind.Absolute, out var uri) &&
+                string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private sealed class ContentEditor
+    {
+        public int? Id { get; set; }
+        public SiteContentType Type { get; set; }
+        public SiteContentStatus Status { get; set; } = SiteContentStatus.Draft;
+        public string Title { get; set; } = "";
+        public string Slug { get; set; } = "";
+        public string Summary { get; set; } = "";
+        public string FeaturedImageUrl { get; set; } = "";
+        public string FeaturedImageCaption { get; set; } = "";
+        public string Body { get; set; } = "";
+        public string ProductName { get; set; } = "";
+        public string Brand { get; set; } = "";
+        public int? Rating { get; set; }
+
+        public static ContentEditor From(SiteContent entry) => new()
+        {
+            Id = entry.Id,
+            Type = entry.Type,
+            Status = entry.Status,
+            Title = entry.Title,
+            Slug = entry.Slug,
+            Summary = entry.Summary,
+            FeaturedImageUrl = entry.FeaturedImageUrl ?? "",
+            FeaturedImageCaption = entry.FeaturedImageCaption ?? "",
+            Body = entry.Body,
+            ProductName = entry.ProductName ?? "",
+            Brand = entry.Brand ?? "",
+            Rating = entry.Rating
+        };
+    }
+
+    private enum EditorView
+    {
+        Write,
+        Split,
+        Preview
+    }
+}

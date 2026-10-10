@@ -105,6 +105,17 @@
         <span class="nav-label">Settings</span>
     </NavLink>
 
+    <AuthorizeView Policy="@ContentEditorPolicy.Name">
+        <NavLink href="/admin/content" Match="NavLinkMatch.Prefix" class="nav-item nav-item-admin">
+            <span class="nav-icon-wrap">
+                <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 4h16v16H4z"/>
+                    <path d="M8 8h8M8 12h8M8 16h5"/>
+                </svg>
+            </span>
+            <span class="nav-label">Content</span>
+        </NavLink>
+    </AuthorizeView>
     <AuthorizeView Roles="Admin">
         <NavLink href="/admin/users" Match="NavLinkMatch.Prefix" class="nav-item nav-item-admin">
             <span class="nav-icon-wrap">

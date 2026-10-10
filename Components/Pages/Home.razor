@@ -1,6 +1,9 @@
 @page "/"
 @attribute [Authorize]
 @rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using FiveThreeOneTracker.Data
+@using FiveThreeOneTracker.Models
 @inject ICycleService CycleService
 @inject ILiftService LiftService
 @inject IPplProgramService PplProgramService
@@ -8,9 +11,27 @@
 @inject IUserInitService UserInitService
 @inject ICurrentUserService UserContext
 @inject IDashboardAnalyticsService DashboardAnalyticsService
+@inject AppDbContext Db
 @inject NavigationManager Nav
 
 <PageTitle>Dashboard — Jason's Garage Lab</PageTitle>
+
+@if (!loading && recentBlogPost is not null)
+{
+    <a class="dashboard-blog-feature" href="@RecentBlogPostUrl" aria-label="@($"Read blog post: {recentBlogPost.Title}")">
+        <img src="@(recentBlogPost.FeaturedImageUrl ?? "images/baselogo-192.png")"
+             alt="@(recentBlogPost.FeaturedImageCaption ?? recentBlogPost.Title)"
+             class="dashboard-blog-feature-image" />
+        <span class="dashboard-blog-feature-copy">
+            <span class="dashboard-blog-feature-label">LATEST FROM THE BLOG</span>
+            <span class="dashboard-blog-feature-title">@recentBlogPost.Title</span>
+            @if (!string.IsNullOrWhiteSpace(recentBlogPost.FeaturedImageCaption))
+            {
+                <span class="dashboard-blog-feature-caption">@recentBlogPost.FeaturedImageCaption</span>
+            }
+        </span>
+    </a>
+}
 
 @if (loading)
 {
@@ -404,6 +425,10 @@ else
     private PplSession? nextPplSession;
     private bool loading = true;
     private DashboardAnalytics? analytics;
+    private SiteContent? recentBlogPost;
+    private string RecentBlogPostUrl => recentBlogPost is null
+        ? "/blog"
+        : $"/blog/{Uri.EscapeDataString(recentBlogPost.Slug)}";
     private bool showSetup;
     private bool enableBbb;
     private bool enableWarmup;
@@ -428,6 +453,11 @@ else
 
     private async Task LoadData()
     {
+        recentBlogPost = await Db.SiteContents.AsNoTracking()
+            .Where(post => post.Type == SiteContentType.BlogPost && post.Status == SiteContentStatus.Published)
+            .OrderByDescending(post => post.PublishedAtUtc)
+            .ThenByDescending(post => post.Id)
+            .FirstOrDefaultAsync();
         analytics = await DashboardAnalyticsService.GetDashboardAsync();
         currentCycle = await CycleService.GetCurrentCycleAsync();
         if (analytics.Program.ProgramType == "5/3/1")

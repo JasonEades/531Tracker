@@ -1,0 +1,69 @@
+@page "/blog/{Slug}"
+@page "/reviews/{Slug}"
+@using Microsoft.EntityFrameworkCore
+@using FiveThreeOneTracker.Data
+@using FiveThreeOneTracker.Models
+@inject AppDbContext Db
+@inject NavigationManager Nav
+
+<PageTitle>@(entry?.Title ?? "Article") — Jason's Garage Lab</PageTitle>
+
+@if (loading)
+{
+    <div class="loading"><div class="spinner"></div></div>
+}
+else if (entry is null)
+{
+    <div class="page-header">
+        <div><div class="eyebrow">NOT FOUND</div><h1>Content not found</h1></div>
+    </div>
+    <a class="btn btn-outline" href="@BackUrl">Back to @(IsReviews ? "reviews" : "blog")</a>
+}
+else
+{
+    <article class="public-content-detail">
+        <a class="content-back-link" href="@BackUrl">← @(IsReviews ? "All reviews" : "All posts")</a>
+        @if (entry.Type == SiteContentType.ProductReview)
+        {
+            <div class="eyebrow">@(entry.Brand is null ? entry.ProductName : $"{entry.Brand} · {entry.ProductName}")</div>
+            <div class="content-rating" aria-label="@($"{entry.Rating} out of 5 stars")">@RatingStars(entry.Rating ?? 0) <span>@entry.Rating/5</span></div>
+        }
+        <h1>@entry.Title</h1>
+        <time datetime="@entry.PublishedAtUtc?.ToString("O")">@entry.PublishedAtUtc?.ToString("MMMM d, yyyy")</time>
+        @if (!string.IsNullOrWhiteSpace(entry.FeaturedImageUrl))
+        {
+            <figure class="content-article-featured-image">
+                <img src="@entry.FeaturedImageUrl" alt="@entry.FeaturedImageCaption" />
+                @if (!string.IsNullOrWhiteSpace(entry.FeaturedImageCaption))
+                {
+                    <figcaption>@entry.FeaturedImageCaption</figcaption>
+                }
+            </figure>
+        }
+        @if (!string.IsNullOrWhiteSpace(entry.Summary))
+        {
+            <p class="public-content-summary">@entry.Summary</p>
+        }
+        <div class="markdown-content">@((MarkupString)SiteContentMarkdown.ToSafeHtml(entry.Body))</div>
+    </article>
+}
+
+@code {
+    [Parameter] public string Slug { get; set; } = "";
+
+    private SiteContent? entry;
+    private bool loading = true;
+    private bool IsReviews => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("reviews/", StringComparison.OrdinalIgnoreCase);
+    private string BackUrl => IsReviews ? "/reviews" : "/blog";
+
+    protected override async Task OnParametersSetAsync()
+    {
+        loading = true;
+        var expectedType = IsReviews ? SiteContentType.ProductReview : SiteContentType.BlogPost;
+        entry = await Db.SiteContents.AsNoTracking().SingleOrDefaultAsync(item =>
+            item.Slug == Slug && item.Type == expectedType && item.Status == SiteContentStatus.Published);
+        loading = false;
+    }
+
+    private static string RatingStars(int rating) => new string('★', rating) + new string('☆', 5 - rating);
+}

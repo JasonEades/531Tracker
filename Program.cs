@@ -207,7 +207,11 @@ builder.Services.ConfigureApplicationCookie(options =>
 
 // Blazor auth
 builder.Services.AddCascadingAuthenticationState();
-builder.Services.AddAuthorizationCore();
+builder.Services.AddAuthorizationCore(options =>
+{
+    options.AddPolicy(ContentEditorPolicy.Name, policy =>
+        policy.RequireAssertion(context => ContentEditorPolicy.IsAuthorized(context.User)));
+});
 
 // Application services
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();

@@ -29,6 +29,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<UserProtocol> UserProtocols => Set<UserProtocol>();
     public DbSet<GoogleHealthConnection> GoogleHealthConnections => Set<GoogleHealthConnection>();
     public DbSet<DailyStepRecord> DailyStepRecords => Set<DailyStepRecord>();
+    public DbSet<SiteContent> SiteContents => Set<SiteContent>();
 
     // ── Body metrics ─────────────────────────────────────────────────────────
     public DbSet<BodyMetricEntry> BodyMetricEntries => Set<BodyMetricEntry>();
@@ -268,6 +269,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
                   .HasForeignKey(e => e.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
             entity.Property(e => e.TakenOn).HasColumnType("date");
+        });
+
+        modelBuilder.Entity<SiteContent>(entity =>
+        {
+            entity.HasIndex(e => e.Slug).IsUnique();
+            entity.HasIndex(e => new { e.Type, e.Status, e.PublishedAtUtc });
+            entity.Property(e => e.Type).HasConversion<string>();
+            entity.Property(e => e.Status).HasConversion<string>();
+            entity.Property(e => e.FeaturedImageUrl).HasMaxLength(1000);
+            entity.Property(e => e.FeaturedImageCaption).HasMaxLength(240);
         });
 
         modelBuilder.Entity<AdditionalStrengthExercise>(entity =>
