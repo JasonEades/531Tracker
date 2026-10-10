@@ -14,6 +14,14 @@
         <h1>@(IsReviews ? "Product Reviews" : "Training Blog")</h1>
         <p class="text-muted">@(IsReviews ? "Reviews of training gear and products." : "Training notes, ideas, and updates.")</p>
     </div>
+    @if (!IsReviews)
+    {
+        <AuthorizeView Policy="@ContentEditorPolicy.Name">
+            <Authorized>
+                <a class="btn btn-primary content-new-post-button" href="/admin/content">New post</a>
+            </Authorized>
+        </AuthorizeView>
+    }
 </div>
 
 @if (loading)

@@ -373,6 +373,11 @@ body:has(.writing-workspace.fullscreen) {
     gap: var(--space-4);
 }
 
+.content-new-post-button {
+    flex: 0 0 auto;
+    align-self: center;
+}
+
 .public-content-card h2 {
     margin: var(--space-2) 0;
 }
@@ -463,6 +468,10 @@ body:has(.writing-workspace.fullscreen) {
 }
 
 @media (max-width: 760px) {
+    .content-new-post-button {
+        align-self: flex-start;
+    }
+
     .content-studio-grid {
         grid-template-columns: 1fr;
     }
