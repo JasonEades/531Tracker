@@ -16,28 +16,47 @@
 
 <PageTitle>Dashboard — Jason's Garage Lab</PageTitle>
 
-@if (!loading && recentBlogPost is not null)
+@if (!loading && (recentReview is not null || recentBlogPost is not null))
 {
-    <a class="dashboard-blog-feature" href="@RecentBlogPostUrl" aria-label="@($"Read {RecentContentTypeLabel}: {recentBlogPost.Title}")">
-        <img src="@(recentBlogPost.FeaturedImageUrl ?? "images/baselogo-192.png")"
-             alt="@(recentBlogPost.FeaturedImageCaption ?? recentBlogPost.Title)"
-             class="dashboard-blog-feature-image" />
-        <span class="dashboard-blog-feature-copy">
-            <span class="dashboard-blog-feature-label">LATEST · @RecentContentTypeLabel.ToUpperInvariant()</span>
-            <span class="dashboard-blog-feature-title">@recentBlogPost.Title</span>
-            @if (recentBlogPost.Type == SiteContentType.ProductReview && recentBlogPost.Rating is int rating)
+    <div class="dashboard-content-features">
+        @foreach (var featureType in new[] { SiteContentType.ProductReview, SiteContentType.BlogPost })
+        {
+            var item = featureType == SiteContentType.ProductReview ? recentReview : recentBlogPost;
+            var itemTypeLabel = featureType == SiteContentType.ProductReview ? "Product review" : "Blog post";
+            if (item is null)
             {
-                <span class="dashboard-blog-feature-rating" aria-label="@($"{rating} out of 5 stars")">
-                    <span aria-hidden="true">@RatingStars(rating)</span>
-                    <span>@rating/5</span>
+                <div class="dashboard-blog-feature dashboard-blog-feature-empty">
+                    <span class="dashboard-blog-feature-copy">
+                        <span class="dashboard-blog-feature-label">LATEST · @itemTypeLabel.ToUpperInvariant()</span>
+                        <span class="dashboard-blog-feature-caption">No published @(featureType == SiteContentType.ProductReview ? "reviews" : "posts") yet.</span>
+                    </span>
+                </div>
+                continue;
+            }
+
+            var itemUrl = $"/{(item.Type == SiteContentType.ProductReview ? "reviews" : "blog")}/{Uri.EscapeDataString(item.Slug)}";
+            <a class="dashboard-blog-feature" href="@itemUrl" aria-label="@($"Read {itemTypeLabel}: {item.Title}")">
+                <img src="@(item.FeaturedImageUrl ?? "images/baselogo-192.png")"
+                     alt="@(item.FeaturedImageCaption ?? item.Title)"
+                     class="dashboard-blog-feature-image" />
+                <span class="dashboard-blog-feature-copy">
+                    <span class="dashboard-blog-feature-label">LATEST · @itemTypeLabel.ToUpperInvariant()</span>
+                    <span class="dashboard-blog-feature-title">@item.Title</span>
+                    @if (item.Type == SiteContentType.ProductReview && item.Rating is int rating)
+                    {
+                        <span class="dashboard-blog-feature-rating" aria-label="@($"{rating} out of 5 stars")">
+                            <span aria-hidden="true">@RatingStars(rating)</span>
+                            <span>@rating/5</span>
+                        </span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(item.FeaturedImageCaption))
+                    {
+                        <span class="dashboard-blog-feature-caption">@item.FeaturedImageCaption</span>
+                    }
                 </span>
-            }
-            @if (!string.IsNullOrWhiteSpace(recentBlogPost.FeaturedImageCaption))
-            {
-                <span class="dashboard-blog-feature-caption">@recentBlogPost.FeaturedImageCaption</span>
-            }
-        </span>
-    </a>
+            </a>
+        }
+    </div>
 }
 
 @if (loading)
@@ -432,12 +451,9 @@ else
     private PplSession? nextPplSession;
     private bool loading = true;
     private DashboardAnalytics? analytics;
+    private SiteContent? recentReview;
     private SiteContent? recentBlogPost;
-    private string RecentContentTypeLabel => recentBlogPost?.Type == SiteContentType.ProductReview ? "Product review" : "Blog post";
     private static string RatingStars(int rating) => new string('★', rating) + new string('☆', 5 - rating);
-    private string RecentBlogPostUrl => recentBlogPost is null
-        ? "/blog"
-        : $"/{(recentBlogPost.Type == SiteContentType.ProductReview ? "reviews" : "blog")}/{Uri.EscapeDataString(recentBlogPost.Slug)}";
     private bool showSetup;
     private bool enableBbb;
     private bool enableWarmup;
@@ -462,8 +478,13 @@ else
 
     private async Task LoadData()
     {
+        recentReview = await Db.SiteContents.AsNoTracking()
+            .Where(post => post.Type == SiteContentType.ProductReview && post.Status == SiteContentStatus.Published)
+            .OrderByDescending(post => post.PublishedAtUtc)
+            .ThenByDescending(post => post.Id)
+            .FirstOrDefaultAsync();
         recentBlogPost = await Db.SiteContents.AsNoTracking()
-            .Where(post => post.Status == SiteContentStatus.Published)
+            .Where(post => post.Type == SiteContentType.BlogPost && post.Status == SiteContentStatus.Published)
             .OrderByDescending(post => post.PublishedAtUtc)
             .ThenByDescending(post => post.Id)
             .FirstOrDefaultAsync();
