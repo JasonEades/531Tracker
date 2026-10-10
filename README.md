@@ -81,7 +81,8 @@ write, save drafts, edit, and publish training articles and product reviews.
 The editor includes formatting tools, live Markdown preview, split view, and
 fullscreen writing. Published articles are available at `/blog` and reviews at
 `/reviews`; unpublished drafts remain private. Raw HTML and unsafe link
-destinations are disabled.
+destinations are disabled. Posts and reviews support captioned photo galleries
+with compact thumbnails that open in a full-size lightbox.
 
 ### Additional primary-lift sets
 

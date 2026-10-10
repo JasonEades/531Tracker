@@ -1228,6 +1228,36 @@ namespace FiveThreeOneTracker.Migrations
                     b.ToTable("SiteContents");
                 });
 
+            modelBuilder.Entity("FiveThreeOneTracker.Models.SiteContentImage", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Caption")
+                        .HasMaxLength(240)
+                        .HasColumnType("character varying(240)");
+
+                    b.Property<int>("SiteContentId")
+                        .HasColumnType("integer");
+
+                    b.Property<int>("SortOrder")
+                        .HasColumnType("integer");
+
+                    b.Property<string>("Url")
+                        .IsRequired()
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteContentId", "SortOrder");
+
+                    b.ToTable("SiteContentImages");
+                });
+
             modelBuilder.Entity("FiveThreeOneTracker.Models.UserEquipment", b =>
                 {
                     b.Property<int>("Id")
@@ -1831,6 +1861,17 @@ namespace FiveThreeOneTracker.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("FiveThreeOneTracker.Models.SiteContentImage", b =>
+                {
+                    b.HasOne("FiveThreeOneTracker.Models.SiteContent", "SiteContent")
+                        .WithMany("Images")
+                        .HasForeignKey("SiteContentId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("SiteContent");
+                });
+
             modelBuilder.Entity("FiveThreeOneTracker.Models.Week", b =>
                 {
                     b.HasOne("FiveThreeOneTracker.Models.Cycle", "Cycle")
@@ -2021,6 +2062,11 @@ namespace FiveThreeOneTracker.Migrations
                     b.Navigation("AdditionalSessions");
 
                     b.Navigation("Sessions");
+                });
+
+            modelBuilder.Entity("FiveThreeOneTracker.Models.SiteContent", b =>
+                {
+                    b.Navigation("Images");
                 });
 
             modelBuilder.Entity("FiveThreeOneTracker.Models.UserEquipment", b =>

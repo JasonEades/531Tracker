@@ -53,4 +53,23 @@ public class SiteContent
     public DateTime UpdatedAtUtc { get; set; } = DateTime.UtcNow;
 
     public DateTime? PublishedAtUtc { get; set; }
+
+    public List<SiteContentImage> Images { get; set; } = [];
+}
+
+public class SiteContentImage
+{
+    public int Id { get; set; }
+
+    public int SiteContentId { get; set; }
+
+    public SiteContent SiteContent { get; set; } = null!;
+
+    [Required, MaxLength(1000)]
+    public string Url { get; set; } = "";
+
+    [MaxLength(240)]
+    public string? Caption { get; set; }
+
+    public int SortOrder { get; set; }
 }

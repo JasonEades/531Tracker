@@ -130,6 +130,34 @@ else
                         }
                     </figure>
                 }
+                <div class="content-gallery-editor">
+                    <div class="content-gallery-editor-heading">
+                        <div>
+                            <label class="form-label">Photo gallery</label>
+                            <p class="text-muted">Add multiple photos. Visitors can open each image in a full-size lightbox.</p>
+                        </div>
+                        <button type="button" class="btn btn-outline btn-sm" @onclick="AddGalleryImage">+ Add photo</button>
+                    </div>
+                    @for (var imageIndex = 0; imageIndex < editor.Images.Count; imageIndex++)
+                    {
+                        var galleryImage = editor.Images[imageIndex];
+                        <div class="content-gallery-editor-row" @key="galleryImage">
+                            <div class="form-group">
+                                <label class="form-label" for="@($"gallery-image-url-{imageIndex}")">Photo URL</label>
+                                <input id="@($"gallery-image-url-{imageIndex}")" class="form-control" @bind="galleryImage.Url" maxlength="1000" placeholder="https://… or /images/…" />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="@($"gallery-image-caption-{imageIndex}")">Caption</label>
+                                <input id="@($"gallery-image-caption-{imageIndex}")" class="form-control" @bind="galleryImage.Caption" maxlength="240" placeholder="Optional photo caption" />
+                            </div>
+                            <button type="button" class="btn btn-outline btn-sm" aria-label="Remove photo" @onclick="() => RemoveGalleryImage(galleryImage)">Remove</button>
+                        </div>
+                        @if (!string.IsNullOrWhiteSpace(galleryImage.Url) && IsAllowedFeaturedImageUrl(galleryImage.Url))
+                        {
+                            <img class="content-gallery-editor-thumb" src="@galleryImage.Url" alt="@galleryImage.Caption" />
+                        }
+                    }
+                </div>
                 @if (editor.Type == SiteContentType.ProductReview)
                 {
                     <div class="form-row">
@@ -271,7 +299,7 @@ else
     {
         if (!string.IsNullOrWhiteSpace(DraftSlug))
         {
-            draftPreview = await Db.SiteContents.AsNoTracking().SingleOrDefaultAsync(item =>
+            draftPreview = await Db.SiteContents.AsNoTracking().Include(item => item.Images).SingleOrDefaultAsync(item =>
                 item.Slug == DraftSlug && item.Status == SiteContentStatus.Draft);
             editor = null;
             if (draftPreview is null)
@@ -281,7 +309,7 @@ else
 
         if (!string.IsNullOrWhiteSpace(EditSlug))
         {
-            var entry = await Db.SiteContents.AsNoTracking().SingleOrDefaultAsync(item =>
+            var entry = await Db.SiteContents.AsNoTracking().Include(item => item.Images).SingleOrDefaultAsync(item =>
                 item.Slug == EditSlug && item.Status == SiteContentStatus.Published);
             if (entry is not null)
             {
@@ -383,7 +411,7 @@ else
 
     private async Task EditContent(int id)
     {
-        var entry = await Db.SiteContents.AsNoTracking().SingleOrDefaultAsync(item => item.Id == id);
+        var entry = await Db.SiteContents.AsNoTracking().Include(item => item.Images).SingleOrDefaultAsync(item => item.Id == id);
         if (entry is null)
         {
             SetError("That content could not be found. Refresh the page and try again.");
@@ -424,6 +452,11 @@ else
             SetError("Featured photo URL must use HTTPS or a path within this site.");
             return;
         }
+        if (editor.Images.Any(image => !string.IsNullOrWhiteSpace(image.Url) && !IsAllowedFeaturedImageUrl(image.Url)))
+        {
+            SetError("Gallery photo URLs must use HTTPS or a path within this site.");
+            return;
+        }
         saving = true;
         try
         {
@@ -437,7 +470,7 @@ else
             SiteContent entry;
             if (editor.Id is int id)
             {
-                entry = await Db.SiteContents.SingleOrDefaultAsync(item => item.Id == id)
+                entry = await Db.SiteContents.Include(item => item.Images).SingleOrDefaultAsync(item => item.Id == id)
                     ?? throw new InvalidOperationException("The content being edited no longer exists.");
             }
             else
@@ -459,6 +492,15 @@ else
                 ? editor.Brand.Trim()
                 : null;
             entry.Rating = editor.Type == SiteContentType.ProductReview ? editor.Rating : null;
+            entry.Images.Clear();
+            entry.Images.AddRange(editor.Images
+                .Where(image => !string.IsNullOrWhiteSpace(image.Url))
+                .Select((image, index) => new SiteContentImage
+                {
+                    Url = image.Url.Trim(),
+                    Caption = string.IsNullOrWhiteSpace(image.Caption) ? null : image.Caption.Trim(),
+                    SortOrder = index
+                }));
             entry.UpdatedAtUtc = now;
             if (entry.Status == SiteContentStatus.Published)
                 entry.PublishedAtUtc ??= now;
@@ -537,6 +579,10 @@ else
                 string.Equals(uri.Scheme, Uri.UriSchemeHttps, StringComparison.OrdinalIgnoreCase);
     }
 
+    private void AddGalleryImage() => editor?.Images.Add(new GalleryImageEditor());
+
+    private void RemoveGalleryImage(GalleryImageEditor image) => editor?.Images.Remove(image);
+
     private sealed class ContentEditor
     {
         public int? Id { get; set; }
@@ -551,6 +597,7 @@ else
         public string ProductName { get; set; } = "";
         public string Brand { get; set; } = "";
         public int? Rating { get; set; }
+        public List<GalleryImageEditor> Images { get; set; } = [];
 
         public static ContentEditor From(SiteContent entry) => new()
         {
@@ -565,8 +612,19 @@ else
             Body = entry.Body,
             ProductName = entry.ProductName ?? "",
             Brand = entry.Brand ?? "",
-            Rating = entry.Rating
+            Rating = entry.Rating,
+            Images = entry.Images.OrderBy(image => image.SortOrder).Select(image => new GalleryImageEditor
+            {
+                Url = image.Url,
+                Caption = image.Caption ?? ""
+            }).ToList()
         };
+    }
+
+    private sealed class GalleryImageEditor
+    {
+        public string Url { get; set; } = "";
+        public string Caption { get; set; } = "";
     }
 
     private enum EditorView

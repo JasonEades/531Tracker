@@ -1,10 +1,12 @@
 @page "/blog/{Slug}"
 @page "/reviews/{Slug}"
+@rendermode InteractiveServer
 @using Microsoft.EntityFrameworkCore
 @using FiveThreeOneTracker.Data
 @using FiveThreeOneTracker.Models
 @inject AppDbContext Db
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>@(entry?.Title ?? "Article") — Jason's Garage Lab</PageTitle>
 
@@ -37,15 +39,25 @@ else
         }
         <h1>@entry.Title</h1>
         <time datetime="@entry.PublishedAtUtc?.ToString("O")">@entry.PublishedAtUtc?.ToString("MMMM d, yyyy")</time>
-        @if (!string.IsNullOrWhiteSpace(entry.FeaturedImageUrl))
+        @if (GalleryImages.Count > 0)
         {
-            <figure class="content-article-featured-image">
-                <img src="@entry.FeaturedImageUrl" alt="@entry.FeaturedImageCaption" />
-                @if (!string.IsNullOrWhiteSpace(entry.FeaturedImageCaption))
+            var galleryImages = GalleryImages;
+            <div class="content-image-gallery" aria-label="Photo gallery">
+                @for (var imageIndex = 0; imageIndex < galleryImages.Count; imageIndex++)
                 {
-                    <figcaption>@entry.FeaturedImageCaption</figcaption>
+                    var image = galleryImages[imageIndex];
+                    var selectedImageIndex = imageIndex;
+                    <figure class="content-gallery-item">
+                        <button type="button" class="content-gallery-open" @onclick="() => OpenLightbox(selectedImageIndex)" aria-label="@($"View full-size image {imageIndex + 1}")">
+                            <img src="@image.Url" alt="@image.Caption" loading="lazy" />
+                        </button>
+                        @if (!string.IsNullOrWhiteSpace(image.Caption))
+                        {
+                            <figcaption>@image.Caption</figcaption>
+                        }
+                    </figure>
                 }
-            </figure>
+            </div>
         }
         @if (!string.IsNullOrWhiteSpace(entry.Summary))
         {
@@ -62,15 +74,41 @@ else
     private bool loading = true;
     private bool IsReviews => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("reviews/", StringComparison.OrdinalIgnoreCase);
     private string BackUrl => IsReviews ? "/reviews" : "/blog";
+    private List<GalleryImageView> GalleryImages
+    {
+        get
+        {
+            if (entry is null)
+                return [];
+
+            var images = new List<GalleryImageView>();
+            if (!string.IsNullOrWhiteSpace(entry.FeaturedImageUrl))
+                images.Add(new(entry.FeaturedImageUrl, entry.FeaturedImageCaption));
+
+            images.AddRange(entry.Images
+                .OrderBy(image => image.SortOrder)
+                .Where(image => !images.Any(existing => string.Equals(existing.Url, image.Url, StringComparison.OrdinalIgnoreCase)))
+                .Select(image => new GalleryImageView(image.Url, image.Caption)));
+            return images;
+        }
+    }
 
     protected override async Task OnParametersSetAsync()
     {
         loading = true;
         var expectedType = IsReviews ? SiteContentType.ProductReview : SiteContentType.BlogPost;
-        entry = await Db.SiteContents.AsNoTracking().SingleOrDefaultAsync(item =>
+        entry = await Db.SiteContents.AsNoTracking().Include(item => item.Images).SingleOrDefaultAsync(item =>
             item.Slug == Slug && item.Type == expectedType && item.Status == SiteContentStatus.Published);
         loading = false;
     }
 
+    private async Task OpenLightbox(int imageIndex)
+    {
+        var images = GalleryImages.Select(image => new { image.Url, image.Caption }).ToArray();
+        await JS.InvokeVoidAsync("contentImageLightbox.open", images, imageIndex);
+    }
+
     private static string RatingStars(int rating) => new string('★', rating) + new string('☆', 5 - rating);
+
+    private sealed record GalleryImageView(string Url, string? Caption);
 }

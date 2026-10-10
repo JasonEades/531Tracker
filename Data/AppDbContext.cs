@@ -30,6 +30,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     public DbSet<GoogleHealthConnection> GoogleHealthConnections => Set<GoogleHealthConnection>();
     public DbSet<DailyStepRecord> DailyStepRecords => Set<DailyStepRecord>();
     public DbSet<SiteContent> SiteContents => Set<SiteContent>();
+    public DbSet<SiteContentImage> SiteContentImages => Set<SiteContentImage>();
 
     // ── Body metrics ─────────────────────────────────────────────────────────
     public DbSet<BodyMetricEntry> BodyMetricEntries => Set<BodyMetricEntry>();
@@ -279,6 +280,17 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
             entity.Property(e => e.Status).HasConversion<string>();
             entity.Property(e => e.FeaturedImageUrl).HasMaxLength(1000);
             entity.Property(e => e.FeaturedImageCaption).HasMaxLength(240);
+            entity.HasMany(e => e.Images)
+                .WithOne(e => e.SiteContent)
+                .HasForeignKey(e => e.SiteContentId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<SiteContentImage>(entity =>
+        {
+            entity.HasIndex(e => new { e.SiteContentId, e.SortOrder });
+            entity.Property(e => e.Url).HasMaxLength(1000);
+            entity.Property(e => e.Caption).HasMaxLength(240);
         });
 
         modelBuilder.Entity<AdditionalStrengthExercise>(entity =>

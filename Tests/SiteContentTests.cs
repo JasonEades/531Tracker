@@ -36,6 +36,11 @@ public sealed class SiteContentTests
             Body = "A review.",
             ProductName = "Barbell",
             Rating = 5,
+            Images =
+            [
+                new SiteContentImage { Url = "https://example.com/front.jpg", Caption = "Front view", SortOrder = 0 },
+                new SiteContentImage { Url = "https://example.com/side.jpg", Caption = "Side view", SortOrder = 1 }
+            ],
             PublishedAtUtc = DateTime.UtcNow
         };
         var hiddenDraft = new SiteContent
@@ -55,6 +60,7 @@ public sealed class SiteContentTests
             .ThenByDescending(entry => entry.Id)
             .ToListAsync();
         var latest = await context.SiteContents.AsNoTracking()
+            .Include(entry => entry.Images)
             .Where(entry => entry.Status == SiteContentStatus.Published)
             .OrderByDescending(entry => entry.PublishedAtUtc)
             .ThenByDescending(entry => entry.Id)
@@ -64,6 +70,10 @@ public sealed class SiteContentTests
             entry => Assert.Equal(SiteContentType.ProductReview, entry.Type),
             entry => Assert.Equal(SiteContentType.BlogPost, entry.Type));
         Assert.Equal(recentReview.Id, latest?.Id);
+        Assert.NotNull(latest);
+        Assert.Collection(latest!.Images.OrderBy(image => image.SortOrder),
+            image => Assert.Equal("Front view", image.Caption),
+            image => Assert.Equal("Side view", image.Caption));
         Assert.DoesNotContain(feed, entry => entry.Status == SiteContentStatus.Draft);
     }
 
@@ -98,6 +108,7 @@ public sealed class SiteContentTests
                 Body = "A training article.",
                 FeaturedImageUrl = "https://example.com/training.jpg",
                 FeaturedImageCaption = "Ready for the next set.",
+                Images = [new SiteContentImage { Url = "/images/lift.jpg", Caption = "A completed lift" }],
                 PublishedAtUtc = DateTime.UtcNow
             },
             new SiteContent
@@ -113,6 +124,7 @@ public sealed class SiteContentTests
         await context.SaveChangesAsync();
 
         var published = await context.SiteContents
+            .Include(item => item.Images)
             .Where(item => item.Status == SiteContentStatus.Published)
             .SingleAsync();
         var draft = await context.SiteContents
@@ -123,6 +135,7 @@ public sealed class SiteContentTests
         Assert.Equal(SiteContentStatus.Published, published.Status);
         Assert.Equal("https://example.com/training.jpg", published.FeaturedImageUrl);
         Assert.Equal("Ready for the next set.", published.FeaturedImageCaption);
+        Assert.Equal("A completed lift", published.Images.Single().Caption);
         Assert.Equal(SiteContentType.ProductReview, draft.Type);
         Assert.Equal(SiteContentStatus.Draft, draft.Status);
         Assert.Equal(4, draft.Rating);
