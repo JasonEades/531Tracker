@@ -4,24 +4,20 @@
 @using FiveThreeOneTracker.Data
 @using FiveThreeOneTracker.Models
 @inject AppDbContext Db
-@inject NavigationManager Nav
 
-<PageTitle>@(IsReviews ? "Product Reviews" : "Blog") — Jason's Garage Lab</PageTitle>
+<PageTitle>Blog & Reviews — Jason's Garage Lab</PageTitle>
 
 <div class="page-header">
     <div>
         <div class="eyebrow">JASON'S GARAGE LAB</div>
-        <h1>@(IsReviews ? "Product Reviews" : "Training Blog")</h1>
-        <p class="text-muted">@(IsReviews ? "Reviews of training gear and products." : "Training notes, ideas, and updates.")</p>
+        <h1>Blog &amp; Reviews</h1>
+        <p class="text-muted">Training notes, ideas, and product reviews.</p>
     </div>
-    @if (!IsReviews)
-    {
-        <AuthorizeView Policy="@ContentEditorPolicy.Name">
-            <Authorized>
-                <a class="btn btn-primary content-new-post-button" href="/admin/content">New post</a>
-            </Authorized>
-        </AuthorizeView>
-    }
+    <AuthorizeView Policy="@ContentEditorPolicy.Name">
+        <Authorized>
+            <a class="btn btn-primary content-new-post-button" href="/admin/content">New post</a>
+        </Authorized>
+    </AuthorizeView>
 </div>
 
 @if (loading)
@@ -30,7 +26,7 @@
 }
 else if (entries.Count == 0)
 {
-    <section class="card"><div class="card-body text-muted">@(IsReviews ? "No product reviews have been published yet." : "No blog posts have been published yet.")</div></section>
+    <section class="card"><div class="card-body text-muted">No posts or reviews have been published yet.</div></section>
 }
 else
 {
@@ -41,8 +37,19 @@ else
                 <div class="card-body">
                     @if (entry.Type == SiteContentType.ProductReview)
                     {
+                        <span class="content-type-tag product-review-tag">Product review</span>
                         <div class="eyebrow">@(entry.Brand is null ? entry.ProductName : $"{entry.Brand} · {entry.ProductName}")</div>
                         <div class="content-rating" aria-label="@($"{entry.Rating} out of 5 stars")">@RatingStars(entry.Rating ?? 0) <span>@entry.Rating/5</span></div>
+                    }
+                    else
+                    {
+                        <span class="content-type-tag blog-post-tag">Blog post</span>
+                    }
+                    @if (!string.IsNullOrWhiteSpace(entry.FeaturedImageUrl))
+                    {
+                        <a class="public-content-image-link" href="@DetailUrl(entry)" tabindex="-1" aria-hidden="true">
+                            <img class="public-content-image" src="@entry.FeaturedImageUrl" alt="@entry.FeaturedImageCaption" />
+                        </a>
                     }
                     <h2><a href="@DetailUrl(entry)">@entry.Title</a></h2>
                     <time datetime="@entry.PublishedAtUtc?.ToString("O")">@entry.PublishedAtUtc?.ToString("MMMM d, yyyy")</time>
@@ -60,14 +67,13 @@ else
 @code {
     private List<SiteContent> entries = [];
     private bool loading = true;
-    private bool IsReviews => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("reviews", StringComparison.OrdinalIgnoreCase);
 
     protected override async Task OnInitializedAsync()
     {
-        var type = IsReviews ? SiteContentType.ProductReview : SiteContentType.BlogPost;
         entries = await Db.SiteContents.AsNoTracking()
-            .Where(entry => entry.Type == type && entry.Status == SiteContentStatus.Published)
+            .Where(entry => entry.Status == SiteContentStatus.Published)
             .OrderByDescending(entry => entry.PublishedAtUtc)
+            .ThenByDescending(entry => entry.Id)
             .ToListAsync();
         loading = false;
     }

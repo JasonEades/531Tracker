@@ -346,6 +346,19 @@ body:has(.writing-workspace.fullscreen) {
     text-overflow: ellipsis;
 }
 
+.dashboard-blog-feature-rating {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    color: #f4c45e;
+    font-size: var(--text-xs);
+    line-height: 1.2;
+}
+
+.dashboard-blog-feature-rating span:last-child {
+    color: var(--color-text-muted);
+}
+
 .dashboard-blog-feature-caption {
     display: -webkit-box;
     overflow: hidden;
@@ -388,6 +401,44 @@ body:has(.writing-workspace.fullscreen) {
 
 .public-content-card h2 {
     margin: var(--space-2) 0;
+}
+
+.content-type-tag {
+    display: inline-flex;
+    align-items: center;
+    margin-bottom: var(--space-2);
+    padding: 3px 9px;
+    border: 1px solid var(--color-border);
+    border-radius: 999px;
+    color: var(--color-text-muted);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.product-review-tag {
+    border-color: rgba(244, 196, 94, 0.4);
+    color: #f4c45e;
+}
+
+.blog-post-tag {
+    border-color: var(--color-primary-dim);
+    color: var(--color-primary-h);
+}
+
+.public-content-image-link {
+    display: block;
+}
+
+.public-content-image {
+    display: block;
+    width: 100%;
+    max-height: 280px;
+    margin-bottom: var(--space-3);
+    border-radius: var(--radius-md);
+    background: var(--color-bg);
+    object-fit: cover;
 }
 
 .public-content-card h2 a {

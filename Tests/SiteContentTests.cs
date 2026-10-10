@@ -10,6 +10,64 @@ namespace FiveThreeOneTracker.Tests;
 public sealed class SiteContentTests
 {
     [Fact]
+    public async Task BlogFeedIncludesPublishedPostsAndReviewsInMostRecentFirstOrder()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var olderPost = new SiteContent
+        {
+            Type = SiteContentType.BlogPost,
+            Status = SiteContentStatus.Published,
+            Title = "Training post",
+            Slug = "training-post",
+            Body = "Training notes.",
+            PublishedAtUtc = DateTime.UtcNow.AddDays(-1)
+        };
+        var recentReview = new SiteContent
+        {
+            Type = SiteContentType.ProductReview,
+            Status = SiteContentStatus.Published,
+            Title = "New equipment review",
+            Slug = "new-equipment-review",
+            Body = "A review.",
+            ProductName = "Barbell",
+            Rating = 5,
+            PublishedAtUtc = DateTime.UtcNow
+        };
+        var hiddenDraft = new SiteContent
+        {
+            Type = SiteContentType.ProductReview,
+            Status = SiteContentStatus.Draft,
+            Title = "Private draft",
+            Slug = "private-draft",
+            Body = "Not published."
+        };
+        context.SiteContents.AddRange(olderPost, recentReview, hiddenDraft);
+        await context.SaveChangesAsync();
+
+        var feed = await context.SiteContents.AsNoTracking()
+            .Where(entry => entry.Status == SiteContentStatus.Published)
+            .OrderByDescending(entry => entry.PublishedAtUtc)
+            .ThenByDescending(entry => entry.Id)
+            .ToListAsync();
+        var latest = await context.SiteContents.AsNoTracking()
+            .Where(entry => entry.Status == SiteContentStatus.Published)
+            .OrderByDescending(entry => entry.PublishedAtUtc)
+            .ThenByDescending(entry => entry.Id)
+            .FirstOrDefaultAsync();
+
+        Assert.Collection(feed,
+            entry => Assert.Equal(SiteContentType.ProductReview, entry.Type),
+            entry => Assert.Equal(SiteContentType.BlogPost, entry.Type));
+        Assert.Equal(recentReview.Id, latest?.Id);
+        Assert.DoesNotContain(feed, entry => entry.Status == SiteContentStatus.Draft);
+    }
+
+    [Fact]
     public void MarkdownOutputDoesNotRenderRawHtmlOrDangerousLinks()
     {
         var html = SiteContentMarkdown.ToSafeHtml(
