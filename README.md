@@ -65,6 +65,15 @@ The `+` marks the final set as AMRAP (as many reps as possible). The optional 5s
 - Plate-loading calculator based on available plates and bar weight
 - Equipment configuration for bars and plate inventory
 
+### Rest countdown
+
+Both 5/3/1 and PPL rest timers play a short beep each second from 10 down to 1,
+alongside the visual countdown. Tap or press a key in the app to enable browser
+audio. Sound requires an active browser and audible device volume; the visual
+timer remains available if audio is blocked or unsupported.
+Turn off **Settings > Rest Timer > Rest countdown beeps** to mute both timers.
+This preference defaults to on and is saved in the current browser.
+
 ### Additional primary-lift sets
 
 Additional work can be recorded directly from a primary-lift workout without changing the programmed prescription. Each additional set supports:

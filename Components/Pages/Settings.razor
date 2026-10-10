@@ -10,6 +10,8 @@
 @inject IGoogleHealthSyncService HealthSync
 @inject IPlateCalculatorService PlateCalc
 @inject NavigationManager Nav
+@inject IJSRuntime JS
+@inject ILogger<Settings> Logger
 
 <PageTitle>Settings — Jason's Garage Lab</PageTitle>
 
@@ -19,6 +21,24 @@
         <h1>Settings</h1>
     </div>
 </div>
+
+<section class="card mb-4">
+    <div class="card-header">
+        <h2>Rest Timer</h2>
+    </div>
+    <div class="card-body">
+        <label class="form-label">
+            <input type="checkbox" @bind:get="countdownBeepsEnabled" @bind:set="SaveCountdownBeeps"
+                   disabled="@(!audioSettingsLoaded || savingAudioSettings)" aria-describedby="countdown-beeps-help" />
+            Rest countdown beeps
+        </label>
+        <p id="countdown-beeps-help" class="text-muted">Beep each second during the final 10 seconds of 5/3/1 and PPL rest timers. Saved in this browser; the visual countdown stays on.</p>
+        @if (!string.IsNullOrWhiteSpace(audioSettingsError))
+        {
+            <div class="alert alert-danger" role="alert">@audioSettingsError</div>
+        }
+    </div>
+</section>
 
 <section class="card mb-4">
     <div class="card-header">
@@ -259,6 +279,58 @@ else if (equipment is not null)
     private double editBarWeight;
     private string newBarName = "";
     private double newBarWeight = 45;
+    private bool countdownBeepsEnabled = true;
+    private bool audioSettingsLoaded;
+    private bool savingAudioSettings;
+    private string? audioSettingsError;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+            return;
+
+        try
+        {
+            countdownBeepsEnabled = await JS.InvokeAsync<bool>("restTimerAudio.getEnabled");
+            audioSettingsLoaded = true;
+        }
+        catch (JSDisconnectedException ex)
+        {
+            Logger.LogDebug(ex, "Browser disconnected while loading rest countdown audio setting.");
+            audioSettingsError = "Connection lost. Reload this page to change countdown sound.";
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Unable to load rest countdown audio setting.");
+            audioSettingsError = "Could not load the countdown sound setting. Allow browser storage and reload this page.";
+        }
+        StateHasChanged();
+    }
+
+    private async Task SaveCountdownBeeps(bool enabled)
+    {
+        savingAudioSettings = true;
+        audioSettingsError = null;
+        try
+        {
+            await JS.InvokeVoidAsync("restTimerAudio.setEnabled", enabled);
+            countdownBeepsEnabled = enabled;
+        }
+        catch (JSDisconnectedException ex)
+        {
+            Logger.LogDebug(ex, "Browser disconnected while saving rest countdown audio setting.");
+            audioSettingsError = "Connection lost. Reload this page to check the saved countdown sound setting.";
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Unable to save rest countdown audio setting.");
+            audioSettingsError = "Could not save the countdown sound setting. Allow browser storage and try again.";
+        }
+        finally
+        {
+            savingAudioSettings = false;
+        }
+    }
 
     private double TestBarWeight => bars.FirstOrDefault(b => b.Id == testBarId)?.Weight ?? 45;
     private double ActualTotal => testResults is null ? 0 : TestBarWeight + testResults.Sum(r => r.PlateWeight * r.CountPerSide * 2);

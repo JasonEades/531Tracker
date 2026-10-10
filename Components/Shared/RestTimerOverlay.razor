@@ -1,3 +1,7 @@
+@inject IJSRuntime JS
+@inject ISnackbar Snackbar
+@inject ILogger<RestTimerOverlay> Logger
+
 @* Persistent, always-visible rest-timer badge plus a big center-screen flash
    during the last moments of the rest period, so the timer is never missed
    even if the user has scrolled away from the inline timer controls. *@
@@ -22,6 +26,46 @@
     [Parameter] public EventCallback OnStop { get; set; }
 
     private bool IsUrgent => RemainingSeconds is > 0 and <= 10;
+    private int lastRenderedSeconds;
+    private bool audioWarningShown;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (RemainingSeconds == lastRenderedSeconds)
+            return;
+
+        lastRenderedSeconds = RemainingSeconds;
+        if (!IsUrgent)
+            return;
+
+        try
+        {
+            if (!await JS.InvokeAsync<bool>("restTimerAudio.getEnabled"))
+                return;
+
+            var played = await JS.InvokeAsync<bool>("restTimerAudio.beep");
+            if (!played)
+                WarnAudioUnavailable();
+        }
+        catch (JSDisconnectedException ex)
+        {
+            Logger.LogDebug(ex, "Rest timer audio skipped because the browser disconnected.");
+        }
+        catch (JSException ex)
+        {
+            Logger.LogWarning(ex, "Unable to play rest timer audio.");
+            WarnAudioUnavailable();
+        }
+    }
+
+    private void WarnAudioUnavailable()
+    {
+        if (audioWarningShown)
+            return;
+
+        audioWarningShown = true;
+        Snackbar.Add("Countdown sound is unavailable. Tap the page to enable audio; the visual timer will continue.", Severity.Warning);
+    }
 
     private static string FormatRest(int seconds) => $"{seconds / 60}:{seconds % 60:D2}";
 
