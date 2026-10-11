@@ -66,6 +66,10 @@ The `+` marks the final set as AMRAP (as many reps as possible). The optional 5s
 - Plate-loading calculator based on available plates and bar weight
 - Equipment configuration for bars and plate inventory
 
+### Navigation feedback
+
+A global progress bar and spinner appear the instant a link is tapped (and for programmatic navigation via Blazor's `enhancednavigationstart`/`enhancednavigationend` events), so slow mobile connections never look frozen. See `wwwroot/js/navigation-progress.js` and the `#nav-progress` element in `Components/App.razor`.
+
 ### Rest countdown
 
 Both 5/3/1 and PPL rest timers play a short beep each second from 10 down to 1,

@@ -27,10 +27,15 @@
 </head>
 
 <body>
+    <div id="nav-progress" data-permanent aria-hidden="true">
+        <div class="nav-progress-bar"></div>
+        <div class="nav-progress-spinner"><div class="spinner"></div></div>
+    </div>
     <Routes />
     <ReconnectModal />
     <script src="_content/MudBlazor/MudBlazor.min.js"></script>
     <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="@Assets["js/navigation-progress.js"]"></script>
     <script src="js/client-error-logger.js"></script>
     <script src="js/download.js"></script>
     <script src="js/voice-notes.js"></script>

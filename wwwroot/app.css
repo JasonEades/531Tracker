@@ -1124,6 +1124,56 @@ input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--color-pr
 
 @keyframes spin { to { transform: rotate(360deg); } }
 
+/* ── Navigation progress (shown instantly on tap) ────────── */
+#nav-progress {
+    position: fixed;
+    inset: 0;
+    z-index: var(--z-toast);
+    pointer-events: none;
+    visibility: hidden;
+    opacity: 0;
+    transition: opacity 0.12s ease, visibility 0s linear 0.12s;
+}
+#nav-progress.active {
+    visibility: visible;
+    opacity: 1;
+    transition: opacity 0s, visibility 0s;
+}
+.nav-progress-bar {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    overflow: hidden;
+    background: var(--color-surface-3);
+}
+.nav-progress-bar::after {
+    content: "";
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 40%;
+    background: var(--color-primary);
+    animation: nav-progress-slide 1s ease-in-out infinite;
+}
+.nav-progress-spinner {
+    position: absolute;
+    top: calc(env(safe-area-inset-top, 0px) + 72px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: var(--space-2);
+    border-radius: 999px;
+    background: var(--color-surface-2, var(--color-surface-3));
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
+}
+.nav-progress-spinner .spinner { width: 24px; height: 24px; border-width: 3px; }
+
+@keyframes nav-progress-slide {
+    0%   { left: -40%; }
+    100% { left: 100%; }
+}
+
 /* ── Empty state ─────────────────────────────────────────── */
 .empty-state {
     display: flex;
