@@ -66,6 +66,10 @@ The `+` marks the final set as AMRAP (as many reps as possible). The optional 5s
 - Plate-loading calculator based on available plates and bar weight
 - Equipment configuration for bars and plate inventory
 
+### Progress photos
+
+Upload on **Body** with a drag-and-drop zone (tap to browse on mobile). Choosing a photo only selects it; nothing uploads until you set the date/caption and click **Save Photo**, after which the uploader clears. Photos are resized to 1280px, with 960px timeline thumbnails (`ProgressPhotos:ThumbnailDimension`) kept sharp on high-density screens; older, smaller thumbnails are upgraded automatically the first time they are viewed.
+
 ### Navigation feedback
 
 A global progress bar and spinner appear the instant a link is tapped (and for programmatic navigation via Blazor's `enhancednavigationstart`/`enhancednavigationend` events), so slow mobile connections never look frozen. See `wwwroot/js/navigation-progress.js` and the `#nav-progress` element in `Components/App.razor`.

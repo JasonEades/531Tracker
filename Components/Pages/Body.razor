@@ -99,7 +99,54 @@
                 <label>Caption
                     <input class="form-control" type="text" maxlength="200" @bind="photoCaption" placeholder="Optional" />
                 </label>
-                <InputFile OnChange="UploadPhotoAsync" accept="image/*" disabled="@(uploading || quota?.IsFull == true)" />
+            </div>
+
+            <div class="photo-dropzone @(uploading ? "is-uploading" : "") @(quota?.IsFull == true ? "is-disabled" : "") @(selectedPhoto is not null ? "has-file" : "")">
+                <InputFile @key="uploaderKey" OnChange="SelectPhoto" accept="image/*" class="photo-dropzone-input"
+                           disabled="@(uploading || quota?.IsFull == true)" />
+                <div class="photo-dropzone-content">
+                    @if (uploading)
+                    {
+                        <div class="spinner photo-dropzone-spinner"></div>
+                        <strong>Uploading and optimizing…</strong>
+                    }
+                    else if (quota?.IsFull == true)
+                    {
+                        <strong>Photo limit reached</strong>
+                        <span>Delete an older photo to add a new one.</span>
+                    }
+                    else if (selectedPhoto is not null)
+                    {
+                        <svg class="photo-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <rect x="3" y="3" width="18" height="18" rx="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <polyline points="21 15 16 10 5 21"/>
+                        </svg>
+                        <strong class="photo-dropzone-filename">@selectedPhoto.Name</strong>
+                        <span>@FormatFileSize(selectedPhoto.Size) · tap to choose a different photo</span>
+                    }
+                    else
+                    {
+                        <svg class="photo-dropzone-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        <strong><span class="photo-dropzone-desktop">Drag &amp; drop a photo, or </span><span class="photo-dropzone-link">browse</span></strong>
+                        <span>JPG, PNG, HEIC or WebP · resized automatically</span>
+                    }
+                </div>
+            </div>
+
+            <div class="photo-upload-actions">
+                <button class="btn btn-primary" @onclick="UploadPhotoAsync"
+                        disabled="@(selectedPhoto is null || uploading || quota?.IsFull == true)">
+                    @(uploading ? "Saving…" : "Save Photo")
+                </button>
+                @if (selectedPhoto is not null && !uploading)
+                {
+                    <button class="btn btn-outline" @onclick="ClearSelectedPhoto">Clear</button>
+                }
             </div>
 
             @if (!string.IsNullOrEmpty(photoMessage))
@@ -235,6 +282,8 @@
     private bool loading = true;
     private bool saving;
     private bool uploading;
+    private IBrowserFile? selectedPhoto;
+    private Guid uploaderKey = Guid.NewGuid();
     private int? busyPhotoId;
     private int? editingCaptionId;
     private string captionDraft = string.Empty;
@@ -296,10 +345,10 @@
         await ReloadAsync();
     }
 
-    private async Task UploadPhotoAsync(InputFileChangeEventArgs e)
+    private async Task UploadPhotoAsync()
     {
-        var file = e.File;
-        if (file is null) return;
+        var file = selectedPhoto;
+        if (file is null || uploading) return;
 
         uploading = true;
         photoMessage = null;
@@ -312,6 +361,7 @@
             if (result.Success)
             {
                 photoCaption = null;
+                ClearSelectedPhoto();
                 await ReloadAsync();
             }
         }
@@ -324,6 +374,22 @@
             uploading = false;
         }
     }
+
+    private void SelectPhoto(InputFileChangeEventArgs e)
+    {
+        selectedPhoto = e.File;
+        photoMessage = null;
+    }
+
+    // Changing the key recreates the InputFile so the browser's file selection is cleared too.
+    private void ClearSelectedPhoto()
+    {
+        selectedPhoto = null;
+        uploaderKey = Guid.NewGuid();
+    }
+
+    private static string FormatFileSize(long bytes) =>
+        bytes >= 1024 * 1024 ? $"{bytes / 1024d / 1024d:0.#} MB" : $"{Math.Max(1, bytes / 1024)} KB";
 
     private async Task DeletePhotoAsync(int id)
     {

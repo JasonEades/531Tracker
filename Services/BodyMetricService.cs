@@ -329,13 +329,34 @@ public sealed class BodyMetricService(
     {
         if (string.IsNullOrEmpty(userId)) return null;
 
+        if (thumbnail)
+        {
+            var tracked = await db.ProgressPhotos
+                .FirstOrDefaultAsync(x => x.Id == id && x.UserId == userId, ct);
+            if (tracked is null || tracked.ThumbnailData.Length == 0) return null;
+
+            // Older thumbnails were generated small and look blurry on high-density screens.
+            try
+            {
+                var upgraded = processor.UpgradeThumbnail(tracked.ThumbnailData, tracked.ImageData);
+                if (upgraded is not null)
+                {
+                    tracked.ThumbnailData = upgraded;
+                    tracked.ThumbnailSizeBytes = upgraded.Length;
+                    await db.SaveChangesAsync(ct);
+                }
+            }
+            catch (Exception ex) when (ex is not OperationCanceledException)
+            {
+                // Serve the existing thumbnail if it cannot be upgraded.
+            }
+
+            return (tracked.ThumbnailData, tracked.ContentType);
+        }
+
         var photo = await db.ProgressPhotos.AsNoTracking()
             .Where(x => x.Id == id && x.UserId == userId)
-            .Select(x => new
-            {
-                Content = thumbnail ? x.ThumbnailData : x.ImageData,
-                x.ContentType
-            })
+            .Select(x => new { Content = x.ImageData, x.ContentType })
             .FirstOrDefaultAsync(ct);
 
         return photo is null || photo.Content.Length == 0

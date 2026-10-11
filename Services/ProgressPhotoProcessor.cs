@@ -18,6 +18,12 @@ public interface IProgressPhotoProcessor
 
     /// <summary>Rotates an already-stored image by 90 degrees and regenerates its thumbnail.</summary>
     ProcessedPhoto Rotate(byte[] stored, bool clockwise);
+
+    /// <summary>
+    /// Returns a sharper thumbnail when the stored one is smaller than the configured size
+    /// (photos uploaded before the thumbnail size was raised), or null if it is already adequate.
+    /// </summary>
+    byte[]? UpgradeThumbnail(byte[] storedThumbnail, byte[] storedImage);
 }
 
 public sealed class ProgressPhotoProcessor(IOptions<ProgressPhotoOptions> options) : IProgressPhotoProcessor
@@ -47,6 +53,24 @@ public sealed class ProgressPhotoProcessor(IOptions<ProgressPhotoOptions> option
         Downscale(image, _options.MaxDimension);
 
         return Render(image);
+    }
+
+    public byte[]? UpgradeThumbnail(byte[] storedThumbnail, byte[] storedImage)
+    {
+        var target = _options.ThumbnailDimension;
+        if (target <= 0 || storedImage.Length == 0) return null;
+
+        var thumbInfo = Image.Identify(storedThumbnail);
+        var imageInfo = Image.Identify(storedImage);
+        var currentEdge = Math.Max(thumbInfo.Width, thumbInfo.Height);
+        var sourceEdge = Math.Max(imageInfo.Width, imageInfo.Height);
+
+        // Nothing sharper to produce if the thumbnail already matches the target or the source.
+        if (currentEdge >= target || currentEdge >= sourceEdge) return null;
+
+        using var image = Image.Load(storedImage);
+        Downscale(image, target);
+        return Encode(image, Math.Clamp(_options.ThumbnailJpegQuality, 1, 100));
     }
 
     private ProcessedPhoto Render(Image image)

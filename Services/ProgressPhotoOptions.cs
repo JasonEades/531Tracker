@@ -19,11 +19,11 @@ public sealed class ProgressPhotoOptions
     public int MaxDimension { get; set; } = 1280;
 
     /// <summary>Longest edge of the generated gallery thumbnail, in pixels.</summary>
-    public int ThumbnailDimension { get; set; } = 320;
+    public int ThumbnailDimension { get; set; } = 960;
 
     /// <summary>JPEG quality (1-100) used for the stored image.</summary>
     public int JpegQuality { get; set; } = 78;
 
     /// <summary>JPEG quality (1-100) used for the thumbnail.</summary>
-    public int ThumbnailJpegQuality { get; set; } = 65;
+    public int ThumbnailJpegQuality { get; set; } = 78;
 }
