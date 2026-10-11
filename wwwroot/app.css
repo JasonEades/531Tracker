@@ -446,15 +446,15 @@ input, select, textarea, button { font-family: inherit; }
 /* ── Responsive ────────────────────────────────────────────── */
 @media (min-width: 768px) {
     .top-bar { display: flex; }
-    .bottom-tab-bar { display: none; }
     .main-content {
-        padding: var(--space-6) var(--space-8);
-        padding-bottom: var(--space-8);
+        padding: var(--space-6) var(--space-8) calc(var(--bottom-nav-height) + var(--space-8) + env(safe-area-inset-bottom, 0px));
     }
 }
 
+/* The sidebar only appears at 900px, so the bottom tab bar must stay visible below it. */
 @media (min-width: 900px) {
     .top-bar { display: none; }
+    .bottom-tab-bar { display: none; }
     .sidebar { display: flex; }
     .main-content {
         padding: var(--space-8);
