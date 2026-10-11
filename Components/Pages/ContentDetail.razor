@@ -4,11 +4,49 @@
 @using Microsoft.EntityFrameworkCore
 @using FiveThreeOneTracker.Data
 @using FiveThreeOneTracker.Models
+@using System.Text.Json
 @inject AppDbContext Db
 @inject NavigationManager Nav
 @inject IJSRuntime JS
+@inject IConfiguration Configuration
 
 <PageTitle>@(entry?.Title ?? "Article") — Jason's Garage Lab</PageTitle>
+@if (entry is not null)
+{
+    <HeadContent>
+        <meta name="description" content="@SeoDescription" />
+        <link rel="canonical" href="@CanonicalUrl" />
+        <meta property="og:type" content="article" />
+        <meta property="og:site_name" content="Jason's Garage Lab" />
+        <meta property="og:title" content="@entry.Title" />
+        <meta property="og:description" content="@SeoDescription" />
+        <meta property="og:url" content="@CanonicalUrl" />
+        @if (!string.IsNullOrWhiteSpace(SeoImageUrl))
+        {
+            <meta property="og:image" content="@SeoImageUrl" />
+            <meta name="twitter:card" content="summary_large_image" />
+            <meta name="twitter:image" content="@SeoImageUrl" />
+        }
+        else
+        {
+            <meta name="twitter:card" content="summary" />
+        }
+        <meta name="twitter:title" content="@entry.Title" />
+        <meta name="twitter:description" content="@SeoDescription" />
+        <meta property="article:published_time" content="@entry.PublishedAtUtc?.ToString("O")" />
+        @if (entry.UpdatedAtUtc > entry.PublishedAtUtc)
+        {
+            <meta property="article:modified_time" content="@entry.UpdatedAtUtc.ToString("O")" />
+        }
+        <script type="application/ld+json">@((MarkupString)StructuredData)</script>
+    </HeadContent>
+}
+else if (!loading)
+{
+    <HeadContent>
+        <meta name="robots" content="noindex,follow" />
+    </HeadContent>
+}
 
 @if (loading)
 {
@@ -74,6 +112,15 @@ else
     private bool loading = true;
     private bool IsReviews => Nav.ToBaseRelativePath(Nav.Uri).StartsWith("reviews/", StringComparison.OrdinalIgnoreCase);
     private string BackUrl => IsReviews ? "/reviews" : "/blog";
+    private string CanonicalUrl => entry is null
+        ? Nav.ToAbsoluteUri(BackUrl).AbsoluteUri
+        : SiteContentSeo.GetCanonicalUrl(SiteBaseUrl, entry.Type, entry.Slug);
+    private string SiteBaseUrl => SiteContentSeo.ResolveBaseUrl(Configuration["Seo:BaseUrl"], Nav.BaseUri);
+    private string SeoDescription => entry is null ? "" : SiteContentSeo.GetDescription(entry);
+    private string? SeoImageUrl => entry?.FeaturedImageUrl is { Length: > 0 } image
+        ? SiteContentSeo.GetImageUrl(SiteBaseUrl, image)
+        : null;
+    private string StructuredData => entry is null ? "" : JsonSerializer.Serialize(BuildStructuredData(entry));
     private List<GalleryImageView> GalleryImages
     {
         get
@@ -109,6 +156,66 @@ else
     }
 
     private static string RatingStars(int rating) => new string('★', rating) + new string('☆', 5 - rating);
+
+    private object BuildStructuredData(SiteContent content)
+    {
+        if (content.Type == SiteContentType.ProductReview)
+        {
+            return new Dictionary<string, object?>
+            {
+                ["@context"] = "https://schema.org",
+                ["@type"] = "Review",
+                ["headline"] = content.Title,
+                ["url"] = CanonicalUrl,
+                ["datePublished"] = content.PublishedAtUtc?.ToString("O"),
+                ["dateModified"] = content.UpdatedAtUtc.ToString("O"),
+                ["author"] = new Dictionary<string, object?>
+                {
+                    ["@type"] = "Organization",
+                    ["name"] = "Jason's Garage Lab"
+                },
+                ["reviewBody"] = SeoDescription,
+                ["itemReviewed"] = new Dictionary<string, object?>
+                {
+                    ["@type"] = "Product",
+                    ["name"] = content.ProductName,
+                    ["brand"] = content.Brand
+                },
+                ["reviewRating"] = content.Rating is int rating
+                    ? new Dictionary<string, object?>
+                    {
+                        ["@type"] = "Rating",
+                        ["ratingValue"] = rating,
+                        ["bestRating"] = 5,
+                        ["worstRating"] = 1
+                    }
+                    : null,
+                ["image"] = SeoImageUrl
+            };
+        }
+
+        return new Dictionary<string, object?>
+        {
+            ["@context"] = "https://schema.org",
+            ["@type"] = "BlogPosting",
+            ["headline"] = content.Title,
+            ["description"] = SeoDescription,
+            ["url"] = CanonicalUrl,
+            ["datePublished"] = content.PublishedAtUtc?.ToString("O"),
+            ["dateModified"] = content.UpdatedAtUtc.ToString("O"),
+            ["author"] = new Dictionary<string, string>
+            {
+                ["@type"] = "Organization",
+                ["name"] = "Jason's Garage Lab"
+            },
+            ["publisher"] = new Dictionary<string, string>
+            {
+                ["@type"] = "Organization",
+                ["name"] = "Jason's Garage Lab"
+            },
+            ["image"] = SeoImageUrl
+        };
+    }
 
     private sealed record GalleryImageView(string Url, string? Caption);
 }

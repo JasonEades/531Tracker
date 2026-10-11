@@ -1,0 +1,79 @@
+@page "/fitness-tracker"
+@using System.Text.Json
+@inject NavigationManager Nav
+@inject IConfiguration Configuration
+
+<PageTitle>5/3/1 &amp; PPL Fitness Tracker — Jason's Garage Lab</PageTitle>
+<HeadContent>
+    <meta name="description" content="@Description" />
+    <link rel="canonical" href="@CanonicalUrl" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Jason's Garage Lab" />
+    <meta property="og:title" content="5/3/1 &amp; PPL Fitness Tracker — Jason's Garage Lab" />
+    <meta property="og:description" content="@Description" />
+    <meta property="og:url" content="@CanonicalUrl" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="5/3/1 &amp; PPL Fitness Tracker — Jason's Garage Lab" />
+    <meta name="twitter:description" content="@Description" />
+    <script type="application/ld+json">@((MarkupString)StructuredData)</script>
+</HeadContent>
+
+<article class="public-content-detail fitness-tracker-overview">
+    <div class="eyebrow">JASON'S GARAGE LAB</div>
+    <h1>A Fitness Tracker for 5/3/1 and Push/Pull/Legs</h1>
+    <p class="public-content-summary">
+        Plan strength workouts, track completed sets, and follow your progress with a training app built for
+        5/3/1 and customizable Push/Pull/Legs (PPL) programs.
+    </p>
+
+    <h2>Track 5/3/1 Cycles</h2>
+    <p>
+        Create four-week 5/3/1 cycles for squat, bench press, deadlift, and overhead press. Follow programmed
+        training-max percentages, log actual weights and reps, and review estimated one-rep max progress.
+        Optional warmups, Boring But Big (BBB), 5s PRO, and First Set Last (FSL) support different training setups.
+    </p>
+
+    <h2>Customize PPL Workouts by Week</h2>
+    <p>
+        Set up three- or six-day Push/Pull/Legs programs, adjust each week's workouts, and add accessory exercises.
+        Configure exercise names, muscle groups, sets, and rep ranges, then record working weights and completed sets.
+    </p>
+
+    <h2>Review Training History and Equipment</h2>
+    <p>
+        Keep workout notes and session history, review strength progress, and configure your bars and plate inventory
+        for plate-loading calculations. Personal training data is available after signing in.
+    </p>
+
+    <div class="flex gap-2 mt-3">
+        <a class="btn btn-primary" href="/login">Sign in to the fitness tracker</a>
+        <a class="btn btn-outline" href="/blog">Read training articles</a>
+        <a class="btn btn-outline" href="/reviews">Browse product reviews</a>
+    </div>
+</article>
+
+@code {
+    private const string Description =
+        "Track 5/3/1 strength cycles and customizable Push/Pull/Legs workouts. Log sets, review estimated 1RM progress, and configure training equipment.";
+
+    private string CanonicalUrl =>
+        $"{SiteContentSeo.ResolveBaseUrl(Configuration["Seo:BaseUrl"], Nav.BaseUri)}/fitness-tracker";
+
+    private string StructuredData => JsonSerializer.Serialize(new Dictionary<string, object>
+    {
+        ["@context"] = "https://schema.org",
+        ["@type"] = "SoftwareApplication",
+        ["name"] = "Jason's Garage Lab Fitness Tracker",
+        ["applicationCategory"] = "HealthApplication",
+        ["operatingSystem"] = "Web",
+        ["url"] = CanonicalUrl,
+        ["description"] = Description,
+        ["featureList"] = new[]
+        {
+            "5/3/1 cycle and training max tracking",
+            "Customizable weekly Push/Pull/Legs workouts",
+            "Workout set logging and estimated one-rep max progress",
+            "Bar and plate inventory with plate-loading calculations"
+        }
+    });
+}

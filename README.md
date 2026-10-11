@@ -83,6 +83,12 @@ fullscreen writing. Published articles are available at `/blog` and reviews at
 `/reviews`; unpublished drafts remain private. Raw HTML and unsafe link
 destinations are disabled. Posts and reviews support captioned photo galleries
 with compact thumbnails that open in a full-size lightbox.
+Public content pages include canonical URLs, search/social descriptions, and
+Article or Review structured data. `/sitemap.xml` lists both indexes and every
+published blog post and product review, along with the public fitness-tracker
+overview; `/robots.txt` points crawlers to it and keeps private application
+routes out of crawl discovery. Set `Seo__BaseUrl` to the public HTTPS origin
+when deploying to a different domain.
 
 ### Additional primary-lift sets
 

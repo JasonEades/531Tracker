@@ -89,6 +89,79 @@ public sealed class SiteContentTests
     }
 
     [Fact]
+    public void SeoMetadataUsesSummaryOrReadableMarkdownDescription()
+    {
+        var content = new SiteContent
+        {
+            Summary = "",
+            Body = "# Practical Strength\n\nA useful **training guide** for lifters."
+        };
+
+        var description = SiteContentSeo.GetDescription(content);
+
+        Assert.Contains("Practical Strength", description);
+        Assert.Contains("training guide", description);
+        Assert.DoesNotContain("**", description);
+        Assert.Equal(
+            "https://example.com/reviews/steel-bar",
+            SiteContentSeo.GetCanonicalUrl("https://example.com/", SiteContentType.ProductReview, "steel-bar"));
+        Assert.Equal(
+            "https://example.com/photos/front.jpg",
+            SiteContentSeo.GetImageUrl("https://example.com", "/photos/front.jpg"));
+    }
+
+    [Fact]
+    public void SitemapContainsOnlyPublishedBlogAndReviewUrls()
+    {
+        var publishedPost = new SiteContent
+        {
+            Type = SiteContentType.BlogPost,
+            Status = SiteContentStatus.Published,
+            Slug = "training-guide",
+            UpdatedAtUtc = new DateTime(2026, 10, 10, 12, 0, 0, DateTimeKind.Utc)
+        };
+        var publishedReview = new SiteContent
+        {
+            Type = SiteContentType.ProductReview,
+            Status = SiteContentStatus.Published,
+            Slug = "bar-review"
+        };
+        var draft = new SiteContent
+        {
+            Type = SiteContentType.BlogPost,
+            Status = SiteContentStatus.Draft,
+            Slug = "private-draft"
+        };
+
+        var sitemap = SiteContentSitemap.Build("https://example.com", [publishedPost, publishedReview, draft]);
+        var document = System.Xml.Linq.XDocument.Parse(sitemap);
+        var urls = document.Descendants()
+            .Where(element => element.Name.LocalName == "loc")
+            .Select(element => element.Value)
+            .ToList();
+
+        Assert.Contains("https://example.com/blog/training-guide", urls);
+        Assert.Contains("https://example.com/reviews/bar-review", urls);
+        Assert.Contains("https://example.com/fitness-tracker", urls);
+        Assert.DoesNotContain(urls, url => url.Contains("private-draft", StringComparison.Ordinal));
+        Assert.Contains(document.Descendants().Where(element => element.Name.LocalName == "lastmod"),
+            element => element.Value == "2026-10-10");
+    }
+
+    [Fact]
+    public void RobotsFilePointsToSitemapAndExcludesPrivateApplicationRoutes()
+    {
+        var robots = SiteContentSeo.BuildRobotsTxt("https://example.com");
+
+        Assert.Contains("Sitemap: https://example.com/sitemap.xml", robots);
+        Assert.Contains("Disallow: /admin", robots);
+        Assert.Contains("Disallow: /settings", robots);
+        Assert.Contains("Allow: /blog", robots);
+        Assert.Contains("Allow: /reviews", robots);
+        Assert.Contains("Allow: /fitness-tracker", robots);
+    }
+
+    [Fact]
     public async Task ContentTypesStatusesAndUniqueSlugsPersist()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

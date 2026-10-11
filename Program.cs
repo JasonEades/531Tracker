@@ -313,6 +313,26 @@ app.UseAuthentication();
 app.UseAuthorization();
 app.UseAntiforgery();
 
+app.MapGet("/robots.txt", (HttpContext context, IConfiguration configuration) =>
+{
+    var baseUrl = SiteContentSeo.ResolveBaseUrl(
+        configuration["Seo:BaseUrl"],
+        $"{context.Request.Scheme}://{context.Request.Host}");
+    return Results.Text(SiteContentSeo.BuildRobotsTxt(baseUrl), "text/plain");
+});
+
+app.MapGet("/sitemap.xml", async (
+    HttpContext context, IConfiguration configuration, AppDbContext db, CancellationToken cancellationToken) =>
+{
+    var baseUrl = SiteContentSeo.ResolveBaseUrl(
+        configuration["Seo:BaseUrl"],
+        $"{context.Request.Scheme}://{context.Request.Host}");
+    var publishedContent = await db.SiteContents.AsNoTracking()
+        .Where(item => item.Status == SiteContentStatus.Published)
+        .ToListAsync(cancellationToken);
+    return Results.Content(SiteContentSitemap.Build(baseUrl, publishedContent), "application/xml", System.Text.Encoding.UTF8);
+});
+
 app.MapStaticAssets();
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();

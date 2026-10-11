@@ -4,14 +4,28 @@
 @using FiveThreeOneTracker.Data
 @using FiveThreeOneTracker.Models
 @inject AppDbContext Db
+@inject NavigationManager Nav
+@inject IConfiguration Configuration
 
-<PageTitle>Blog & Reviews — Jason's Garage Lab</PageTitle>
+<PageTitle>@(IsReviews ? "Product Reviews" : "Training Blog") — Jason's Garage Lab</PageTitle>
+<HeadContent>
+    <meta name="description" content="@PageDescription" />
+    <link rel="canonical" href="@CanonicalUrl" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Jason's Garage Lab" />
+    <meta property="og:title" content="@PageTitleText" />
+    <meta property="og:description" content="@PageDescription" />
+    <meta property="og:url" content="@CanonicalUrl" />
+    <meta name="twitter:card" content="summary" />
+    <meta name="twitter:title" content="@PageTitleText" />
+    <meta name="twitter:description" content="@PageDescription" />
+</HeadContent>
 
 <div class="page-header">
     <div>
         <div class="eyebrow">JASON'S GARAGE LAB</div>
-        <h1>Blog &amp; Reviews</h1>
-        <p class="text-muted">Training notes, ideas, and product reviews.</p>
+        <h1>@PageTitleText</h1>
+        <p class="text-muted">@PageDescription</p>
     </div>
     <AuthorizeView Policy="@ContentEditorPolicy.Name">
         <Authorized>
@@ -26,7 +40,7 @@
 }
 else if (entries.Count == 0)
 {
-    <section class="card"><div class="card-body text-muted">No posts or reviews have been published yet.</div></section>
+    <section class="card"><div class="card-body text-muted">No @(IsReviews ? "reviews" : "posts") have been published yet.</div></section>
 }
 else
 {
@@ -67,14 +81,27 @@ else
 @code {
     private List<SiteContent> entries = [];
     private bool loading = true;
+    private SiteContentType? loadedContentType;
+    private bool IsReviews => Nav.ToBaseRelativePath(Nav.Uri).Equals("reviews", StringComparison.OrdinalIgnoreCase);
+    private string PageTitleText => IsReviews ? "Product Reviews" : "Training Blog";
+    private string PageDescription => IsReviews
+        ? "Independent product reviews from Jason's Garage Lab, with hands-on notes on strength training gear and equipment."
+        : "Training articles, strength-program notes, and practical ideas from Jason's Garage Lab.";
+    private string CanonicalUrl => $"{SiteContentSeo.ResolveBaseUrl(Configuration["Seo:BaseUrl"], Nav.BaseUri)}{(IsReviews ? "/reviews" : "/blog")}";
 
-    protected override async Task OnInitializedAsync()
+    protected override async Task OnParametersSetAsync()
     {
+        var contentType = IsReviews ? SiteContentType.ProductReview : SiteContentType.BlogPost;
+        if (loadedContentType == contentType) return;
+
+        loading = true;
         entries = await Db.SiteContents.AsNoTracking()
-            .Where(entry => entry.Status == SiteContentStatus.Published)
+            .Where(entry => entry.Status == SiteContentStatus.Published
+                && entry.Type == contentType)
             .OrderByDescending(entry => entry.PublishedAtUtc)
             .ThenByDescending(entry => entry.Id)
             .ToListAsync();
+        loadedContentType = contentType;
         loading = false;
     }
 
