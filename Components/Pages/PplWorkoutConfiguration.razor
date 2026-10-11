@@ -1,0 +1,256 @@
+@page "/ppl/{ProgramId:int}/workouts"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@using Microsoft.EntityFrameworkCore
+@using FiveThreeOneTracker.Models
+@inject IPplProgramService PplService
+@inject NavigationManager Nav
+
+<PageTitle>Configure PPL Workouts — Jason's Garage Lab</PageTitle>
+
+<div class="ppl-setup animate-fade-in">
+    <div class="setup-header">
+        <button class="btn btn-ghost btn-sm back-btn" @onclick='() => Nav.NavigateTo("/")'>← Dashboard</button>
+        <h1>Configure PPL Workouts</h1>
+        @if (program is not null)
+        {
+            <p class="setup-sub">@program.Name · Set a different workout for each training week.</p>
+        }
+    </div>
+
+    @if (loading)
+    {
+        <div class="loading"><div class="spinner"></div></div>
+    }
+    else if (program is null)
+    {
+        <div class="alert alert-danger">PPL program not found.</div>
+    }
+    else
+    {
+        <div class="setup-card">
+            <div class="form-group">
+                <label class="form-label" for="week-number">Training Week</label>
+                <div class="flex items-center gap-1">
+                    <button class="btn btn-outline btn-sm" @onclick="PreviousWeek" aria-label="Previous week">‹</button>
+                    <input id="week-number" class="form-control" style="max-width:140px" type="number" min="1"
+                           @bind="selectedWeek" @bind:after="LoadWeek" />
+                    <button class="btn btn-outline btn-sm" @onclick="NextWeek" aria-label="Next week">›</button>
+                </div>
+                <p class="option-hint">Changes apply only to week @selectedWeek. Other weeks keep their own workouts or use the default schedule.</p>
+            </div>
+        </div>
+
+        @foreach (var day in days)
+        {
+            <div class="setup-card mt-3">
+                <div class="form-group">
+                    <label class="form-label">Workout Name</label>
+                    <input class="form-control" type="text" maxlength="100" @bind="day.Name" />
+                </div>
+                <div class="preview-title" style="margin-bottom:var(--space-3)">@day.DayType · Day @day.OrderInWeek</div>
+                @foreach (var exercise in day.Exercises)
+                {
+                    <div class="ex-row" style="align-items:flex-start">
+                        <div class="form-group" style="flex:2;min-width:150px">
+                            <label class="form-label">Exercise</label>
+                            <input class="form-control" type="text" maxlength="100" @bind="exercise.ExerciseName" />
+                        </div>
+                        <div class="form-group" style="flex:1;min-width:100px">
+                            <label class="form-label">Muscle Group</label>
+                            <select class="form-control" @bind="exercise.MuscleGroup">
+                                @foreach (var group in Enum.GetValues<MuscleGroup>())
+                                {
+                                    <option value="@group">@group</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="form-group" style="width:76px">
+                            <label class="form-label">Sets</label>
+                            <input class="form-control" type="number" min="1" max="20" @bind="exercise.TargetSets" />
+                        </div>
+                        <div class="form-group" style="width:90px">
+                            <label class="form-label">Rep Range</label>
+                            <div class="flex items-center gap-1">
+                                <input class="form-control" type="number" min="1" max="100" aria-label="Minimum reps" @bind="exercise.RepsMin" />
+                                <span>–</span>
+                                <input class="form-control" type="number" min="1" max="100" aria-label="Maximum reps" @bind="exercise.RepsMax" />
+                            </div>
+                        </div>
+                        <div class="form-group" style="padding-top:var(--space-6)">
+                            <label class="toggle-row">
+                                <span class="form-label" style="margin-bottom:0">Bodyweight</span>
+                                <input type="checkbox" @bind="exercise.IsBodyweight" />
+                            </label>
+                        </div>
+                        <button class="btn btn-ghost btn-sm" style="margin-top:var(--space-6)" @onclick="() => RemoveExercise(day, exercise)" disabled="@(day.Exercises.Count == 1)">Remove</button>
+                    </div>
+                }
+                <button class="btn btn-outline btn-sm mt-2" @onclick="() => AddExercise(day)">+ Add Accessory Exercise</button>
+            </div>
+        }
+
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="alert alert-danger mt-3">@error</div>
+        }
+        @if (!string.IsNullOrWhiteSpace(success))
+        {
+            <div class="alert alert-success mt-3">@success</div>
+        }
+
+        <div class="flex gap-1 mt-3">
+            <button class="btn btn-primary flex-1 btn-lg" @onclick="Save" disabled="@saving">
+                @(saving ? "Saving…" : $"Save Week {selectedWeek} Workouts")
+            </button>
+            <button class="btn btn-outline" @onclick='() => Nav.NavigateTo("/")'>Done</button>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int ProgramId { get; set; }
+
+    private PplProgram? program;
+    private List<WorkoutDayDraft> days = [];
+    private int selectedWeek = 1;
+    private bool loading = true;
+    private bool saving;
+    private string? error;
+    private string? success;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        program = await PplService.GetProgramWithDetailsAsync(ProgramId);
+        if (program is not null)
+        {
+            var elapsedDays = (DateTime.UtcNow.Date - program.CreatedAt.ToUniversalTime().Date).TotalDays;
+            selectedWeek = Math.Max(1, (int)Math.Floor(elapsedDays / 7) + 1);
+            await LoadWeek();
+        }
+        loading = false;
+    }
+
+    private async Task LoadWeek()
+    {
+        error = null;
+        success = null;
+        if (selectedWeek < 1)
+        {
+            error = "Training week must be 1 or greater.";
+            return;
+        }
+
+        var templates = await PplService.GetWeekWorkoutTemplatesAsync(ProgramId, selectedWeek);
+        days = templates.Select(template => new WorkoutDayDraft
+        {
+            DayTemplateId = program!.DayTemplates.Single(
+                defaultTemplate => defaultTemplate.WeekNumber is null
+                    && defaultTemplate.OrderInWeek == template.OrderInWeek).Id,
+            DayType = template.DayType,
+            OrderInWeek = template.OrderInWeek,
+            Name = template.Name,
+            Exercises = template.ExerciseSlots.OrderBy(slot => slot.OrderInDay).Select(slot => new WorkoutExerciseDraft
+            {
+                SourceSlotId = slot.Id,
+                ExerciseName = slot.ExerciseName,
+                MuscleGroup = slot.MuscleGroup,
+                TargetSets = slot.TargetSets,
+                RepsMin = slot.RepsMin,
+                RepsMax = slot.RepsMax,
+                IsBodyweight = slot.IsBodyweight,
+                ProgressionIncrement = slot.ProgressionIncrement,
+                StartingWeight = slot.StartingWeight,
+                CurrentWeight = slot.CurrentWeight
+            }).ToList()
+        }).ToList();
+    }
+
+    private async Task PreviousWeek()
+    {
+        if (selectedWeek > 1) selectedWeek--;
+        await LoadWeek();
+    }
+
+    private async Task NextWeek()
+    {
+        selectedWeek++;
+        await LoadWeek();
+    }
+
+    private void AddExercise(WorkoutDayDraft day)
+    {
+        day.Exercises.Add(new WorkoutExerciseDraft
+        {
+            MuscleGroup = day.DayType switch
+            {
+                PplDayType.Push => MuscleGroup.Chest,
+                PplDayType.Pull => MuscleGroup.Back,
+                _ => MuscleGroup.Quads
+            }
+        });
+    }
+
+    private static void RemoveExercise(WorkoutDayDraft day, WorkoutExerciseDraft exercise)
+    {
+        if (day.Exercises.Count > 1) day.Exercises.Remove(exercise);
+    }
+
+    private async Task Save()
+    {
+        saving = true;
+        error = null;
+        success = null;
+        try
+        {
+            var drafts = days.Select(day => new PplWorkoutDayDraft(
+                day.DayTemplateId,
+                day.Name,
+                day.Exercises.Select(exercise => new PplWorkoutExerciseDraft(
+                    exercise.SourceSlotId,
+                    exercise.ExerciseName,
+                    exercise.MuscleGroup,
+                    exercise.TargetSets,
+                    exercise.RepsMin,
+                    exercise.RepsMax,
+                    exercise.IsBodyweight,
+                    exercise.ProgressionIncrement,
+                    exercise.StartingWeight,
+                    exercise.CurrentWeight)).ToList())).ToList();
+            await PplService.ConfigureWeekWorkoutsAsync(ProgramId, selectedWeek, drafts);
+            await LoadWeek();
+            success = $"Week {selectedWeek} workouts saved.";
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private sealed class WorkoutDayDraft
+    {
+        public int DayTemplateId { get; set; }
+        public PplDayType DayType { get; set; }
+        public int OrderInWeek { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public List<WorkoutExerciseDraft> Exercises { get; set; } = [];
+    }
+
+    private sealed class WorkoutExerciseDraft
+    {
+        public int? SourceSlotId { get; set; }
+        public string ExerciseName { get; set; } = string.Empty;
+        public MuscleGroup MuscleGroup { get; set; }
+        public int TargetSets { get; set; } = 3;
+        public int RepsMin { get; set; } = 8;
+        public int RepsMax { get; set; } = 12;
+        public bool IsBodyweight { get; set; }
+        public double ProgressionIncrement { get; set; } = 5;
+        public double? StartingWeight { get; set; }
+        public double? CurrentWeight { get; set; }
+    }
+}

@@ -24,8 +24,18 @@ public class CycleService(
     IBbbMappingService bbbMapping,
     IWeightCalculator weightCalc,
     ICurrentUserService userContext,
+    IEstimatedStrengthService estimatedStrength,
     IDbContextFactory<AppDbContext>? dbFactory = null) : ICycleService
 {
+    private static readonly IReadOnlyDictionary<LiftType, double> DefaultTrainingMaxes =
+        new Dictionary<LiftType, double>
+        {
+            [LiftType.Squat] = 315,
+            [LiftType.BenchPress] = 225,
+            [LiftType.Deadlift] = 365,
+            [LiftType.OverheadPress] = 145
+        };
+
     public async Task<Cycle?> GetCurrentCycleAsync()
     {
         var userId = await userContext.GetUserIdAsync();
@@ -89,6 +99,18 @@ public class CycleService(
             .OrderByDescending(c => c.CycleNumber)
             .FirstOrDefaultAsync();
         var cycleNumber = (lastCycle?.CycleNumber ?? 0) + 1;
+        var lifts = await liftService.GetAllLiftsAsync();
+
+        if (cycleNumber == 1)
+        {
+            var profile = await estimatedStrength.GetProfileAsync(userId);
+            foreach (var lift in lifts)
+            {
+                if (DefaultTrainingMaxes.GetValueOrDefault(lift.LiftType) == lift.TrainingMax
+                    && profile.MainLiftOneRepMaxes.TryGetValue(lift.LiftType, out var oneRepMax))
+                    await liftService.UpdateTrainingMaxAsync(lift.Id, weightCalc.RoundToNearest5(oneRepMax * 0.9));
+            }
+        }
 
         var cycle = new Cycle
         {

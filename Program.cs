@@ -219,6 +219,7 @@ builder.Services.AddScoped<IUserInitService, UserInitService>();
 builder.Services.AddScoped<IAdminService, AdminService>();
 builder.Services.AddScoped<IBbbMappingService, BbbMappingService>();
 builder.Services.AddScoped<IWeightCalculator, WeightCalculator>();
+builder.Services.AddScoped<IEstimatedStrengthService, EstimatedStrengthService>();
 builder.Services.AddScoped<ICycleService, CycleService>();
 builder.Services.AddScoped<ICycleDateResolver, CycleDateResolver>();
 builder.Services.Configure<GoogleHealthOptions>(builder.Configuration.GetSection(GoogleHealthOptions.SectionName));

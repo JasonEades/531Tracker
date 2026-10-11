@@ -16,6 +16,9 @@ public class PplDayTemplate
     /// <summary>1-based position in the weekly rotation (e.g. 1=first day, 6=last day of 6-day split).</summary>
     public int OrderInWeek { get; set; }
 
+    /// <summary>Training week for a customized schedule; null means the program's default schedule.</summary>
+    public int? WeekNumber { get; set; }
+
     [Required]
     [StringLength(100)]
     public string Name { get; set; } = string.Empty;

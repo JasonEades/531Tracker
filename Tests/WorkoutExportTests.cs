@@ -112,7 +112,7 @@ public sealed class WorkoutExportTests
 
         await using var context = new AppDbContext(options);
         await context.Database.EnsureCreatedAsync();
-        var service = new PplProgramService(context, new TestCurrentUserService());
+        var service = CreatePplProgramService(context, new TestCurrentUserService());
 
         var program = await service.CreateProgramAsync("New PPL", 3);
         var details = await service.GetProgramWithDetailsAsync(program.Id);
@@ -136,13 +136,316 @@ public sealed class WorkoutExportTests
 
         await using var context = new AppDbContext(options);
         await context.Database.EnsureCreatedAsync();
-        var service = new PplProgramService(context, new TestCurrentUserService());
+        var service = CreatePplProgramService(context, new TestCurrentUserService());
 
         var threeDay = await service.CreateProgramAsync("Three", 3);
         var sixDay = await service.CreateProgramAsync("Six", 6);
 
         Assert.Equal(3, (await service.GetProgramWithDetailsAsync(threeDay.Id))!.DayTemplates.Count);
         Assert.Equal(6, (await service.GetProgramWithDetailsAsync(sixDay.Id))!.DayTemplates.Count);
+    }
+
+    [Fact]
+    public async Task PplStartingWeightsUseEstimatedOneRepMaxesFromCompleted531Workouts()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var bench = new Lift { UserId = "test-user", LiftType = LiftType.BenchPress, Name = "Bench Press", TrainingMax = 200 };
+        var cycle = new Cycle { UserId = "test-user", Name = "Cycle 1", CycleNumber = 1 };
+        var week = new Week { Cycle = cycle, WeekNumber = WeekNumber.Week1 };
+        var workout = new Workout { Week = week, MainLiftType = LiftType.BenchPress, Status = WorkoutStatus.Completed };
+        context.WorkoutSets.Add(new WorkoutSet
+        {
+            Workout = workout,
+            Lift = bench,
+            SetType = SetType.Main,
+            IsCompleted = true,
+            ActualWeight = 170,
+            ActualReps = 5
+        });
+        await context.SaveChangesAsync();
+
+        var service = CreatePplProgramService(context, new TestCurrentUserService());
+        var program = await service.CreateProgramAsync("PPL from 531 history", 3);
+        var details = await service.GetProgramWithDetailsAsync(program.Id);
+        var benchSlot = details!.DayTemplates
+            .SelectMany(day => day.ExerciseSlots)
+            .Single(slot => slot.ExerciseName == "Barbell Bench Press");
+
+        Assert.Equal(200, new WeightCalculator().CalculateEstimated1RM(170, 5));
+        Assert.Equal(160, benchSlot.StartingWeight);
+        Assert.Equal(160, benchSlot.CurrentWeight);
+    }
+
+    [Fact]
+    public async Task SelectingAnotherUsersPplProgramDoesNotDeactivateOwnProgram()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var ownService = CreatePplProgramService(context, new TestCurrentUserService("user-a"));
+        var otherService = CreatePplProgramService(context, new TestCurrentUserService("user-b"));
+        var ownProgram = await ownService.CreateProgramAsync("Own PPL", 3);
+        var otherProgram = await otherService.CreateProgramAsync("Other PPL", 3);
+
+        await ownService.SetActiveProgramAsync(otherProgram.Id);
+
+        Assert.True((await context.PplPrograms.SingleAsync(p => p.Id == ownProgram.Id)).IsActive);
+        Assert.True((await context.PplPrograms.SingleAsync(p => p.Id == otherProgram.Id)).IsActive);
+    }
+
+    [Fact]
+    public async Task FirstUserLiftsUseEstimatedOneRepMaxesFromExisting531History()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var bench = new Lift { LiftType = LiftType.BenchPress, Name = "Bench Press", TrainingMax = 225 };
+        var cycle = new Cycle { Name = "Legacy Cycle", CycleNumber = 1 };
+        var week = new Week { Cycle = cycle, WeekNumber = WeekNumber.Week1 };
+        var workout = new Workout { Week = week, MainLiftType = LiftType.BenchPress, Status = WorkoutStatus.Completed };
+        context.WorkoutSets.Add(new WorkoutSet
+        {
+            Workout = workout,
+            Lift = bench,
+            SetType = SetType.Main,
+            IsCompleted = true,
+            ActualWeight = 170,
+            ActualReps = 5
+        });
+        await context.SaveChangesAsync();
+
+        var calculator = new WeightCalculator();
+        context.Users.Add(new ApplicationUser { Id = "test-user", UserName = "test-user", NormalizedUserName = "TEST-USER" });
+        await context.SaveChangesAsync();
+        var initializer = new UserInitService(
+            context,
+            new EstimatedStrengthService(context, calculator),
+            calculator);
+        await initializer.EnsureUserInitializedAsync("test-user");
+
+        Assert.Equal("test-user", bench.UserId);
+        Assert.Equal(180, bench.TrainingMax);
+    }
+
+    [Fact]
+    public async Task NewAccountDoesNotClaimLegacyUnownedDataWhenOtherAccountsExist()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        context.Users.AddRange(
+            new ApplicationUser { Id = "existing-user", UserName = "existing-user", NormalizedUserName = "EXISTING-USER" },
+            new ApplicationUser { Id = "new-user", UserName = "new-user", NormalizedUserName = "NEW-USER" });
+        var orphanedCycle = new Cycle { Name = "Legacy Cycle", CycleNumber = 1 };
+        context.Cycles.Add(orphanedCycle);
+        await context.SaveChangesAsync();
+
+        var calculator = new WeightCalculator();
+        var initializer = new UserInitService(
+            context,
+            new EstimatedStrengthService(context, calculator),
+            calculator);
+        await initializer.EnsureUserInitializedAsync("new-user");
+
+        Assert.Null(orphanedCycle.UserId);
+        Assert.Equal(4, await context.Lifts.CountAsync(lift => lift.UserId == "new-user"));
+    }
+
+    [Fact]
+    public async Task UpdatingCardioSessionCannotAttachAnotherUsersPrivateAccessory()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var ownAccessory = new Accessory
+        {
+            UserId = "user-a",
+            Name = "My Rowing Machine",
+            Category = AccessoryCategory.Cardio
+        };
+        var privateAccessory = new Accessory
+        {
+            UserId = "user-b",
+            Name = "Private Bike",
+            Category = AccessoryCategory.Cardio
+        };
+        var cycle = new Cycle { UserId = "user-a", Name = "Cycle" };
+        var week = new Week { Cycle = cycle, WeekNumber = WeekNumber.Week1 };
+        var session = new AdditionalSession
+        {
+            Week = week,
+            SessionType = SessionType.Cardio,
+            Name = "Existing Cardio",
+            CardioEntries =
+            [
+                new CardioEntry
+                {
+                    Accessory = ownAccessory,
+                    Quantity = 20,
+                    Unit = CardioUnit.Minutes
+                }
+            ]
+        };
+        context.AdditionalSessions.Add(session);
+        context.Accessories.Add(privateAccessory);
+        await context.SaveChangesAsync();
+
+        var service = new AdditionalSessionService(context, new TestCurrentUserService("user-a"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.UpdateAsync(
+            session.Id,
+            DateTime.UtcNow.Date.AddDays(1),
+            "Changed Cardio",
+            null,
+            [new CardioEntryInput(privateAccessory.Id, 30, CardioUnit.Minutes, null)]));
+
+        Assert.Equal("Existing Cardio", session.Name);
+        Assert.Equal(ownAccessory.Id, (await context.CardioEntries.SingleAsync()).AccessoryId);
+    }
+
+    [Fact]
+    public async Task First531CycleUsesEstimatedOneRepMaxFromPplHistory()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        context.Lifts.AddRange(
+            new Lift { UserId = "test-user", LiftType = LiftType.Squat, Name = "Squat", TrainingMax = 315 },
+            new Lift { UserId = "test-user", LiftType = LiftType.BenchPress, Name = "Bench Press", TrainingMax = 225 },
+            new Lift { UserId = "test-user", LiftType = LiftType.Deadlift, Name = "Deadlift", TrainingMax = 365 },
+            new Lift { UserId = "test-user", LiftType = LiftType.OverheadPress, Name = "Overhead Press", TrainingMax = 145 });
+        await context.SaveChangesAsync();
+
+        var user = new TestCurrentUserService();
+        var calculator = new WeightCalculator();
+        var pplService = CreatePplProgramService(context, user);
+        var pplSessions = new PplSessionService(context, user);
+        var program = await pplService.CreateProgramAsync("PPL first", 3);
+        var session = await pplService.GetOrCreateNextSessionAsync(program.Id);
+        var details = await pplSessions.GetSessionWithDetailsAsync(session.Id);
+        var benchExercise = details!.Exercises.Single(exercise => exercise.ExerciseName == "Barbell Bench Press");
+        var set = benchExercise.Sets.First();
+
+        await pplSessions.UpdateSetAsync(set.Id, 170, 5, true);
+        await pplSessions.CompleteSessionAsync(session.Id);
+
+        var cycleService = new CycleService(
+            context,
+            new LiftService(context, user),
+            new BbbMappingService(),
+            calculator,
+            user,
+            new EstimatedStrengthService(context, calculator));
+        await cycleService.CreateCycleAsync();
+
+        var bench = await context.Lifts.SingleAsync(lift => lift.LiftType == LiftType.BenchPress);
+        Assert.Equal(180, bench.TrainingMax);
+    }
+
+    [Fact]
+    public async Task PplUsesCustomizedWorkoutForSelectedWeekAndDefaultsForOtherWeeks()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var service = CreatePplProgramService(context, new TestCurrentUserService());
+        var program = await service.CreateProgramAsync("Weekly PPL", 3);
+        var defaults = await service.GetWeekWorkoutTemplatesAsync(program.Id, 1);
+        var firstDefaultExercise = defaults[0].ExerciseSlots.First();
+        var weekOneDrafts = defaults.Select(day => new PplWorkoutDayDraft(
+            day.Id,
+            day.Name,
+            day.ExerciseSlots.Select(slot => new PplWorkoutExerciseDraft(
+                slot.Id,
+                slot.ExerciseName,
+                slot.MuscleGroup,
+                slot.TargetSets,
+                slot.RepsMin,
+                slot.RepsMax,
+                slot.IsBodyweight,
+                slot.ProgressionIncrement,
+                slot.StartingWeight,
+                slot.CurrentWeight)).ToList())).ToList();
+        var firstDay = weekOneDrafts[0];
+        var exercises = firstDay.Exercises.ToList();
+        exercises[0] = exercises[0] with { ExerciseName = "Week One Press", TargetSets = 5, RepsMin = 3, RepsMax = 5 };
+        exercises.Add(new PplWorkoutExerciseDraft(
+            null,
+            "Cable Lateral Raise",
+            MuscleGroup.Shoulders,
+            3,
+            12,
+            15,
+            false,
+            2.5,
+            null,
+            null));
+        weekOneDrafts[0] = firstDay with { Name = "Week One Push", Exercises = exercises };
+
+        await service.ConfigureWeekWorkoutsAsync(program.Id, 1, weekOneDrafts);
+
+        var customized = await service.GetWeekWorkoutTemplatesAsync(program.Id, 1);
+        var nextWeek = await service.GetWeekWorkoutTemplatesAsync(program.Id, 2);
+        Assert.Equal("Week One Push", customized[0].Name);
+        Assert.Equal("Week One Press", customized[0].ExerciseSlots.OrderBy(slot => slot.OrderInDay).First().ExerciseName);
+        Assert.Equal(5, customized[0].ExerciseSlots.OrderBy(slot => slot.OrderInDay).First().TargetSets);
+        Assert.Contains(customized[0].ExerciseSlots, slot =>
+            slot.ExerciseName == "Cable Lateral Raise"
+            && slot.MuscleGroup == MuscleGroup.Shoulders
+            && slot.TargetSets == 3
+            && slot.RepsMin == 12
+            && slot.RepsMax == 15);
+        Assert.Equal(firstDefaultExercise.ExerciseName, nextWeek[0].ExerciseSlots.OrderBy(slot => slot.OrderInDay).First().ExerciseName);
+
+        var reconfiguredDrafts = customized.Select(day => new PplWorkoutDayDraft(
+            defaults.Single(defaultDay => defaultDay.OrderInWeek == day.OrderInWeek).Id,
+            day.Name,
+            day.ExerciseSlots.OrderBy(slot => slot.OrderInDay).Select(slot => new PplWorkoutExerciseDraft(
+                slot.Id,
+                slot.ExerciseName,
+                slot.MuscleGroup,
+                slot.TargetSets,
+                slot.RepsMin,
+                slot.RepsMax,
+                slot.IsBodyweight,
+                slot.ProgressionIncrement,
+                slot.StartingWeight,
+                slot.CurrentWeight)).ToList())).ToList();
+        await service.ConfigureWeekWorkoutsAsync(program.Id, 1, reconfiguredDrafts);
+
+        var session = await service.GetOrCreateNextSessionAsync(program.Id);
+        Assert.Equal("Week One Push", session.DayTemplate.Name);
+        Assert.Equal(1, session.Week!.WeekNumber);
+        var sessionService = new PplSessionService(context, new TestCurrentUserService());
+        var detailedSession = await sessionService.GetSessionWithDetailsAsync(session.Id);
+        Assert.Contains(detailedSession!.Exercises, exercise =>
+            exercise.ExerciseName == "Cable Lateral Raise"
+            && exercise.TargetSets == 3
+            && exercise.RepsMin == 12
+            && exercise.RepsMax == 15);
     }
 
     [Fact]
@@ -154,7 +457,7 @@ public sealed class WorkoutExportTests
 
         await using var context = new AppDbContext(options);
         await context.Database.EnsureCreatedAsync();
-        var service = new PplProgramService(context, new TestCurrentUserService());
+        var service = CreatePplProgramService(context, new TestCurrentUserService());
         var sessionService = new PplSessionService(context, new TestCurrentUserService());
         var program = await service.CreateProgramAsync("PPL", 3);
         var details = await service.GetProgramWithDetailsAsync(program.Id);
@@ -187,7 +490,7 @@ public sealed class WorkoutExportTests
 
         var owner = new TestCurrentUserService("owner");
         var other = new TestCurrentUserService("other");
-        var programService = new PplProgramService(context, owner);
+        var programService = CreatePplProgramService(context, owner);
         var ownerSessionService = new PplSessionService(context, owner);
         var otherSessionService = new PplSessionService(context, other);
 
@@ -463,6 +766,16 @@ public sealed class WorkoutExportTests
 
         public Task<string> GetUserIdAsync() => Task.FromResult(userId);
         public Task<string?> GetUserIdOrNullAsync() => Task.FromResult<string?>(userId);
+    }
+
+    private static PplProgramService CreatePplProgramService(AppDbContext context, ICurrentUserService userContext)
+    {
+        var weightCalculator = new WeightCalculator();
+        return new PplProgramService(
+            context,
+            userContext,
+            new EstimatedStrengthService(context, weightCalculator),
+            weightCalculator);
     }
 
     private static WorkoutExportModel CreateWorkout(string name, string notes) => new()

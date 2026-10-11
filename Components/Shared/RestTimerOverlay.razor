@@ -1,6 +1,7 @@
 @inject IJSRuntime JS
 @inject ISnackbar Snackbar
 @inject ILogger<RestTimerOverlay> Logger
+@inject ICurrentUserService UserContext
 
 @* Persistent, always-visible rest-timer badge plus a big center-screen flash
    during the last moments of the rest period, so the timer is never missed
@@ -28,9 +29,31 @@
     private bool IsUrgent => RemainingSeconds is > 0 and <= 10;
     private int lastRenderedSeconds;
     private bool audioWarningShown;
+    private string? currentUserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        currentUserId = await UserContext.GetUserIdAsync();
+    }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        if (firstRender && !string.IsNullOrWhiteSpace(currentUserId))
+        {
+            try
+            {
+                await JS.InvokeVoidAsync("restTimerAudio.setCurrentUser", currentUserId);
+            }
+            catch (JSDisconnectedException ex)
+            {
+                Logger.LogDebug(ex, "Rest timer audio preference was not loaded because the browser disconnected.");
+            }
+            catch (JSException ex)
+            {
+                Logger.LogWarning(ex, "Unable to select the current user's rest timer audio preference.");
+            }
+        }
+
         if (RemainingSeconds == lastRenderedSeconds)
             return;
 
@@ -40,10 +63,11 @@
 
         try
         {
-            if (!await JS.InvokeAsync<bool>("restTimerAudio.getEnabled"))
+            if (string.IsNullOrWhiteSpace(currentUserId)
+                || !await JS.InvokeAsync<bool>("restTimerAudio.getEnabled", currentUserId))
                 return;
 
-            var played = await JS.InvokeAsync<bool>("restTimerAudio.beep");
+            var played = await JS.InvokeAsync<bool>("restTimerAudio.beep", currentUserId);
             if (!played)
                 WarnAudioUnavailable();
         }

@@ -32,7 +32,7 @@
                    disabled="@(!audioSettingsLoaded || savingAudioSettings)" aria-describedby="countdown-beeps-help" />
             Rest countdown beeps
         </label>
-        <p id="countdown-beeps-help" class="text-muted">Beep each second during the final 10 seconds of 5/3/1 and PPL rest timers. Saved in this browser; the visual countdown stays on.</p>
+        <p id="countdown-beeps-help" class="text-muted">Beep each second during the final 10 seconds of 5/3/1 and PPL rest timers. Saved separately for your account in this browser; the visual countdown stays on.</p>
         @if (!string.IsNullOrWhiteSpace(audioSettingsError))
         {
             <div class="alert alert-danger" role="alert">@audioSettingsError</div>
@@ -283,6 +283,7 @@ else if (equipment is not null)
     private bool audioSettingsLoaded;
     private bool savingAudioSettings;
     private string? audioSettingsError;
+    private string? audioPreferenceUserId;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -291,7 +292,9 @@ else if (equipment is not null)
 
         try
         {
-            countdownBeepsEnabled = await JS.InvokeAsync<bool>("restTimerAudio.getEnabled");
+            audioPreferenceUserId = await UserContext.GetUserIdAsync();
+            await JS.InvokeVoidAsync("restTimerAudio.setCurrentUser", audioPreferenceUserId);
+            countdownBeepsEnabled = await JS.InvokeAsync<bool>("restTimerAudio.getEnabled", audioPreferenceUserId);
             audioSettingsLoaded = true;
         }
         catch (JSDisconnectedException ex)
@@ -313,7 +316,9 @@ else if (equipment is not null)
         audioSettingsError = null;
         try
         {
-            await JS.InvokeVoidAsync("restTimerAudio.setEnabled", enabled);
+            audioPreferenceUserId ??= await UserContext.GetUserIdAsync();
+            await JS.InvokeVoidAsync("restTimerAudio.setEnabled", audioPreferenceUserId, enabled);
+            await JS.InvokeVoidAsync("restTimerAudio.setCurrentUser", audioPreferenceUserId);
             countdownBeepsEnabled = enabled;
         }
         catch (JSDisconnectedException ex)

@@ -165,9 +165,13 @@ public class PlateCalculatorService(AppDbContext db, ICurrentUserService userCon
     public async Task SetDefaultBarAsync(int barId)
     {
         var userId = await userContext.GetUserIdAsync();
+        var requestedBar = await db.Bars
+            .FirstOrDefaultAsync(b => b.Id == barId && b.UserId == userId);
+        if (requestedBar is null) return;
+
         var bars = await db.Bars.Where(b => b.UserId == userId).ToListAsync();
         foreach (var bar in bars)
-            bar.IsDefault = bar.Id == barId;
+            bar.IsDefault = bar.Id == requestedBar.Id;
         await db.SaveChangesAsync();
     }
 

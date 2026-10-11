@@ -842,9 +842,12 @@ namespace FiveThreeOneTracker.Migrations
                         .IsRequired()
                         .HasColumnType("text");
 
+                    b.Property<int?>("WeekNumber")
+                        .HasColumnType("integer");
+
                     b.HasKey("Id");
 
-                    b.HasIndex("PplProgramId");
+                    b.HasIndex("PplProgramId", "WeekNumber", "OrderInWeek");
 
                     b.ToTable("PplDayTemplates");
                 });

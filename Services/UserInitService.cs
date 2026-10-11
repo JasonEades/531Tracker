@@ -8,13 +8,13 @@ public interface IUserInitService
 {
     /// <summary>
     /// Ensures the user has their 4 default lifts and a default equipment record.
-    /// On first login, claims any existing unowned (UserId == null) rows before
-    /// falling back to creating fresh defaults. Safe to call on every login — idempotent.
+    /// Legacy unowned data is claimed only when this is the installation's sole account.
+    /// Safe to call on every login — idempotent.
     /// </summary>
     Task EnsureUserInitializedAsync(string userId);
 }
 
-public class UserInitService(AppDbContext db) : IUserInitService
+public class UserInitService(AppDbContext db, IEstimatedStrengthService estimatedStrength, IWeightCalculator weightCalculator) : IUserInitService
 {
     private static readonly (LiftType Type, string Name, double Tm, double BbbPct)[] DefaultLifts =
     [
@@ -26,15 +26,20 @@ public class UserInitService(AppDbContext db) : IUserInitService
 
     public async Task EnsureUserInitializedAsync(string userId)
     {
+        var canClaimLegacyData = await db.Users.CountAsync() == 1;
         var hasLifts = await db.Lifts.AnyAsync(l => l.UserId == userId);
+        var initializeLiftMaxes = false;
         if (!hasLifts)
         {
-            // Claim any unowned lifts left over from before multi-user support
-            var orphanedLifts = await db.Lifts.Where(l => l.UserId == null).ToListAsync();
+            // Claim legacy unowned data only while this is a single-account installation.
+            var orphanedLifts = canClaimLegacyData
+                ? await db.Lifts.Where(l => l.UserId == null).ToListAsync()
+                : [];
             if (orphanedLifts.Count > 0)
             {
                 foreach (var lift in orphanedLifts)
                     lift.UserId = userId;
+                initializeLiftMaxes = true;
             }
             else
             {
@@ -50,14 +55,17 @@ public class UserInitService(AppDbContext db) : IUserInitService
                         BbbPercentage = bbb,
                     });
                 }
+                initializeLiftMaxes = true;
             }
         }
 
         var hasEquipment = await db.UserEquipment.AnyAsync(e => e.UserId == userId);
         if (!hasEquipment)
         {
-            // Claim any unowned equipment first
-            var orphanedEquipment = await db.UserEquipment.Where(e => e.UserId == null).ToListAsync();
+            // Claim legacy unowned equipment only on a single-account installation.
+            var orphanedEquipment = canClaimLegacyData
+                ? await db.UserEquipment.Where(e => e.UserId == null).ToListAsync()
+                : [];
             if (orphanedEquipment.Count > 0)
             {
                 foreach (var eq in orphanedEquipment)
@@ -79,7 +87,9 @@ public class UserInitService(AppDbContext db) : IUserInitService
         var hasBars = await db.Bars.AnyAsync(b => b.UserId == userId);
         if (!hasBars)
         {
-            var orphanedBars = await db.Bars.Where(b => b.UserId == null).ToListAsync();
+            var orphanedBars = canClaimLegacyData
+                ? await db.Bars.Where(b => b.UserId == null).ToListAsync()
+                : [];
             if (orphanedBars.Count > 0)
             {
                 foreach (var bar in orphanedBars)
@@ -92,15 +102,32 @@ public class UserInitService(AppDbContext db) : IUserInitService
         }
 
         // Claim any unowned cycles (and their entire workout tree via cascade FK)
-        var orphanedCycles = await db.Cycles.Where(c => c.UserId == null).ToListAsync();
+        var orphanedCycles = canClaimLegacyData
+            ? await db.Cycles.Where(c => c.UserId == null).ToListAsync()
+            : [];
         foreach (var cycle in orphanedCycles)
             cycle.UserId = userId;
 
         // Claim any unowned PPL programs
-        var orphanedPpl = await db.PplPrograms.Where(p => p.UserId == null).ToListAsync();
+        var orphanedPpl = canClaimLegacyData
+            ? await db.PplPrograms.Where(p => p.UserId == null).ToListAsync()
+            : [];
         foreach (var ppl in orphanedPpl)
             ppl.UserId = userId;
 
         await db.SaveChangesAsync();
+
+        if (initializeLiftMaxes)
+        {
+            var profile = await estimatedStrength.GetProfileAsync(userId);
+            var lifts = await db.Lifts.Where(l => l.UserId == userId).ToListAsync();
+            foreach (var lift in lifts)
+            {
+                if (profile.MainLiftOneRepMaxes.TryGetValue(lift.LiftType, out var oneRepMax))
+                    lift.TrainingMax = weightCalculator.RoundToNearest5(oneRepMax * 0.9);
+            }
+
+            await db.SaveChangesAsync();
+        }
     }
 }

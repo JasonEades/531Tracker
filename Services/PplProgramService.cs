@@ -9,6 +9,8 @@ public interface IPplProgramService
     Task<PplProgram?> GetActiveProgramAsync();
     Task<List<PplProgram>> GetAllProgramsAsync();
     Task<PplProgram?> GetProgramWithDetailsAsync(int programId);
+    Task<List<PplDayTemplate>> GetWeekWorkoutTemplatesAsync(int programId, int weekNumber);
+    Task ConfigureWeekWorkoutsAsync(int programId, int weekNumber, IReadOnlyList<PplWorkoutDayDraft> days);
     Task<PplProgram> CreateProgramAsync(string name, int daysPerWeek, string? notes = null);
     Task ConfigureStartingWeightsAsync(int programId, IReadOnlyDictionary<int, double?> weights);
     Task SetActiveProgramAsync(int programId);
@@ -16,7 +18,11 @@ public interface IPplProgramService
     Task<PplSession> GetOrCreateNextSessionAsync(int programId);
 }
 
-public class PplProgramService(AppDbContext db, ICurrentUserService userContext) : IPplProgramService
+public class PplProgramService(
+    AppDbContext db,
+    ICurrentUserService userContext,
+    IEstimatedStrengthService estimatedStrength,
+    IWeightCalculator weightCalculator) : IPplProgramService
 {
     public async Task<PplProgram?> GetActiveProgramAsync()
     {
@@ -44,6 +50,126 @@ public class PplProgramService(AppDbContext db, ICurrentUserService userContext)
             .FirstOrDefaultAsync(p => p.Id == programId && p.UserId == userId);
     }
 
+    public async Task<List<PplDayTemplate>> GetWeekWorkoutTemplatesAsync(int programId, int weekNumber)
+    {
+        if (weekNumber < 1)
+            throw new ArgumentOutOfRangeException(nameof(weekNumber));
+
+        var userId = await userContext.GetUserIdAsync();
+        var hasProgram = await db.PplPrograms.AnyAsync(p => p.Id == programId && p.UserId == userId);
+        if (!hasProgram) throw new InvalidOperationException("PPL program was not found.");
+
+        var templates = await db.PplDayTemplates
+            .Include(d => d.ExerciseSlots.OrderBy(s => s.OrderInDay))
+            .Where(d => d.PplProgramId == programId && d.WeekNumber == weekNumber)
+            .OrderBy(d => d.OrderInWeek)
+            .ToListAsync();
+        if (templates.Count > 0) return templates;
+
+        return await db.PplDayTemplates
+            .Include(d => d.ExerciseSlots.OrderBy(s => s.OrderInDay))
+            .Where(d => d.PplProgramId == programId && d.WeekNumber == null)
+            .OrderBy(d => d.OrderInWeek)
+            .ToListAsync();
+    }
+
+    public async Task ConfigureWeekWorkoutsAsync(
+        int programId,
+        int weekNumber,
+        IReadOnlyList<PplWorkoutDayDraft> days)
+    {
+        if (weekNumber < 1)
+            throw new ArgumentOutOfRangeException(nameof(weekNumber));
+
+        var userId = await userContext.GetUserIdAsync();
+        var program = await db.PplPrograms.FirstOrDefaultAsync(p => p.Id == programId && p.UserId == userId)
+            ?? throw new InvalidOperationException("PPL program was not found.");
+
+        var defaults = await db.PplDayTemplates
+            .Include(d => d.ExerciseSlots)
+            .Where(d => d.PplProgramId == programId && d.WeekNumber == null)
+            .OrderBy(d => d.OrderInWeek)
+            .ToListAsync();
+        if (days.Count != defaults.Count || days.Select(d => d.DayTemplateId).Distinct().Count() != defaults.Count
+            || days.Any(d => defaults.All(t => t.Id != d.DayTemplateId)))
+            throw new InvalidOperationException("Workout days do not match this program's schedule.");
+        if (days.Any(d => string.IsNullOrWhiteSpace(d.Name) || d.Name.Length > 100
+            || d.Exercises.Count == 0
+            || d.Exercises.Any(e => string.IsNullOrWhiteSpace(e.ExerciseName) || e.ExerciseName.Length > 100
+                || e.TargetSets is < 1 or > 20 || e.RepsMin is < 1 or > 100
+                || e.RepsMax < e.RepsMin || e.RepsMax > 100
+                || e.ProgressionIncrement is < 0 or > 100)))
+            throw new InvalidOperationException("Enter a valid name and at least one exercise with valid sets and reps for every workout.");
+        var profile = await estimatedStrength.GetProfileAsync(userId);
+
+        var sessions = await db.PplSessions
+            .Include(s => s.Week)
+            .Where(s => s.PplProgramId == programId && s.Week != null && s.Week.WeekNumber == weekNumber)
+            .ToListAsync();
+        if (sessions.Any(s => s.Status != WorkoutStatus.NotStarted))
+            throw new InvalidOperationException("This week's workouts cannot be changed after a session has started.");
+
+        var selectedTemplates = await GetWeekWorkoutTemplatesAsync(programId, weekNumber);
+        var allowedSourceSlotIds = selectedTemplates.SelectMany(t => t.ExerciseSlots).Select(s => s.Id).ToHashSet();
+        if (days.SelectMany(d => d.Exercises).Any(e => e.SourceSlotId is int id && !allowedSourceSlotIds.Contains(id)))
+            throw new InvalidOperationException("An exercise no longer belongs to this week's workout configuration.");
+
+        db.PplSessions.RemoveRange(sessions);
+        await db.SaveChangesAsync();
+
+        var existingWeekTemplates = await db.PplDayTemplates
+            .Include(d => d.ExerciseSlots)
+            .Where(d => d.PplProgramId == programId && d.WeekNumber == weekNumber)
+            .ToListAsync();
+        db.PplDayTemplates.RemoveRange(existingWeekTemplates);
+        await db.SaveChangesAsync();
+
+        var sourceSlots = selectedTemplates.SelectMany(t => t.ExerciseSlots).ToDictionary(s => s.Id);
+        foreach (var draft in days)
+        {
+            var defaultTemplate = defaults.Single(t => t.Id == draft.DayTemplateId);
+            var template = new PplDayTemplate
+            {
+                PplProgramId = program.Id,
+                DayType = defaultTemplate.DayType,
+                Variant = defaultTemplate.Variant,
+                OrderInWeek = defaultTemplate.OrderInWeek,
+                WeekNumber = weekNumber,
+                Name = draft.Name.Trim()
+            };
+
+            for (var index = 0; index < draft.Exercises.Count; index++)
+            {
+                var exercise = draft.Exercises[index];
+                var source = exercise.SourceSlotId is int sourceId ? sourceSlots[sourceId] : null;
+                var keepProgress = source is not null
+                    && source.MuscleGroup == exercise.MuscleGroup
+                    && string.Equals(source.ExerciseName, exercise.ExerciseName.Trim(), StringComparison.OrdinalIgnoreCase);
+                var oneRepMax = keepProgress ? null : profile.GetOneRepMax(exercise.ExerciseName.Trim());
+                var derivedWeight = oneRepMax is > 0
+                    ? weightCalculator.RoundToNearest5(oneRepMax.Value / (1 + exercise.RepsMax / 30.0))
+                    : (double?)null;
+                template.ExerciseSlots.Add(new PplExerciseSlot
+                {
+                    OrderInDay = index + 1,
+                    ExerciseName = exercise.ExerciseName.Trim(),
+                    MuscleGroup = exercise.MuscleGroup,
+                    TargetSets = exercise.TargetSets,
+                    RepsMin = exercise.RepsMin,
+                    RepsMax = exercise.RepsMax,
+                    IsBodyweight = exercise.IsBodyweight,
+                    ProgressionIncrement = exercise.ProgressionIncrement,
+                    StartingWeight = keepProgress ? source!.StartingWeight : derivedWeight,
+                    CurrentWeight = keepProgress ? source!.CurrentWeight : derivedWeight
+                });
+            }
+
+            db.PplDayTemplates.Add(template);
+        }
+
+        await db.SaveChangesAsync();
+    }
+
     public async Task<PplProgram> CreateProgramAsync(string name, int daysPerWeek, string? notes = null)
     {
         var userId = await userContext.GetUserIdAsync();
@@ -66,6 +192,18 @@ public class PplProgramService(AppDbContext db, ICurrentUserService userContext)
         var templates = daysPerWeek >= 6
             ? BuildSixDayTemplates(program.Id)
             : BuildThreeDayTemplates(program.Id);
+
+        var profile = await estimatedStrength.GetProfileAsync(userId);
+        foreach (var slot in templates.SelectMany(template => template.ExerciseSlots))
+        {
+            if (slot.IsBodyweight) continue;
+            var oneRepMax = profile.GetOneRepMax(slot.ExerciseName);
+            if (oneRepMax is not > 0) continue;
+
+            var startingWeight = weightCalculator.RoundToNearest5(oneRepMax.Value / (1 + slot.RepsMax / 30.0));
+            slot.StartingWeight = startingWeight;
+            slot.CurrentWeight = startingWeight;
+        }
 
         db.PplDayTemplates.AddRange(templates);
         await db.SaveChangesAsync();
@@ -95,13 +233,12 @@ public class PplProgramService(AppDbContext db, ICurrentUserService userContext)
     public async Task SetActiveProgramAsync(int programId)
     {
         var userId = await userContext.GetUserIdAsync();
-        await db.PplPrograms.Where(p => p.UserId == userId).ExecuteUpdateAsync(s => s.SetProperty(p => p.IsActive, false));
         var program = await db.PplPrograms.FirstOrDefaultAsync(p => p.Id == programId && p.UserId == userId);
-        if (program is not null)
-        {
-            program.IsActive = true;
-            await db.SaveChangesAsync();
-        }
+        if (program is null) return;
+
+        await db.PplPrograms.Where(p => p.UserId == userId).ExecuteUpdateAsync(s => s.SetProperty(p => p.IsActive, false));
+        program.IsActive = true;
+        await db.SaveChangesAsync();
     }
 
     public async Task DeleteProgramAsync(int programId)
@@ -133,11 +270,20 @@ public class PplProgramService(AppDbContext db, ICurrentUserService userContext)
 
         if (existing is not null) return existing;
 
-        // Determine which day template comes next in the rotation
-        var templates = await db.PplDayTemplates
-            .Where(d => d.PplProgramId == programId)
+        var programCreatedDate = program.CreatedAt.ToUniversalTime();
+        var sessionDate = DateTime.UtcNow.Date;
+        var weekNumber = Math.Max(1, (int)Math.Floor((sessionDate - programCreatedDate.Date).TotalDays / 7) + 1);
+
+        // Select this week's customized schedule when one exists, otherwise use the program defaults.
+        var availableTemplates = await db.PplDayTemplates
+            .Include(d => d.ExerciseSlots)
+            .Where(d => d.PplProgramId == programId && (d.WeekNumber == weekNumber || d.WeekNumber == null))
             .OrderBy(d => d.OrderInWeek)
             .ToListAsync();
+        var weekTemplates = availableTemplates.Where(d => d.WeekNumber == weekNumber).ToList();
+        var templates = weekTemplates.Count > 0
+            ? weekTemplates
+            : availableTemplates.Where(d => d.WeekNumber is null).ToList();
 
         if (templates.Count == 0) throw new InvalidOperationException("Program has no day templates.");
 
@@ -165,20 +311,18 @@ public class PplProgramService(AppDbContext db, ICurrentUserService userContext)
             .OrderBy(s => s.OrderInDay)
             .ToListAsync();
 
-        var programCreatedDate = program.CreatedAt.ToUniversalTime();
-
         var session = new PplSession
         {
             PplProgramId = programId,
             PplDayTemplateId = nextTemplate.Id,
+            DayTemplate = nextTemplate,
             Status = WorkoutStatus.NotStarted,
             CreatedAt = DateTime.UtcNow,
-            OccurredOn = DateTime.UtcNow
+            OccurredOn = sessionDate
         };
         db.PplSessions.Add(session);
         await db.SaveChangesAsync();
 
-        var weekNumber = Math.Max(1, (int)Math.Floor((session.OccurredOn.Date - programCreatedDate.Date).TotalDays / 7) + 1);
         var pplWeek = await db.PplWeeks.FirstOrDefaultAsync(w => w.PplProgramId == programId && w.WeekNumber == weekNumber);
         if (pplWeek is null)
         {
@@ -187,6 +331,7 @@ public class PplProgramService(AppDbContext db, ICurrentUserService userContext)
             await db.SaveChangesAsync();
         }
         session.PplWeekId = pplWeek.Id;
+        session.Week = pplWeek;
         await db.SaveChangesAsync();
 
         var order = 1;

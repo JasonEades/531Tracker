@@ -185,6 +185,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         {
             entity.Property(e => e.DayType).HasConversion<string>();
             entity.Property(e => e.Variant).HasConversion<string>();
+            entity.HasIndex(e => new { e.PplProgramId, e.WeekNumber, e.OrderInWeek });
             entity.HasMany(d => d.ExerciseSlots)
                   .WithOne(s => s.DayTemplate)
                   .HasForeignKey(s => s.PplDayTemplateId)

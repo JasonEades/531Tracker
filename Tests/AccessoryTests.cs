@@ -69,9 +69,49 @@ public sealed class AccessoryTests
         Assert.Equal("Latest notes", suggestion.Notes);
     }
 
-    private sealed class TestCurrentUserService : ICurrentUserService
+    [Fact]
+    public async Task SettingAnotherUsersBarAsDefaultDoesNotClearCurrentUsersDefault()
     {
-        public Task<string> GetUserIdAsync() => Task.FromResult("test-user");
-        public Task<string?> GetUserIdOrNullAsync() => Task.FromResult<string?>("test-user");
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var ownBar = new Bar { UserId = "test-user", Name = "My Bar", Weight = 45, IsDefault = true };
+        var otherBar = new Bar { UserId = "other-user", Name = "Other Bar", Weight = 35, IsDefault = true };
+        context.Bars.AddRange(ownBar, otherBar);
+        await context.SaveChangesAsync();
+
+        var service = new PlateCalculatorService(context, new TestCurrentUserService());
+        await service.SetDefaultBarAsync(otherBar.Id);
+
+        Assert.True((await context.Bars.SingleAsync(bar => bar.Id == ownBar.Id)).IsDefault);
+        Assert.True((await context.Bars.SingleAsync(bar => bar.Id == otherBar.Id)).IsDefault);
+    }
+
+    [Fact]
+    public async Task AccessoryHistoryCannotBeRecordedForAnotherUsersPrivateAccessory()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        var accessory = new Accessory { UserId = "other-user", Name = "Private Accessory" };
+        context.Accessories.Add(accessory);
+        await context.SaveChangesAsync();
+
+        var service = new AccessoryService(context, new TestCurrentUserService());
+        await Assert.ThrowsAsync<InvalidOperationException>(
+            () => service.RecordAccessoryHistoryAsync(accessory.Id, 100, 10, 3));
+        Assert.Empty(await context.AccessoryHistory.ToListAsync());
+    }
+
+    private sealed class TestCurrentUserService(string userId = "test-user") : ICurrentUserService
+    {
+        public Task<string> GetUserIdAsync() => Task.FromResult(userId);
+        public Task<string?> GetUserIdOrNullAsync() => Task.FromResult<string?>(userId);
     }
 }

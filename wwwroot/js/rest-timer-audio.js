@@ -1,19 +1,31 @@
 window.restTimerAudio = (() => {
     let context = null;
-    const preferenceKey = "restTimerAudio.enabled";
+    const preferenceKey = userId => `restTimerAudio.enabled.${encodeURIComponent(userId)}`;
 
-    function getEnabled() {
-        return window.localStorage.getItem(preferenceKey) !== "false";
+    function getEnabled(userId) {
+        if (!userId) {
+            return false;
+        }
+
+        return window.localStorage.getItem(preferenceKey(userId)) !== "false";
     }
 
-    function setEnabled(enabled) {
-        window.localStorage.setItem(preferenceKey, String(enabled));
+    function setEnabled(userId, enabled) {
+        if (!userId) {
+            throw new TypeError("A signed-in user is required to save this preference.");
+        }
+
+        window.localStorage.setItem(preferenceKey(userId), String(enabled));
+    }
+
+    let currentUserId = null;
+
+    function setCurrentUser(userId) {
+        currentUserId = userId || null;
     }
 
     function unlock() {
-        if (!getEnabled()) {
-            return;
-        }
+        if (!getEnabled(currentUserId)) return;
 
         const AudioContext = window.AudioContext || window.webkitAudioContext;
         if (!AudioContext) {
@@ -30,8 +42,8 @@ window.restTimerAudio = (() => {
     document.addEventListener("click", unlock, { capture: true });
     document.addEventListener("keydown", unlock, { capture: true });
 
-    function beep() {
-        if (!getEnabled() || !context || context.state !== "running") {
+    function beep(userId) {
+        if (!getEnabled(userId) || !context || context.state !== "running") {
             return false;
         }
 
@@ -54,5 +66,5 @@ window.restTimerAudio = (() => {
         return true;
     }
 
-    return { beep, getEnabled, setEnabled };
+    return { beep, getEnabled, setEnabled, setCurrentUser };
 })();

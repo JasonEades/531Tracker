@@ -170,6 +170,11 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
     public async Task RecordAccessoryHistoryAsync(int accessoryId, double weight, int reps, int sets)
     {
         var userId = await userContext.GetUserIdAsync();
+        var canRecordHistory = await db.Accessories
+            .AnyAsync(a => a.Id == accessoryId && (a.UserId == null || a.UserId == userId));
+        if (!canRecordHistory)
+            throw new InvalidOperationException("The accessory is not available to the current user.");
+
         db.AccessoryHistory.Add(new AccessoryHistory
         {
             AccessoryId = accessoryId,

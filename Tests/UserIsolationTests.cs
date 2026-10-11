@@ -99,10 +99,12 @@ public sealed class UserIsolationTests
 
         var cycleServiceA = new CycleService(
             context, new LiftService(context, new TestCurrentUserService("user-a")),
-            new BbbMappingService(), new WeightCalculator(), new TestCurrentUserService("user-a"));
+            new BbbMappingService(), new WeightCalculator(), new TestCurrentUserService("user-a"),
+            new EstimatedStrengthService(context, new WeightCalculator()));
         var cycleServiceB = new CycleService(
             context, new LiftService(context, new TestCurrentUserService("user-b")),
-            new BbbMappingService(), new WeightCalculator(), new TestCurrentUserService("user-b"));
+            new BbbMappingService(), new WeightCalculator(), new TestCurrentUserService("user-b"),
+            new EstimatedStrengthService(context, new WeightCalculator()));
 
         var cycleA = await cycleServiceA.CreateCycleAsync();
         var cycleB = await cycleServiceB.CreateCycleAsync();

@@ -81,7 +81,7 @@
         <div class="setup-card mt-3">
             <div class="preview-title" style="margin-bottom:var(--space-2)">Set Your Starting Weights</div>
             <p class="option-hint" style="margin-bottom:var(--space-4)">
-                Enter the weight you currently use for each exercise. Leave any exercise blank and establish it during your first workout.
+                Starting weights are estimated from your completed workouts when available. Adjust any values to your preference.
             </p>
             @foreach (var day in programDetails.DayTemplates.OrderBy(d => d.OrderInWeek))
             {
@@ -155,7 +155,7 @@
             {
                 startingWeightDraft = programDetails.DayTemplates
                     .SelectMany(d => d.ExerciseSlots)
-                    .ToDictionary(s => s.Id, _ => (string?)null);
+                    .ToDictionary(s => s.Id, s => s.StartingWeight?.ToString(System.Globalization.CultureInfo.InvariantCulture));
             }
         }
         catch (Exception ex)
@@ -171,7 +171,10 @@
 
         var weights = startingWeightDraft.ToDictionary(
             pair => pair.Key,
-            pair => double.TryParse(pair.Value, out var weight) && weight > 0 ? weight : (double?)null);
+            pair => double.TryParse(pair.Value, System.Globalization.NumberStyles.Number,
+                System.Globalization.CultureInfo.InvariantCulture, out var weight) && weight > 0
+                ? weight
+                : (double?)null);
         loading = true;
         await PplService.ConfigureStartingWeightsAsync(createdProgram.Id, weights);
         Nav.NavigateTo("/");

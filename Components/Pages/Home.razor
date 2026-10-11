@@ -161,18 +161,25 @@ else if (currentCycle is null && activePplProgram is null)
 }
 else
 {
+    @if (activePplProgram is not null && currentCycle is not null)
+    {
+        <div class="section-header">
+            <h3>Active Programs</h3>
+        </div>
+    }
+
     @* -- PPL Hero -- *@
     @if (activePplProgram is not null)
     {
         <div class="ppl-hero-card animate-fade-in mb-4">
             <div class="ppl-hero-top">
                 <div>
-                    <div class="hero-subtitle">TODAYS PPL SESSION</div>
+                    <div class="hero-subtitle">ACTIVE PPL PROGRAM</div>
                     @if (nextPplSession is not null)
                     {
                         <div class="hero-title">@nextPplSession.DayTemplate.Name</div>
                         <div class="hero-meta">
-                            @activePplProgram.Name
+                            @activePplProgram.Name · Today's session
                             <span class="badge @GetDayTypeBadge(nextPplSession.DayTemplate.DayType) ml-1">@nextPplSession.DayTemplate.DayType</span>
                         </div>
                     }
@@ -185,7 +192,10 @@ else
                 <div class="ppl-hero-badge">PPL</div>
             </div>
             <button class="btn btn-ppl btn-full mt-3" @onclick="StartNextPplSession">
-                Start PPL Session
+                Open PPL Session
+            </button>
+            <button class="btn btn-outline btn-full mt-2" @onclick='() => Nav.NavigateTo($"/ppl/{activePplProgram.Id}/workouts")'>
+                Configure Weekly Workouts
             </button>
         </div>
     }
@@ -222,7 +232,7 @@ else
         </div>
 
         <button class="btn btn-primary btn-full mt-3" @onclick="GoToCycle">
-            View Current Cycle
+            Open 5/3/1 Cycle
         </button>
     </div>
 

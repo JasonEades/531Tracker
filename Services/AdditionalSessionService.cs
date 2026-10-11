@@ -47,10 +47,31 @@ public sealed class AdditionalSessionService(AppDbContext db, ICurrentUserServic
 
     public async Task UpdateAsync(int id, DateTime occurredOn, string? name, string? notes, IReadOnlyCollection<CardioEntryInput>? cardioEntries = null)
     {
-        var session = await OwnedQuery(await userContext.GetUserIdAsync())
+        var userId = await userContext.GetUserIdAsync();
+        var session = await OwnedQuery(userId)
             .Include(s => s.CardioEntries)
             .SingleOrDefaultAsync(s => s.Id == id);
         if (session is null) return;
+
+        var validEntries = new List<CardioEntryInput>();
+        if (session.SessionType == SessionType.Cardio && cardioEntries is not null)
+        {
+            validEntries = cardioEntries
+                .Where(e => e.AccessoryId > 0 && e.Quantity > 0)
+                .ToList();
+            var accessoryIds = validEntries.Select(e => e.AccessoryId).Distinct().ToList();
+            var availableAccessoryIds = await db.Accessories
+                .Where(a => accessoryIds.Contains(a.Id)
+                    && a.IsActive
+                    && a.Category == AccessoryCategory.Cardio
+                    && (a.UserId == null || a.UserId == userId))
+                .Select(a => a.Id)
+                .ToListAsync();
+            if (availableAccessoryIds.Count != accessoryIds.Count
+                || validEntries.Any(e => !Enum.IsDefined(e.Unit)))
+                throw new InvalidOperationException("One or more cardio accessories are not available to the current user.");
+        }
+
         session.OccurredOn = DateTime.SpecifyKind(occurredOn.Date, DateTimeKind.Utc);
         session.Name = string.IsNullOrWhiteSpace(name) ? session.SessionType switch
         {
@@ -63,7 +84,7 @@ public sealed class AdditionalSessionService(AppDbContext db, ICurrentUserServic
         if (session.SessionType == SessionType.Cardio && cardioEntries is not null)
         {
             db.CardioEntries.RemoveRange(session.CardioEntries);
-            foreach (var entry in cardioEntries.Where(e => e.AccessoryId > 0 && e.Quantity > 0))
+            foreach (var entry in validEntries)
             {
                 db.CardioEntries.Add(new CardioEntry
                 {
