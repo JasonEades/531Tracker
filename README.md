@@ -54,8 +54,9 @@ The `+` marks the final set as AMRAP (as many reps as possible). The optional 5s
 
 ### 5/3/1 training
 
-- Dashboard with current cycle, next workout, completion progress, and Training Maxes
+- Dashboard showing every active program (5/3/1 and PPL side by side) with direct open actions, so neither requires a trip to History
 - Cycle creation and history across weeks and primary lifts
+- Starting Training Maxes derive from estimated 1RMs: from completed 5/3/1 main sets and completed PPL sets, falling back to 90% of the estimate for untouched defaults; manual edits are preserved
 - Main, warmup, BBB, FSL, and AMRAP set prescriptions
 - Optional BBB (Boring But Big) work with Same Day and Opposite Day modes
 - Optional FSL (First Set Last) 5×5 work
@@ -90,6 +91,8 @@ overview; `/robots.txt` points crawlers to it and keeps private application
 routes out of crawl discovery. Set `Seo__BaseUrl` to the public HTTPS origin
 when deploying to a different domain.
 
+The public `/fitness-tracker` page describes the app for search engines and visitors; training data stays behind sign-in.
+
 ### Additional primary-lift sets
 
 Additional work can be recorded directly from a primary-lift workout without changing the programmed prescription. Each additional set supports:
@@ -107,6 +110,9 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 ### Push/Pull/Legs
 
 - Three-day or six-day splits
+- Week-by-week workout configuration at `/ppl/{id}/workouts`: edit workout names, exercises, muscle groups, sets, and rep ranges per week; unconfigured weeks use the default schedule
+- **Add Accessory Exercise** on any PPL day; accessories carry into generated sessions
+- New programs derive starting weights from estimated strength in prior 5/3/1 and PPL cycles instead of defaults
 - Exercise slots and session tracking
 - Double progression within configured rep ranges
 - Estimated 1RM history for compound exercises
@@ -124,7 +130,9 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 ### Authentication and privacy
 
 - Google OAuth 2.0 sign-in
-- Per-user data isolation
+- Per-user data isolation: lifts, cycles, PPL programs and templates, accessories, bars/plates, default bar, and settings are all account-scoped; private accessories are owner-only
+- Legacy unowned data is auto-claimed only on single-account installations
+- Rest-beep preference is stored per account in the browser
 - First-login provisioning of default lifts and equipment
 - Admin user management at `/admin/users`
 - Disabled accounts are blocked from access
@@ -148,6 +156,8 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 │   ├── PplProgramService       # PPL program management
 │   ├── PplSessionService       # PPL session tracking
 │   ├── PplProgressionService   # PPL progression and TM sync
+│   ├── EstimatedStrengthService # User-scoped e1RM used to seed 5/3/1 and PPL weights
+│   ├── SiteContentSeo / SiteContentSitemap # Canonical URLs, metadata, sitemap.xml, robots.txt
 │   ├── Export/                 # Normalized Markdown/PDF workout exports
 │   ├── UserInitService         # First-login provisioning
 │   └── AdminService            # User administration
@@ -357,6 +367,9 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - Markdown separation and formatting
 - PDF generation with additional-set data
 - Workout note persistence and export behavior
+- PPL weekly templates, accessory persistence, and estimated-1RM weight derivation
+- Multi-user isolation of settings, bars, programs, and accessories
+- Sitemap, robots.txt, and SEO metadata for published content
 
 Run the full solution build and focused tests with:
 
