@@ -100,6 +100,26 @@ public class PplProgramService(
                 || e.RepsMax < e.RepsMin || e.RepsMax > 100
                 || e.ProgressionIncrement is < 0 or > 100)))
             throw new InvalidOperationException("Enter a valid name and at least one exercise with valid sets and reps for every workout.");
+
+        var selectedExerciseIds = days.SelectMany(day => day.Exercises)
+            .Where(exercise => exercise.ExerciseDefinitionId.HasValue)
+            .Select(exercise => exercise.ExerciseDefinitionId!.Value)
+            .Distinct()
+            .ToList();
+        var selectedDefinitions = selectedExerciseIds.Count == 0
+            ? []
+            : await db.ExerciseDefinitions
+                .Where(definition => selectedExerciseIds.Contains(definition.Id)
+                    && (definition.UserId == null || definition.UserId == userId))
+                .ToDictionaryAsync(definition => definition.Id);
+        if (selectedDefinitions.Count != selectedExerciseIds.Count)
+            throw new InvalidOperationException("One or more selected exercises are unavailable.");
+        if (days.SelectMany(day => day.Exercises).Any(exercise =>
+            exercise.ExerciseDefinitionId is int definitionId
+            && (!string.Equals(selectedDefinitions[definitionId].Name, exercise.ExerciseName.Trim(), StringComparison.Ordinal)
+                || selectedDefinitions[definitionId].PrimaryMuscle != exercise.MuscleGroup)))
+            throw new InvalidOperationException("The selected exercise details have changed. Reload the workout configuration and try again.");
+
         var profile = await estimatedStrength.GetProfileAsync(userId);
 
         var sessions = await db.PplSessions
@@ -142,8 +162,12 @@ public class PplProgramService(
             {
                 var exercise = draft.Exercises[index];
                 var source = exercise.SourceSlotId is int sourceId ? sourceSlots[sourceId] : null;
+                var definition = exercise.ExerciseDefinitionId is int definitionId
+                    ? selectedDefinitions[definitionId]
+                    : null;
                 var keepProgress = source is not null
                     && source.MuscleGroup == exercise.MuscleGroup
+                    && source.ExerciseDefinitionId == exercise.ExerciseDefinitionId
                     && string.Equals(source.ExerciseName, exercise.ExerciseName.Trim(), StringComparison.OrdinalIgnoreCase);
                 var oneRepMax = keepProgress ? null : profile.GetOneRepMax(exercise.ExerciseName.Trim());
                 var derivedWeight = oneRepMax is > 0
@@ -153,6 +177,7 @@ public class PplProgramService(
                 {
                     OrderInDay = index + 1,
                     ExerciseName = exercise.ExerciseName.Trim(),
+                    ExerciseDefinitionId = exercise.ExerciseDefinitionId,
                     MuscleGroup = exercise.MuscleGroup,
                     TargetSets = exercise.TargetSets,
                     RepsMin = exercise.RepsMin,
@@ -192,6 +217,15 @@ public class PplProgramService(
         var templates = daysPerWeek >= 6
             ? BuildSixDayTemplates(program.Id)
             : BuildThreeDayTemplates(program.Id);
+
+        var catalogByName = await db.ExerciseDefinitions
+            .Where(definition => definition.UserId == null)
+            .ToDictionaryAsync(definition => definition.Name, StringComparer.OrdinalIgnoreCase);
+        foreach (var slot in templates.SelectMany(template => template.ExerciseSlots))
+        {
+            if (catalogByName.TryGetValue(slot.ExerciseName, out var definition))
+                slot.ExerciseDefinitionId = definition.Id;
+        }
 
         var profile = await estimatedStrength.GetProfileAsync(userId);
         foreach (var slot in templates.SelectMany(template => template.ExerciseSlots))

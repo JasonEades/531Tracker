@@ -35,6 +35,7 @@ builder.Services.AddScoped<IWorkoutExportService, WorkoutExportService>();
 builder.Services.AddScoped<IAdditionalSessionService, AdditionalSessionService>();
 builder.Services.AddScoped<IDashboardAnalyticsService, DashboardAnalyticsService>();
 builder.Services.AddScoped<IExerciseHistoryService, ExerciseHistoryService>();
+builder.Services.AddScoped<IExerciseLibraryService, ExerciseLibraryService>();
 builder.Services.Configure<ProgressPhotoOptions>(builder.Configuration.GetSection(ProgressPhotoOptions.SectionName));
 builder.Services.AddSingleton<IProgressPhotoProcessor, ProgressPhotoProcessor>();
 builder.Services.AddScoped<IBodyMetricService, BodyMetricService>();

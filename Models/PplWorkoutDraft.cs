@@ -15,4 +15,5 @@ public sealed record PplWorkoutExerciseDraft(
     bool IsBodyweight,
     double ProgressionIncrement,
     double? StartingWeight,
-    double? CurrentWeight);
+    double? CurrentWeight,
+    int? ExerciseDefinitionId = null);

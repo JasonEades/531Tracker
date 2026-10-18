@@ -698,6 +698,866 @@ namespace FiveThreeOneTracker.Migrations
                     b.ToTable("DailyStepRecords");
                 });
 
+            modelBuilder.Entity("FiveThreeOneTracker.Models.ExerciseDefinition", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<string>("Equipment")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Instructions")
+                        .IsRequired()
+                        .HasMaxLength(2000)
+                        .HasColumnType("character varying(2000)");
+
+                    b.Property<string>("MovementType")
+                        .IsRequired()
+                        .HasMaxLength(60)
+                        .HasColumnType("character varying(60)");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("PrimaryMuscle")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("SecondaryMuscles")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)");
+
+                    b.Property<string>("UserId")
+                        .HasMaxLength(450)
+                        .HasColumnType("character varying(450)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId");
+
+                    b.ToTable("ExerciseDefinitions");
+
+                    b.HasData(
+                        new
+                        {
+                            Id = -1,
+                            Equipment = "Barbell",
+                            Instructions = "Lie on the bench with feet planted. Lower the bar under control to the mid-chest, then press it upward until your arms are extended.",
+                            MovementType = "Horizontal push",
+                            Name = "Barbell Bench Press",
+                            PrimaryMuscle = "Chest",
+                            SecondaryMuscles = "Triceps, shoulders"
+                        },
+                        new
+                        {
+                            Id = -2,
+                            Equipment = "Dumbbell, incline bench",
+                            Instructions = "Set the bench to a low incline. Lower the dumbbells beside the upper chest, then press them up without letting them collide.",
+                            MovementType = "Incline push",
+                            Name = "Incline DB Press",
+                            PrimaryMuscle = "Chest",
+                            SecondaryMuscles = "Triceps, shoulders"
+                        },
+                        new
+                        {
+                            Id = -3,
+                            Equipment = "Barbell",
+                            Instructions = "Start with the bar at shoulder height. Brace your trunk and press overhead, moving your head clear of the bar.",
+                            MovementType = "Vertical push",
+                            Name = "Overhead Press",
+                            PrimaryMuscle = "Shoulders",
+                            SecondaryMuscles = "Triceps, upper chest"
+                        },
+                        new
+                        {
+                            Id = -4,
+                            Equipment = "Dumbbell",
+                            Instructions = "With a slight bend in your elbows, raise the weights out to your sides to about shoulder height, then lower them under control.",
+                            MovementType = "Shoulder isolation",
+                            Name = "Lateral Raise",
+                            PrimaryMuscle = "Shoulders",
+                            SecondaryMuscles = "Traps"
+                        },
+                        new
+                        {
+                            Id = -5,
+                            Equipment = "Cable",
+                            Instructions = "Keep your elbows near your sides. Extend your arms against the cable, then return slowly without moving your upper arms.",
+                            MovementType = "Elbow extension",
+                            Name = "Tricep Pushdown",
+                            PrimaryMuscle = "Triceps",
+                            SecondaryMuscles = "Forearms"
+                        },
+                        new
+                        {
+                            Id = -6,
+                            Equipment = "Dumbbell",
+                            Instructions = "Hold one weight overhead with elbows bent. Extend your elbows to raise the weight, then lower it behind your head with control.",
+                            MovementType = "Elbow extension",
+                            Name = "Overhead Tricep Ext",
+                            PrimaryMuscle = "Triceps",
+                            SecondaryMuscles = "Shoulders"
+                        },
+                        new
+                        {
+                            Id = -7,
+                            Equipment = "Barbell",
+                            Instructions = "Stand with the bar over midfoot. Brace, hinge and bend to grip the bar, then stand by pushing through the floor while keeping the bar close.",
+                            MovementType = "Hip hinge",
+                            Name = "Conventional Deadlift",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Glutes, hamstrings, quads, core"
+                        },
+                        new
+                        {
+                            Id = -8,
+                            Equipment = "Cable",
+                            Instructions = "Grip the bar wider than shoulder width. Pull it toward your upper chest while keeping your torso steady, then return with control.",
+                            MovementType = "Vertical pull",
+                            Name = "Lat Pulldown",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Biceps, rear delts"
+                        },
+                        new
+                        {
+                            Id = -9,
+                            Equipment = "Barbell",
+                            Instructions = "Hinge forward with a braced, neutral torso. Pull the bar toward your lower ribs, then lower it without changing your torso angle.",
+                            MovementType = "Horizontal pull",
+                            Name = "Barbell Row",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Biceps, rear delts, core"
+                        },
+                        new
+                        {
+                            Id = -10,
+                            Equipment = "Cable",
+                            Instructions = "Sit tall and brace. Pull the handle toward your torso by driving your elbows back, then extend your arms without rounding your back.",
+                            MovementType = "Horizontal pull",
+                            Name = "Cable Row",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Biceps, rear delts"
+                        },
+                        new
+                        {
+                            Id = -11,
+                            Equipment = "Dumbbell",
+                            Instructions = "Keep your upper arms still and curl the weights toward your shoulders. Lower them slowly to the starting position.",
+                            MovementType = "Elbow flexion",
+                            Name = "Dumbbell Curl",
+                            PrimaryMuscle = "Biceps",
+                            SecondaryMuscles = "Forearms"
+                        },
+                        new
+                        {
+                            Id = -12,
+                            Equipment = "Dumbbell",
+                            Instructions = "Hold dumbbells with palms facing each other. Curl without swinging, then lower under control.",
+                            MovementType = "Elbow flexion",
+                            Name = "Hammer Curl",
+                            PrimaryMuscle = "Biceps",
+                            SecondaryMuscles = "Forearms"
+                        },
+                        new
+                        {
+                            Id = -13,
+                            Equipment = "Cable",
+                            Instructions = "Set the cable around face height. Pull the rope toward your face with elbows high, then return while keeping your shoulders controlled.",
+                            MovementType = "Horizontal pull",
+                            Name = "Face Pulls",
+                            PrimaryMuscle = "RearDelts",
+                            SecondaryMuscles = "Upper back, external rotators"
+                        },
+                        new
+                        {
+                            Id = -14,
+                            Equipment = "Dip bars",
+                            Instructions = "Support yourself on the bars and lower by bending your elbows to a comfortable depth. Press back up without shrugging.",
+                            MovementType = "Vertical push",
+                            Name = "Tricep Dips",
+                            PrimaryMuscle = "Triceps",
+                            SecondaryMuscles = "Chest, shoulders"
+                        },
+                        new
+                        {
+                            Id = -15,
+                            Equipment = "Pull-up bar, weight",
+                            Instructions = "Use a secure added load if needed. Pull until your chin clears the bar, then lower to a controlled hang.",
+                            MovementType = "Vertical pull",
+                            Name = "Weighted Pull-ups",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Biceps, forearms"
+                        },
+                        new
+                        {
+                            Id = -16,
+                            Equipment = "Barbell, rack",
+                            Instructions = "Set the bar securely across your upper back. Brace, sit between your hips to a controlled depth, then stand while keeping your feet planted.",
+                            MovementType = "Squat",
+                            Name = "Back Squat",
+                            PrimaryMuscle = "Quads",
+                            SecondaryMuscles = "Glutes, hamstrings, core"
+                        },
+                        new
+                        {
+                            Id = -17,
+                            Equipment = "Barbell",
+                            Instructions = "Hold the bar against your thighs. Push your hips back with a slight knee bend, lower to a strong hamstring stretch, then stand by extending your hips.",
+                            MovementType = "Hip hinge",
+                            Name = "Romanian Deadlift",
+                            PrimaryMuscle = "Hamstrings",
+                            SecondaryMuscles = "Glutes, back"
+                        },
+                        new
+                        {
+                            Id = -18,
+                            Equipment = "Leg press machine",
+                            Instructions = "Set your feet comfortably on the platform. Lower the sled under control to a pain-free depth, then press through your feet without locking your knees.",
+                            MovementType = "Squat",
+                            Name = "Leg Press",
+                            PrimaryMuscle = "Quads",
+                            SecondaryMuscles = "Glutes, hamstrings"
+                        },
+                        new
+                        {
+                            Id = -19,
+                            Equipment = "Leg curl machine",
+                            Instructions = "Align your knees with the machine pivot. Curl the pad toward you, pause briefly, then return slowly.",
+                            MovementType = "Knee flexion",
+                            Name = "Leg Curl",
+                            PrimaryMuscle = "Hamstrings",
+                            SecondaryMuscles = "Calves"
+                        },
+                        new
+                        {
+                            Id = -20,
+                            Equipment = "Calf raise machine",
+                            Instructions = "Lower your heels to a comfortable stretch, then rise onto the balls of your feet. Use a controlled range without bouncing.",
+                            MovementType = "Plantar flexion",
+                            Name = "Standing Calf Raise",
+                            PrimaryMuscle = "Calves",
+                            SecondaryMuscles = "Soleus"
+                        },
+                        new
+                        {
+                            Id = -21,
+                            Equipment = "Hack squat machine",
+                            Instructions = "Set your shoulders against the pads and feet securely on the platform. Lower to a controlled depth, then press back up smoothly.",
+                            MovementType = "Squat",
+                            Name = "Hack Squat",
+                            PrimaryMuscle = "Quads",
+                            SecondaryMuscles = "Glutes"
+                        },
+                        new
+                        {
+                            Id = -22,
+                            Equipment = "Dumbbell, bench",
+                            Instructions = "Place your rear foot on a stable bench. Lower under control by bending the front leg, then drive through the front foot to stand.",
+                            MovementType = "Single-leg squat",
+                            Name = "Bulgarian Split Squat",
+                            PrimaryMuscle = "Glutes",
+                            SecondaryMuscles = "Quads, hamstrings"
+                        },
+                        new
+                        {
+                            Id = -23,
+                            Equipment = "Leg extension machine",
+                            Instructions = "Align your knees with the machine pivot. Extend your knees smoothly, then lower the pad under control.",
+                            MovementType = "Knee extension",
+                            Name = "Leg Extension",
+                            PrimaryMuscle = "Quads",
+                            SecondaryMuscles = ""
+                        },
+                        new
+                        {
+                            Id = -24,
+                            Equipment = "Leg curl machine",
+                            Instructions = "Adjust the pads so your knees align with the pivot. Curl the lower pad down and back, then return slowly.",
+                            MovementType = "Knee flexion",
+                            Name = "Seated Leg Curl",
+                            PrimaryMuscle = "Hamstrings",
+                            SecondaryMuscles = "Calves"
+                        },
+                        new
+                        {
+                            Id = -25,
+                            Equipment = "Barbell, incline bench",
+                            Instructions = "Set the bench to a low incline. Lower the bar under control to the upper chest, then press to full extension.",
+                            MovementType = "Incline push",
+                            Name = "Incline Barbell Bench",
+                            PrimaryMuscle = "Chest",
+                            SecondaryMuscles = "Triceps, shoulders"
+                        },
+                        new
+                        {
+                            Id = -26,
+                            Equipment = "Cable",
+                            Instructions = "Stand between the pulleys with a slight elbow bend. Bring your hands together in front of your chest, then return until you feel a comfortable stretch.",
+                            MovementType = "Horizontal adduction",
+                            Name = "Cable Fly",
+                            PrimaryMuscle = "Chest",
+                            SecondaryMuscles = "Shoulders"
+                        },
+                        new
+                        {
+                            Id = -27,
+                            Equipment = "Dip bars",
+                            Instructions = "Support yourself on the bars and lower by bending your elbows to a comfortable depth. Press back up without shrugging.",
+                            MovementType = "Vertical push",
+                            Name = "Dips",
+                            PrimaryMuscle = "Triceps",
+                            SecondaryMuscles = "Chest, shoulders"
+                        },
+                        new
+                        {
+                            Id = -28,
+                            Equipment = "T-bar row machine",
+                            Instructions = "Brace your torso and pull the handle toward your abdomen. Lower the load with control while keeping your back stable.",
+                            MovementType = "Horizontal pull",
+                            Name = "T-Bar Row",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Biceps, rear delts"
+                        },
+                        new
+                        {
+                            Id = -29,
+                            Equipment = "Dumbbell, incline bench",
+                            Instructions = "Sit against an incline bench with arms hanging. Curl the dumbbells without swinging, then lower fully under control.",
+                            MovementType = "Elbow flexion",
+                            Name = "Incline DB Curl",
+                            PrimaryMuscle = "Biceps",
+                            SecondaryMuscles = "Forearms"
+                        },
+                        new
+                        {
+                            Id = -31,
+                            Equipment = "Seated calf raise machine",
+                            Instructions = "Lower your heels under control, then raise them as high as comfortable. Pause briefly and avoid bouncing.",
+                            MovementType = "Plantar flexion",
+                            Name = "Seated Calf Raise",
+                            PrimaryMuscle = "Calves",
+                            SecondaryMuscles = "Soleus"
+                        },
+                        new
+                        {
+                            Id = -32,
+                            Equipment = "Dumbbell, bench",
+                            Instructions = "Support one hand and knee on a bench. Pull the dumbbell toward your hip while keeping your torso steady, then lower it under control.",
+                            MovementType = "Horizontal pull",
+                            Name = "Dumbbell Row",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Biceps, rear delts"
+                        },
+                        new
+                        {
+                            Id = -33,
+                            Equipment = "Cable, rope attachment",
+                            Instructions = "Set the cable around face height. Pull the rope toward your face with elbows high, then return while keeping your shoulders controlled.",
+                            MovementType = "Horizontal pull",
+                            Name = "Face Pull",
+                            PrimaryMuscle = "RearDelts",
+                            SecondaryMuscles = "Upper back, external rotators"
+                        },
+                        new
+                        {
+                            Id = -34,
+                            Equipment = "Pull-up bar",
+                            Instructions = "Use an underhand grip. Pull until your chin clears the bar, then lower to a controlled hang.",
+                            MovementType = "Vertical pull",
+                            Name = "Chin-Ups",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Biceps, forearms"
+                        },
+                        new
+                        {
+                            Id = -35,
+                            Equipment = "Ab wheel",
+                            Instructions = "Kneel with the wheel under your shoulders. Brace your trunk and roll forward only as far as you can control, then return without arching your back.",
+                            MovementType = "Anti-extension",
+                            Name = "Ab Wheel",
+                            PrimaryMuscle = "Core",
+                            SecondaryMuscles = "Shoulders, lats"
+                        },
+                        new
+                        {
+                            Id = -36,
+                            Equipment = "Pull-up bar",
+                            Instructions = "Hang from a stable bar and brace. Raise your knees or straight legs without swinging, then lower slowly.",
+                            MovementType = "Hip flexion",
+                            Name = "Hanging Leg Raise",
+                            PrimaryMuscle = "Core",
+                            SecondaryMuscles = "Hip flexors, lats"
+                        },
+                        new
+                        {
+                            Id = -37,
+                            Equipment = "Dumbbell, bench",
+                            Instructions = "Start with dumbbells at shoulder height. Brace and press overhead, then lower them under control.",
+                            MovementType = "Vertical push",
+                            Name = "DB Shoulder Press",
+                            PrimaryMuscle = "Shoulders",
+                            SecondaryMuscles = "Triceps, upper chest"
+                        },
+                        new
+                        {
+                            Id = -38,
+                            Equipment = "Barbell",
+                            Instructions = "Stand tall with the bar at arm's length. Curl toward your shoulders without swinging, then lower under control.",
+                            MovementType = "Elbow flexion",
+                            Name = "Barbell Curl",
+                            PrimaryMuscle = "Biceps",
+                            SecondaryMuscles = "Forearms"
+                        },
+                        new
+                        {
+                            Id = -39,
+                            Equipment = "Dumbbell, flat bench",
+                            Instructions = "Lie on a flat bench with dumbbells over your chest. Lower them beside your chest, then press up smoothly.",
+                            MovementType = "Horizontal push",
+                            Name = "Dumbbell Bench Press",
+                            PrimaryMuscle = "Chest",
+                            SecondaryMuscles = "Triceps, shoulders"
+                        },
+                        new
+                        {
+                            Id = -40,
+                            Equipment = "Dumbbell, flat bench",
+                            Instructions = "Lie on a flat bench with dumbbells over your chest. Lower them beside your chest, then press up smoothly.",
+                            MovementType = "Horizontal push",
+                            Name = "Flat Dumbbell Press",
+                            PrimaryMuscle = "Chest",
+                            SecondaryMuscles = "Triceps, shoulders"
+                        },
+                        new
+                        {
+                            Id = -41,
+                            Equipment = "Barbell, bench",
+                            Instructions = "Use a comfortable grip narrower than your regular bench press. Lower the bar under control and press while keeping wrists stacked over elbows.",
+                            MovementType = "Horizontal push",
+                            Name = "Close-Grip Bench Press",
+                            PrimaryMuscle = "Triceps",
+                            SecondaryMuscles = "Chest, shoulders"
+                        },
+                        new
+                        {
+                            Id = -42,
+                            Equipment = "Bodyweight",
+                            Instructions = "Keep your body in a straight line. Lower your chest toward the floor with elbows controlled, then press back to the starting position.",
+                            MovementType = "Horizontal push",
+                            Name = "Push-Up",
+                            PrimaryMuscle = "Chest",
+                            SecondaryMuscles = "Triceps, shoulders, core"
+                        },
+                        new
+                        {
+                            Id = -43,
+                            Equipment = "Chest press machine",
+                            Instructions = "Adjust the seat so the handles are near chest level. Press forward without locking your elbows, then return slowly.",
+                            MovementType = "Horizontal push",
+                            Name = "Machine Chest Press",
+                            PrimaryMuscle = "Chest",
+                            SecondaryMuscles = "Triceps, shoulders"
+                        },
+                        new
+                        {
+                            Id = -44,
+                            Equipment = "Pec deck machine",
+                            Instructions = "Set the seat so your elbows align with the machine pivot. Bring your arms together with a slight bend, then return under control.",
+                            MovementType = "Horizontal adduction",
+                            Name = "Pec Deck",
+                            PrimaryMuscle = "Chest",
+                            SecondaryMuscles = "Shoulders"
+                        },
+                        new
+                        {
+                            Id = -45,
+                            Equipment = "Dumbbell, flat bench",
+                            Instructions = "Lie on a bench with a slight bend in your elbows. Open your arms to a comfortable stretch, then bring the weights together without changing the elbow bend.",
+                            MovementType = "Horizontal adduction",
+                            Name = "Dumbbell Fly",
+                            PrimaryMuscle = "Chest",
+                            SecondaryMuscles = "Shoulders"
+                        },
+                        new
+                        {
+                            Id = -46,
+                            Equipment = "Dumbbell",
+                            Instructions = "Hinge forward with a steady torso. Raise the weights out to the sides with a slight elbow bend, then lower slowly.",
+                            MovementType = "Shoulder horizontal abduction",
+                            Name = "Reverse Fly",
+                            PrimaryMuscle = "RearDelts",
+                            SecondaryMuscles = "Upper back"
+                        },
+                        new
+                        {
+                            Id = -47,
+                            Equipment = "Pec deck machine",
+                            Instructions = "Face the machine pads and hold the handles. Move your arms outward with control, then return without letting the weights drop.",
+                            MovementType = "Shoulder horizontal abduction",
+                            Name = "Reverse Pec Deck",
+                            PrimaryMuscle = "RearDelts",
+                            SecondaryMuscles = "Upper back"
+                        },
+                        new
+                        {
+                            Id = -48,
+                            Equipment = "Cable",
+                            Instructions = "Stand beside a low cable with the handle in your outside hand. Raise your arm out to shoulder height, then lower slowly.",
+                            MovementType = "Shoulder isolation",
+                            Name = "Cable Lateral Raise",
+                            PrimaryMuscle = "Shoulders",
+                            SecondaryMuscles = "Traps"
+                        },
+                        new
+                        {
+                            Id = -49,
+                            Equipment = "Dumbbell",
+                            Instructions = "Raise the weights in front of you to about shoulder height with elbows slightly bent, then lower under control.",
+                            MovementType = "Shoulder flexion",
+                            Name = "Front Raise",
+                            PrimaryMuscle = "Shoulders",
+                            SecondaryMuscles = "Upper chest"
+                        },
+                        new
+                        {
+                            Id = -50,
+                            Equipment = "Dumbbell, bench",
+                            Instructions = "Start with dumbbells at shoulder height. Brace and press overhead, then lower them under control.",
+                            MovementType = "Vertical push",
+                            Name = "Dumbbell Shoulder Press",
+                            PrimaryMuscle = "Shoulders",
+                            SecondaryMuscles = "Triceps, upper chest"
+                        },
+                        new
+                        {
+                            Id = -51,
+                            Equipment = "Barbell",
+                            Instructions = "Use a comfortable grip and raise the bar in front of your torso only as high as your shoulders tolerate. Lower with control.",
+                            MovementType = "Shoulder abduction",
+                            Name = "Upright Row",
+                            PrimaryMuscle = "Shoulders",
+                            SecondaryMuscles = "Traps, biceps"
+                        },
+                        new
+                        {
+                            Id = -52,
+                            Equipment = "Dumbbell",
+                            Instructions = "Stand tall holding dumbbells at your sides. Raise your shoulders toward your ears without rolling them, then lower slowly.",
+                            MovementType = "Scapular elevation",
+                            Name = "Dumbbell Shrug",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Traps, forearms"
+                        },
+                        new
+                        {
+                            Id = -53,
+                            Equipment = "Pull-up bar",
+                            Instructions = "Use an overhand grip. Pull until your chin clears the bar, then lower to a controlled hang.",
+                            MovementType = "Vertical pull",
+                            Name = "Pull-Up",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Biceps, forearms"
+                        },
+                        new
+                        {
+                            Id = -54,
+                            Equipment = "Dumbbell, incline bench",
+                            Instructions = "Lie chest-down on an incline bench. Row the weights toward your torso without lifting your chest, then lower slowly.",
+                            MovementType = "Horizontal pull",
+                            Name = "Chest-Supported Row",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Biceps, rear delts"
+                        },
+                        new
+                        {
+                            Id = -55,
+                            Equipment = "Cable",
+                            Instructions = "Sit tall and brace. Pull the handle toward your torso by driving your elbows back, then extend your arms without rounding your back.",
+                            MovementType = "Horizontal pull",
+                            Name = "Seated Cable Row",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Biceps, rear delts"
+                        },
+                        new
+                        {
+                            Id = -56,
+                            Equipment = "Cable",
+                            Instructions = "Face a cable handle and brace your torso. Pull one elbow back toward your side, then return with control.",
+                            MovementType = "Horizontal pull",
+                            Name = "Single-Arm Cable Row",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Biceps, rear delts"
+                        },
+                        new
+                        {
+                            Id = -57,
+                            Equipment = "Cable, close-grip handle",
+                            Instructions = "Sit with thighs secured and hold a close-grip handle. Pull toward your upper chest while keeping your torso steady, then return slowly.",
+                            MovementType = "Vertical pull",
+                            Name = "Close-Grip Lat Pulldown",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Biceps, rear delts"
+                        },
+                        new
+                        {
+                            Id = -58,
+                            Equipment = "Cable",
+                            Instructions = "Stand facing a high cable with arms nearly straight. Pull the handle toward your thighs while keeping your torso still, then return slowly.",
+                            MovementType = "Shoulder extension",
+                            Name = "Straight-Arm Pulldown",
+                            PrimaryMuscle = "Back",
+                            SecondaryMuscles = "Triceps, core"
+                        },
+                        new
+                        {
+                            Id = -59,
+                            Equipment = "Preacher bench, barbell",
+                            Instructions = "Rest your upper arms on the pad. Curl the weight without lifting your elbows, then lower until your arms are nearly straight.",
+                            MovementType = "Elbow flexion",
+                            Name = "Preacher Curl",
+                            PrimaryMuscle = "Biceps",
+                            SecondaryMuscles = "Forearms"
+                        },
+                        new
+                        {
+                            Id = -60,
+                            Equipment = "Dumbbell, bench",
+                            Instructions = "Sit and brace your upper arm against your inner thigh. Curl the dumbbell toward your shoulder, then lower slowly.",
+                            MovementType = "Elbow flexion",
+                            Name = "Concentration Curl",
+                            PrimaryMuscle = "Biceps",
+                            SecondaryMuscles = "Forearms"
+                        },
+                        new
+                        {
+                            Id = -61,
+                            Equipment = "Dumbbell",
+                            Instructions = "Rest your forearms on your thighs with palms up. Curl your wrists to raise the weights, then lower through a comfortable range.",
+                            MovementType = "Wrist flexion",
+                            Name = "Wrist Curl",
+                            PrimaryMuscle = "Biceps",
+                            SecondaryMuscles = "Forearms"
+                        },
+                        new
+                        {
+                            Id = -62,
+                            Equipment = "EZ bar, bench",
+                            Instructions = "Lie on a bench and hold the bar above your shoulders. Bend your elbows to lower it near your forehead, then extend them to return.",
+                            MovementType = "Elbow extension",
+                            Name = "Skull Crusher",
+                            PrimaryMuscle = "Triceps",
+                            SecondaryMuscles = "Shoulders"
+                        },
+                        new
+                        {
+                            Id = -63,
+                            Equipment = "Cable, rope attachment",
+                            Instructions = "Face away from a low cable with the rope behind your head. Extend your elbows overhead, then return slowly while keeping your upper arms steady.",
+                            MovementType = "Elbow extension",
+                            Name = "Overhead Cable Tricep Extension",
+                            PrimaryMuscle = "Triceps",
+                            SecondaryMuscles = "Shoulders"
+                        },
+                        new
+                        {
+                            Id = -64,
+                            Equipment = "Bodyweight",
+                            Instructions = "Set your hands slightly narrower than shoulder width. Keep your body straight, lower with elbows near your sides, then press up.",
+                            MovementType = "Horizontal push",
+                            Name = "Close-Grip Push-Up",
+                            PrimaryMuscle = "Triceps",
+                            SecondaryMuscles = "Chest, shoulders, core"
+                        },
+                        new
+                        {
+                            Id = -65,
+                            Equipment = "Barbell, rack",
+                            Instructions = "Rest the bar across the front of your shoulders and keep your elbows lifted. Brace, squat to a controlled depth, then stand while keeping your torso upright.",
+                            MovementType = "Squat",
+                            Name = "Front Squat",
+                            PrimaryMuscle = "Quads",
+                            SecondaryMuscles = "Glutes, core, upper back"
+                        },
+                        new
+                        {
+                            Id = -66,
+                            Equipment = "Dumbbell or kettlebell",
+                            Instructions = "Hold a weight close to your chest. Squat between your hips with your torso braced, then stand while keeping your feet planted.",
+                            MovementType = "Squat",
+                            Name = "Goblet Squat",
+                            PrimaryMuscle = "Quads",
+                            SecondaryMuscles = "Glutes, core"
+                        },
+                        new
+                        {
+                            Id = -67,
+                            Equipment = "Barbell",
+                            Instructions = "Take a wide stance with toes turned slightly out and grip the bar inside your legs. Brace and push the floor apart as you stand, then lower with control.",
+                            MovementType = "Hip hinge",
+                            Name = "Sumo Deadlift",
+                            PrimaryMuscle = "Glutes",
+                            SecondaryMuscles = "Quads, hamstrings, back"
+                        },
+                        new
+                        {
+                            Id = -68,
+                            Equipment = "Trap bar",
+                            Instructions = "Stand centered in the trap bar and grip the handles. Brace, push through the floor to stand tall, then lower the bar under control.",
+                            MovementType = "Hip hinge",
+                            Name = "Trap Bar Deadlift",
+                            PrimaryMuscle = "Glutes",
+                            SecondaryMuscles = "Quads, hamstrings, back"
+                        },
+                        new
+                        {
+                            Id = -69,
+                            Equipment = "Barbell, rack",
+                            Instructions = "With a secure bar position and soft knees, brace and hinge your hips back while keeping your spine neutral. Stand by extending your hips.",
+                            MovementType = "Hip hinge",
+                            Name = "Good Morning",
+                            PrimaryMuscle = "Hamstrings",
+                            SecondaryMuscles = "Glutes, back"
+                        },
+                        new
+                        {
+                            Id = -70,
+                            Equipment = "Barbell, bench",
+                            Instructions = "Rest your upper back against a stable bench with the bar over your hips. Drive through your feet to extend your hips, then lower under control.",
+                            MovementType = "Hip extension",
+                            Name = "Barbell Hip Thrust",
+                            PrimaryMuscle = "Glutes",
+                            SecondaryMuscles = "Hamstrings, core"
+                        },
+                        new
+                        {
+                            Id = -71,
+                            Equipment = "Bodyweight",
+                            Instructions = "Lie on your back with knees bent and feet planted. Brace and raise your hips until your body forms a straight line from shoulders to knees, then lower slowly.",
+                            MovementType = "Hip extension",
+                            Name = "Glute Bridge",
+                            PrimaryMuscle = "Glutes",
+                            SecondaryMuscles = "Hamstrings, core"
+                        },
+                        new
+                        {
+                            Id = -72,
+                            Equipment = "Bodyweight or dumbbells",
+                            Instructions = "Step forward into a controlled lunge, lowering until both knees are comfortably bent. Push through the front foot to step into the next lunge.",
+                            MovementType = "Single-leg squat",
+                            Name = "Walking Lunge",
+                            PrimaryMuscle = "Quads",
+                            SecondaryMuscles = "Glutes, hamstrings"
+                        },
+                        new
+                        {
+                            Id = -73,
+                            Equipment = "Bodyweight or dumbbells",
+                            Instructions = "Step one foot back and lower under control. Push through the front foot to return to standing, then alternate sides.",
+                            MovementType = "Single-leg squat",
+                            Name = "Reverse Lunge",
+                            PrimaryMuscle = "Glutes",
+                            SecondaryMuscles = "Quads, hamstrings"
+                        },
+                        new
+                        {
+                            Id = -74,
+                            Equipment = "Bench or box, dumbbells optional",
+                            Instructions = "Place one foot fully on a stable step. Drive through that foot to stand on the step, then lower slowly and repeat on the other side.",
+                            MovementType = "Single-leg squat",
+                            Name = "Step-Up",
+                            PrimaryMuscle = "Quads",
+                            SecondaryMuscles = "Glutes, hamstrings"
+                        },
+                        new
+                        {
+                            Id = -75,
+                            Equipment = "Dumbbell",
+                            Instructions = "Balance on one leg with a soft knee. Hinge at the hip as the free leg reaches back, then return upright without twisting.",
+                            MovementType = "Single-leg hip hinge",
+                            Name = "Single-Leg Romanian Deadlift",
+                            PrimaryMuscle = "Hamstrings",
+                            SecondaryMuscles = "Glutes, core"
+                        },
+                        new
+                        {
+                            Id = -76,
+                            Equipment = "Hip abduction machine",
+                            Instructions = "Sit with knees against the pads. Move your knees outward against the resistance, pause briefly, then return slowly.",
+                            MovementType = "Hip abduction",
+                            Name = "Hip Abduction",
+                            PrimaryMuscle = "Glutes",
+                            SecondaryMuscles = "Hip abductors"
+                        },
+                        new
+                        {
+                            Id = -77,
+                            Equipment = "Hip adduction machine",
+                            Instructions = "Sit with legs set against the pads. Bring your legs together against resistance, then return to the start under control.",
+                            MovementType = "Hip adduction",
+                            Name = "Hip Adduction",
+                            PrimaryMuscle = "Glutes",
+                            SecondaryMuscles = "Inner thighs"
+                        },
+                        new
+                        {
+                            Id = -80,
+                            Equipment = "Cable, rope attachment",
+                            Instructions = "Kneel facing a high cable and hold the rope by your head. Curl your ribs toward your pelvis, then return without pulling with your arms.",
+                            MovementType = "Trunk flexion",
+                            Name = "Cable Crunch",
+                            PrimaryMuscle = "Core",
+                            SecondaryMuscles = "Obliques"
+                        },
+                        new
+                        {
+                            Id = -81,
+                            Equipment = "Bodyweight",
+                            Instructions = "Support yourself on your forearms and toes. Brace your trunk and keep your body in a straight line without letting your hips sag.",
+                            MovementType = "Anti-extension",
+                            Name = "Plank",
+                            PrimaryMuscle = "Core",
+                            SecondaryMuscles = "Shoulders, glutes"
+                        },
+                        new
+                        {
+                            Id = -82,
+                            Equipment = "Bodyweight",
+                            Instructions = "Support yourself on one forearm and the side of your foot. Lift your hips and keep your body aligned, then switch sides.",
+                            MovementType = "Anti-lateral flexion",
+                            Name = "Side Plank",
+                            PrimaryMuscle = "Core",
+                            SecondaryMuscles = "Obliques, shoulders, glutes"
+                        },
+                        new
+                        {
+                            Id = -83,
+                            Equipment = "Pull-up bar",
+                            Instructions = "Hang from a stable bar and brace. Raise your knees toward your torso without swinging, then lower slowly.",
+                            MovementType = "Hip flexion",
+                            Name = "Hanging Knee Raise",
+                            PrimaryMuscle = "Core",
+                            SecondaryMuscles = "Hip flexors, lats"
+                        },
+                        new
+                        {
+                            Id = -84,
+                            Equipment = "Cable or resistance band",
+                            Instructions = "Stand sideways to a cable or band and hold it at your chest. Press your hands forward while resisting rotation, then return and switch sides.",
+                            MovementType = "Anti-rotation",
+                            Name = "Pallof Press",
+                            PrimaryMuscle = "Core",
+                            SecondaryMuscles = "Shoulders, glutes"
+                        });
+                });
+
             modelBuilder.Entity("FiveThreeOneTracker.Models.GoogleHealthConnection", b =>
                 {
                     b.Property<int>("Id")
@@ -863,6 +1723,9 @@ namespace FiveThreeOneTracker.Migrations
                     b.Property<double?>("CurrentWeight")
                         .HasColumnType("double precision");
 
+                    b.Property<int?>("ExerciseDefinitionId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ExerciseName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -906,6 +1769,8 @@ namespace FiveThreeOneTracker.Migrations
                         .HasColumnType("boolean");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ExerciseDefinitionId");
 
                     b.HasIndex("LiftId");
 
@@ -1735,6 +2600,16 @@ namespace FiveThreeOneTracker.Migrations
                     b.Navigation("User");
                 });
 
+            modelBuilder.Entity("FiveThreeOneTracker.Models.ExerciseDefinition", b =>
+                {
+                    b.HasOne("FiveThreeOneTracker.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade);
+
+                    b.Navigation("User");
+                });
+
             modelBuilder.Entity("FiveThreeOneTracker.Models.GoogleHealthConnection", b =>
                 {
                     b.HasOne("FiveThreeOneTracker.Models.ApplicationUser", "User")
@@ -1770,6 +2645,11 @@ namespace FiveThreeOneTracker.Migrations
 
             modelBuilder.Entity("FiveThreeOneTracker.Models.PplExerciseSlot", b =>
                 {
+                    b.HasOne("FiveThreeOneTracker.Models.ExerciseDefinition", "ExerciseDefinition")
+                        .WithMany()
+                        .HasForeignKey("ExerciseDefinitionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("FiveThreeOneTracker.Models.Lift", "Lift")
                         .WithMany()
                         .HasForeignKey("LiftId")
@@ -1782,6 +2662,8 @@ namespace FiveThreeOneTracker.Migrations
                         .IsRequired();
 
                     b.Navigation("DayTemplate");
+
+                    b.Navigation("ExerciseDefinition");
 
                     b.Navigation("Lift");
                 });

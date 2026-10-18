@@ -1,0 +1,179 @@
+@page "/exercise-library"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IExerciseLibraryService Library
+@inject NavigationManager Nav
+
+<PageTitle>Exercise Library — Jason's Garage Lab</PageTitle>
+
+<div class="animate-fade-in">
+    <div class="page-header mb-4">
+        <div class="flex items-center gap-1">
+            <h1>Exercise Library</h1>
+            <a class="btn btn-ghost btn-sm" href="/exercises">Training history</a>
+        </div>
+        <p>Browse exercise references or add your own private exercise.</p>
+    </div>
+
+    <div class="setup-card mb-3">
+        <div class="form-group">
+            <label class="form-label" for="library-search">Search</label>
+            <input id="library-search" class="form-control" type="search"
+                   placeholder="Name, muscle, equipment…" @bind="search" @bind:after="LoadExercises" />
+        </div>
+        <div class="flex gap-1">
+            <div class="form-group flex-1">
+                <label class="form-label" for="muscle-filter">Primary muscle</label>
+                <select id="muscle-filter" class="form-control" @bind="muscleFilter" @bind:after="LoadExercises">
+                    <option value="">All muscle groups</option>
+                    @foreach (var muscle in Enum.GetValues<MuscleGroup>())
+                    {
+                        <option value="@muscle">@muscle</option>
+                    }
+                </select>
+            </div>
+            <div class="form-group flex-1">
+                <label class="form-label" for="equipment-filter">Equipment</label>
+                <select id="equipment-filter" class="form-control" @bind="equipmentFilter" @bind:after="LoadExercises">
+                    <option value="">All equipment</option>
+                    @foreach (var equipment in equipmentOptions)
+                    {
+                        <option value="@equipment">@equipment</option>
+                    }
+                </select>
+            </div>
+        </div>
+    </div>
+
+    @if (loading)
+    {
+        <div class="loading"><div class="spinner"></div></div>
+    }
+    else if (exercises.Count == 0)
+    {
+        <div class="empty-state"><h3>No matching exercises</h3><p>Try changing your search or filters.</p></div>
+    }
+    else
+    {
+        <div class="exercise-index">
+            @foreach (var exercise in exercises)
+            {
+                <button class="exercise-index-row" @onclick="() => OpenExercise(exercise.Id)">
+                    <div class="exercise-index-main">
+                        <div class="exercise-index-name">@exercise.Name</div>
+                        <div class="exercise-index-meta">
+                            @exercise.PrimaryMuscle · @exercise.Equipment · @exercise.MovementType
+                            @if (exercise.UserId is not null)
+                            {
+                                <span> · Custom</span>
+                            }
+                        </div>
+                    </div>
+                    <span aria-hidden="true">›</span>
+                </button>
+            }
+        </div>
+    }
+
+    <details class="setup-card mt-3">
+        <summary>Add a custom exercise</summary>
+        <div class="form-group mt-2">
+            <label class="form-label" for="custom-name">Name</label>
+            <input id="custom-name" class="form-control" maxlength="100" @bind="customName" />
+        </div>
+        <div class="flex gap-1">
+            <div class="form-group flex-1">
+                <label class="form-label" for="custom-muscle">Primary muscle</label>
+                <select id="custom-muscle" class="form-control" @bind="customMuscle">
+                    @foreach (var muscle in Enum.GetValues<MuscleGroup>())
+                    {
+                        <option value="@muscle">@muscle</option>
+                    }
+                </select>
+            </div>
+            <div class="form-group flex-1">
+                <label class="form-label" for="custom-secondary">Secondary muscles</label>
+                <input id="custom-secondary" class="form-control" maxlength="200" @bind="customSecondaryMuscles" />
+            </div>
+        </div>
+        <div class="flex gap-1">
+            <div class="form-group flex-1">
+                <label class="form-label" for="custom-equipment">Equipment</label>
+                <input id="custom-equipment" class="form-control" maxlength="100" @bind="customEquipment" />
+            </div>
+            <div class="form-group flex-1">
+                <label class="form-label" for="custom-movement">Movement type</label>
+                <input id="custom-movement" class="form-control" maxlength="60" @bind="customMovementType" />
+            </div>
+        </div>
+        <div class="form-group">
+            <label class="form-label" for="custom-instructions">Instructions</label>
+            <textarea id="custom-instructions" class="form-control" maxlength="2000" rows="3" @bind="customInstructions"></textarea>
+        </div>
+        @if (!string.IsNullOrWhiteSpace(error))
+        {
+            <div class="alert alert-danger">@error</div>
+        }
+        <button class="btn btn-primary" @onclick="CreateCustomExercise" disabled="@saving">
+            @(saving ? "Saving…" : "Save private exercise")
+        </button>
+    </details>
+</div>
+
+@code {
+    private List<ExerciseDefinition> exercises = [];
+    private List<string> equipmentOptions = [];
+    private string search = string.Empty;
+    private string? muscleFilter;
+    private string equipmentFilter = string.Empty;
+    private string customName = string.Empty;
+    private MuscleGroup customMuscle = MuscleGroup.Chest;
+    private string customSecondaryMuscles = string.Empty;
+    private string customEquipment = string.Empty;
+    private string customMovementType = string.Empty;
+    private string customInstructions = string.Empty;
+    private string? error;
+    private bool loading = true;
+    private bool saving;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var allExercises = await Library.GetExercisesAsync();
+        equipmentOptions = allExercises.Select(exercise => exercise.Equipment)
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(value => value)
+            .ToList();
+        exercises = allExercises;
+        loading = false;
+    }
+
+    private async Task LoadExercises()
+    {
+        MuscleGroup? muscle = Enum.TryParse<MuscleGroup>(muscleFilter, out var parsed) ? parsed : null;
+        exercises = await Library.GetExercisesAsync(search, muscle, equipmentFilter);
+    }
+
+    private void OpenExercise(int id) => Nav.NavigateTo($"/exercise-library/{id}");
+
+    private async Task CreateCustomExercise()
+    {
+        saving = true;
+        error = null;
+        try
+        {
+            var exercise = await Library.CreateCustomExerciseAsync(
+                customName, customMuscle, customSecondaryMuscles, customEquipment,
+                customMovementType, customInstructions);
+            Nav.NavigateTo($"/exercise-library/{exercise.Id}");
+        }
+        catch (ArgumentException ex)
+        {
+            error = ex.Message;
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+}

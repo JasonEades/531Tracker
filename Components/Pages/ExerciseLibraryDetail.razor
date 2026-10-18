@@ -1,0 +1,64 @@
+@page "/exercise-library/{Id:int}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IExerciseLibraryService Library
+@inject NavigationManager Nav
+
+<PageTitle>@(exercise?.Name ?? "Exercise") — Exercise Library</PageTitle>
+
+<div class="animate-fade-in">
+    <div class="page-header mb-4">
+        <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo("/exercise-library")'>← Exercise Library</button>
+        @if (exercise is not null)
+        {
+            <h1>@exercise.Name</h1>
+        }
+    </div>
+
+    @if (loading)
+    {
+        <div class="loading"><div class="spinner"></div></div>
+    }
+    else if (exercise is null)
+    {
+        <div class="alert alert-danger">Exercise not found.</div>
+    }
+    else
+    {
+        <div class="setup-card">
+            <dl>
+                <dt>Primary muscle</dt>
+                <dd>@exercise.PrimaryMuscle</dd>
+                @if (!string.IsNullOrWhiteSpace(exercise.SecondaryMuscles))
+                {
+                    <dt>Secondary muscles</dt>
+                    <dd>@exercise.SecondaryMuscles</dd>
+                }
+                <dt>Equipment</dt>
+                <dd>@exercise.Equipment</dd>
+                <dt>Movement type</dt>
+                <dd>@exercise.MovementType</dd>
+                <dt>Instructions</dt>
+                <dd>@exercise.Instructions</dd>
+                @if (exercise.UserId is not null)
+                {
+                    <dt>Visibility</dt>
+                    <dd>Private to your account</dd>
+                }
+            </dl>
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private ExerciseDefinition? exercise;
+    private bool loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        exercise = await Library.GetExerciseAsync(Id);
+        loading = false;
+    }
+}

@@ -118,6 +118,7 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 ### Push/Pull/Legs
 
 - Three-day or six-day splits
+- Searchable exercise library with 81 curated strength exercises, muscle and equipment filters, exercise instructions, and account-private custom entries; PPL workout configuration selects catalog or custom exercises while retaining legacy labels and historical exercise-name snapshots
 - Week-by-week workout configuration at `/ppl/{id}/workouts`: edit workout names, exercises, muscle groups, sets, and rep ranges per week; unconfigured weeks use the default schedule
 - **Add Accessory Exercise** on any PPL day; accessories carry into generated sessions
 - New programs derive starting weights from estimated strength in prior 5/3/1 and PPL cycles instead of defaults
@@ -164,6 +165,7 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 │   ├── PplProgramService       # PPL program management
 │   ├── PplSessionService       # PPL session tracking
 │   ├── PplProgressionService   # PPL progression and TM sync
+│   ├── ExerciseLibraryService  # Curated and account-private exercise definitions
 │   ├── EstimatedStrengthService # User-scoped e1RM used to seed 5/3/1 and PPL weights
 │   ├── SiteContentSeo / SiteContentSitemap # Canonical URLs, metadata, sitemap.xml, robots.txt
 │   ├── Export/                 # Normalized Markdown/PDF workout exports
@@ -376,6 +378,7 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - PDF generation with additional-set data
 - Workout note persistence and export behavior
 - PPL weekly templates, accessory persistence, and estimated-1RM weight derivation
+- Exercise-library search/filtering, custom-exercise ownership isolation, and PPL catalog selection
 - Multi-user isolation of settings, bars, programs, and accessories
 - Sitemap, robots.txt, and SEO metadata for published content
 

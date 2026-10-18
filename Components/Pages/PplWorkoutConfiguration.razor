@@ -4,6 +4,7 @@
 @using Microsoft.EntityFrameworkCore
 @using FiveThreeOneTracker.Models
 @inject IPplProgramService PplService
+@inject IExerciseLibraryService ExerciseLibrary
 @inject NavigationManager Nav
 
 <PageTitle>Configure PPL Workouts — Jason's Garage Lab</PageTitle>
@@ -54,11 +55,18 @@
                     <div class="ex-row" style="align-items:flex-start">
                         <div class="form-group" style="flex:2;min-width:150px">
                             <label class="form-label">Exercise</label>
-                            <input class="form-control" type="text" maxlength="100" @bind="exercise.ExerciseName" />
+                            <input class="form-control" list="ppl-exercise-options" value="@exercise.ExerciseName"
+                                   aria-label="Search exercise library"
+                                   @onchange="e => SelectExercise(exercise, e.Value?.ToString())" />
+                            @if (exercise.ExerciseDefinitionId is null)
+                            {
+                                <small class="option-hint">Legacy exercise name; choose a library entry to link it.</small>
+                            }
+                            <a class="option-hint" href="/exercise-library">Browse library or add a custom exercise</a>
                         </div>
                         <div class="form-group" style="flex:1;min-width:100px">
                             <label class="form-label">Muscle Group</label>
-                            <select class="form-control" @bind="exercise.MuscleGroup">
+                            <select class="form-control" @bind="exercise.MuscleGroup" disabled="@(exercise.ExerciseDefinitionId is not null)">
                                 @foreach (var group in Enum.GetValues<MuscleGroup>())
                                 {
                                     <option value="@group">@group</option>
@@ -90,6 +98,13 @@
             </div>
         }
 
+        <datalist id="ppl-exercise-options">
+            @foreach (var definition in libraryExercises)
+            {
+                <option value="@ExercisePickerValue(definition)">@definition.PrimaryMuscle · @definition.Equipment</option>
+            }
+        </datalist>
+
         @if (!string.IsNullOrWhiteSpace(error))
         {
             <div class="alert alert-danger mt-3">@error</div>
@@ -118,9 +133,11 @@
     private bool saving;
     private string? error;
     private string? success;
+    private List<ExerciseDefinition> libraryExercises = [];
 
     protected override async Task OnParametersSetAsync()
     {
+        libraryExercises = await ExerciseLibrary.GetExercisesAsync();
         program = await PplService.GetProgramWithDetailsAsync(ProgramId);
         if (program is not null)
         {
@@ -153,6 +170,7 @@
             Exercises = template.ExerciseSlots.OrderBy(slot => slot.OrderInDay).Select(slot => new WorkoutExerciseDraft
             {
                 SourceSlotId = slot.Id,
+                ExerciseDefinitionId = slot.ExerciseDefinitionId,
                 ExerciseName = slot.ExerciseName,
                 MuscleGroup = slot.MuscleGroup,
                 TargetSets = slot.TargetSets,
@@ -180,16 +198,35 @@
 
     private void AddExercise(WorkoutDayDraft day)
     {
+        var muscle = day.DayType switch
+        {
+            PplDayType.Push => MuscleGroup.Chest,
+            PplDayType.Pull => MuscleGroup.Back,
+            _ => MuscleGroup.Quads
+        };
+        var definition = libraryExercises.FirstOrDefault(exercise => exercise.PrimaryMuscle == muscle);
         day.Exercises.Add(new WorkoutExerciseDraft
         {
-            MuscleGroup = day.DayType switch
-            {
-                PplDayType.Push => MuscleGroup.Chest,
-                PplDayType.Pull => MuscleGroup.Back,
-                _ => MuscleGroup.Quads
-            }
+            ExerciseDefinitionId = definition?.Id,
+            ExerciseName = definition?.Name ?? string.Empty,
+            MuscleGroup = definition?.PrimaryMuscle ?? muscle
         });
     }
+
+    private void SelectExercise(WorkoutExerciseDraft draft, string? value)
+    {
+        var selected = libraryExercises.FirstOrDefault(exercise =>
+            string.Equals(ExercisePickerValue(exercise), value?.Trim(), StringComparison.OrdinalIgnoreCase));
+        if (selected is null)
+            return;
+
+        draft.ExerciseDefinitionId = selected.Id;
+        draft.ExerciseName = selected.Name;
+        draft.MuscleGroup = selected.PrimaryMuscle;
+    }
+
+    private static string ExercisePickerValue(ExerciseDefinition exercise) =>
+        $"{exercise.Name} [{(exercise.UserId is null ? "Library" : "Custom")} #{exercise.Id}]";
 
     private static void RemoveExercise(WorkoutDayDraft day, WorkoutExerciseDraft exercise)
     {
@@ -216,7 +253,8 @@
                     exercise.IsBodyweight,
                     exercise.ProgressionIncrement,
                     exercise.StartingWeight,
-                    exercise.CurrentWeight)).ToList())).ToList();
+                    exercise.CurrentWeight,
+                    exercise.ExerciseDefinitionId)).ToList())).ToList();
             await PplService.ConfigureWeekWorkoutsAsync(ProgramId, selectedWeek, drafts);
             await LoadWeek();
             success = $"Week {selectedWeek} workouts saved.";
@@ -243,6 +281,7 @@
     private sealed class WorkoutExerciseDraft
     {
         public int? SourceSlotId { get; set; }
+        public int? ExerciseDefinitionId { get; set; }
         public string ExerciseName { get; set; } = string.Empty;
         public MuscleGroup MuscleGroup { get; set; }
         public int TargetSets { get; set; } = 3;

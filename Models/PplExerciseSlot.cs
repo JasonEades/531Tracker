@@ -33,6 +33,10 @@ public class PplExerciseSlot
     public int? LiftId { get; set; }
     public Lift? Lift { get; set; }
 
+    /// <summary>Optional catalog/custom exercise reference; ExerciseName remains the slot's stable label.</summary>
+    public int? ExerciseDefinitionId { get; set; }
+    public ExerciseDefinition? ExerciseDefinition { get; set; }
+
     /// <summary>Weight entered during PPL setup or the first workout.</summary>
     public double? StartingWeight { get; set; }
 
