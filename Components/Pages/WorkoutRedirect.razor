@@ -4,14 +4,24 @@
 @inject ICycleService CycleService
 @inject NavigationManager Nav
 
-@* Redirect page: navigates to the current cycle, or cycles list if none exists. *@
+@* Resume an active workout when present; otherwise open the current cycle. *@
 
 @code {
     protected override async Task OnInitializedAsync()
     {
         var currentCycle = await CycleService.GetCurrentCycleAsync();
         if (currentCycle is not null)
-            Nav.NavigateTo($"/cycles/{currentCycle.Id}", replace: true);
+        {
+            var inProgressWorkout = currentCycle.Weeks
+                .SelectMany(week => week.Workouts)
+                .FirstOrDefault(workout => workout.Status == WorkoutStatus.InProgress);
+
+            Nav.NavigateTo(
+                inProgressWorkout is null
+                    ? $"/cycles/{currentCycle.Id}"
+                    : $"/workout/{inProgressWorkout.Id}",
+                replace: true);
+        }
         else
             Nav.NavigateTo("/cycles", replace: true);
     }
