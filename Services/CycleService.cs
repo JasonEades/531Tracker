@@ -27,29 +27,14 @@ public class CycleService(
     IEstimatedStrengthService estimatedStrength,
     IDbContextFactory<AppDbContext>? dbFactory = null) : ICycleService
 {
-    private static readonly IReadOnlyDictionary<LiftType, double> DefaultTrainingMaxes =
-        new Dictionary<LiftType, double>
-        {
-            [LiftType.Squat] = 315,
-            [LiftType.BenchPress] = 225,
-            [LiftType.Deadlift] = 365,
-            [LiftType.OverheadPress] = 145
-        };
-
     public async Task<Cycle?> GetCurrentCycleAsync()
     {
+        // Read-only summary for the dashboard and /workout redirect: weeks + workouts only.
         var userId = await userContext.GetUserIdAsync();
         return await db.Cycles
+            .AsNoTracking()
             .Include(c => c.Weeks)
                 .ThenInclude(w => w.Workouts)
-                    .ThenInclude(wo => wo.Sets)
-            .Include(c => c.Weeks)
-                .ThenInclude(w => w.Workouts)
-                    .ThenInclude(wo => wo.WorkoutAccessories)
-                        .ThenInclude(wa => wa.Accessory)
-            .Include(c => c.Weeks)
-                .ThenInclude(w => w.AdditionalSessions)
-            .Include(c => c.AdditionalSessions)
             .Where(c => !c.IsCompleted && c.UserId == userId)
             .OrderByDescending(c => c.CycleNumber)
             .FirstOrDefaultAsync();
@@ -103,11 +88,11 @@ public class CycleService(
 
         if (cycleNumber == 1)
         {
+            // First 5/3/1 cycle: seed Training Maxes (90% of e1RM) from the previous PPL/5/3/1 training when it exists.
             var profile = await estimatedStrength.GetProfileAsync(userId);
             foreach (var lift in lifts)
             {
-                if (DefaultTrainingMaxes.GetValueOrDefault(lift.LiftType) == lift.TrainingMax
-                    && profile.MainLiftOneRepMaxes.TryGetValue(lift.LiftType, out var oneRepMax))
+                if (profile.MainLiftOneRepMaxes.TryGetValue(lift.LiftType, out var oneRepMax))
                     await liftService.UpdateTrainingMaxAsync(lift.Id, weightCalc.RoundToNearest5(oneRepMax * 0.9));
             }
         }

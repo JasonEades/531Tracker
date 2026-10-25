@@ -89,7 +89,7 @@
 }
 else if (equipment is not null)
 {
-    <div class="settings-section animate-fade-in">
+    <div class="settings-section">
         <div class="settings-section-label">Account</div>
         <div class="card">
             <div class="card-body">
@@ -98,7 +98,7 @@ else if (equipment is not null)
         </div>
     </div>
 
-    <div class="settings-section animate-fade-in">
+    <div class="settings-section">
         <div class="settings-section-label">Your Bars</div>
         <p class="text-muted mb-3" style="font-size:var(--text-sm)">Add every bar you train with. The <strong style="color:var(--color-text-2)">default</strong> bar is used unless a workout overrides it.</p>
         <div class="card">
@@ -107,7 +107,7 @@ else if (equipment is not null)
                 {
                     <div class="plate-row">
                         <div class="plate-visual-wrap">
-                            <span class="plate-visual-badge" style="background:rgba(94,124,255,0.15);color:#5E7CFF;border-color:#5E7CFF;">@FormatPlateWeight(bar.Weight)</span>
+                            <span class="plate-visual-badge plate-tone-bar">@FormatPlateWeight(bar.Weight)</span>
                             @if (editingBarId == bar.Id)
                             {
                                 <div style="display:flex;gap:var(--space-2);flex:1">
@@ -155,7 +155,7 @@ else if (equipment is not null)
         </div>
     </div>
 
-    <div class="settings-section animate-fade-in">
+    <div class="settings-section">
         <div class="settings-section-label">Plate Inventory</div>
         <p class="text-muted mb-3" style="font-size:var(--text-sm)">Number of <strong style="color:var(--color-text-2)">pairs</strong> of each plate you own.</p>
         <div class="card">
@@ -164,7 +164,7 @@ else if (equipment is not null)
                 {
                     <div class="plate-row">
                         <div class="plate-visual-wrap">
-                            <span class="plate-visual-badge" style="@GetPlateAccentStyle(plate.Weight)">@FormatPlateWeight(plate.Weight)</span>
+                            <span class="plate-visual-badge @PlateTone.For(plate.Weight)">@FormatPlateWeight(plate.Weight)</span>
                             <span class="plate-weight-label">@FormatPlateWeight(plate.Weight) lb</span>
                         </div>
                         <div class="plate-stepper">
@@ -179,7 +179,7 @@ else if (equipment is not null)
         </div>
     </div>
 
-    <div class="settings-section animate-fade-in">
+    <div class="settings-section">
         <div class="settings-section-label">Plate Calculator</div>
         <div class="card">
             <div class="card-body">
@@ -218,7 +218,7 @@ else if (equipment is not null)
                                     {
                                         @for (int i = 0; i < result.CountPerSide; i++)
                                         {
-                                            <span class="calc-plate" style="@GetPlateAccentStyle(result.PlateWeight)">@FormatPlateWeight(result.PlateWeight)</span>
+                                            <span class="calc-plate @PlateTone.For(result.PlateWeight)">@FormatPlateWeight(result.PlateWeight)</span>
                                         }
                                     }
                                 </div>
@@ -228,7 +228,7 @@ else if (equipment is not null)
                                     {
                                         @for (int i = 0; i < result.CountPerSide; i++)
                                         {
-                                            <span class="calc-plate" style="@GetPlateAccentStyle(result.PlateWeight)">@FormatPlateWeight(result.PlateWeight)</span>
+                                            <span class="calc-plate @PlateTone.For(result.PlateWeight)">@FormatPlateWeight(result.PlateWeight)</span>
                                         }
                                     }
                                 </div>
@@ -237,12 +237,12 @@ else if (equipment is not null)
                                 Each side:
                                 @foreach (var result in testResults)
                                 {
-                                    <span class="calc-plate-chip" style="@GetPlateAccentStyle(result.PlateWeight)">@result.CountPerSide × @FormatPlateWeight(result.PlateWeight)</span>
+                                    <span class="calc-plate-chip @PlateTone.For(result.PlateWeight)">@result.CountPerSide × @FormatPlateWeight(result.PlateWeight)</span>
                                 }
                             </div>
                             @if (Math.Abs(ActualTotal - testWeight) > 0.01)
                             {
-                                <p class="text-warning mt-1" style="font-size:var(--text-sm)">⚠️ Closest loadable: @ActualTotal lbs (off by @(Math.Abs(testWeight - ActualTotal)) lbs)</p>
+                                <p class="text-warning mt-1" style="font-size:var(--text-sm)">Closest loadable: @ActualTotal lbs (off by @(Math.Abs(testWeight - ActualTotal)) lbs)</p>
                             }
                         </div>
                     }
@@ -342,6 +342,9 @@ else if (equipment is not null)
 
     protected override async Task OnInitializedAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         var query = Microsoft.AspNetCore.WebUtilities.QueryHelpers.ParseQuery(Nav.ToAbsoluteUri(Nav.Uri).Query);
         if (query.ContainsKey("healthError"))
         {
@@ -463,14 +466,4 @@ else if (equipment is not null)
 
     private static string FormatPlateWeight(double w) => w == (int)w ? ((int)w).ToString() : w.ToString("0.#");
 
-    private static string GetPlateAccentStyle(double weight) => weight switch
-    {
-        >= 45 => "background:rgba(37,99,235,0.25);color:#60a5fa;border-color:#2563eb;",
-        >= 35 => "background:rgba(202,138,4,0.2);color:#fbbf24;border-color:#ca8a04;",
-        >= 25 => "background:rgba(22,163,74,0.2);color:#4ade80;border-color:#16a34a;",
-        >= 15 => "background:rgba(139,92,246,0.2);color:#a78bfa;border-color:#8b5cf6;",
-        >= 10 => "background:rgba(148,163,184,0.15);color:#94a3b8;border-color:#475569;",
-        >= 5 => "background:rgba(239,68,68,0.2);color:#f87171;border-color:#ef4444;",
-        _ => "background:rgba(107,114,128,0.2);color:#9ca3af;border-color:#6b7280;"
-    };
 }

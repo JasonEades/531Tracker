@@ -11,64 +11,64 @@ public static class AppTheme
             PaletteDark = new PaletteDark
             {
                 // Backgrounds
-                Background        = "#090B0F",
-                BackgroundGray    = "#14171F",
-                Surface           = "#14171F",
-                DrawerBackground  = "#14171F",
-                AppbarBackground  = "#14171F",
+                Background        = "#121211",
+                BackgroundGray    = "#1A1A19",
+                Surface           = "#1A1A19",
+                DrawerBackground  = "#1A1A19",
+                AppbarBackground  = "#1A1A19",
 
                 // Brand / primary
-                Primary           = "#5E7CFF",
-                PrimaryContrastText = "#FFFFFF",
-                PrimaryDarken     = "#4A68EB",
-                PrimaryLighten    = "#7690FF",
+                Primary           = "#F26A21",
+                PrimaryContrastText = "#17110C",
+                PrimaryDarken     = "#D95A16",
+                PrimaryLighten    = "#FF7F3A",
 
                 // Secondary
-                Secondary         = "#6EE7FF",
-                SecondaryContrastText = "#090B0F",
+                Secondary         = "#9DB4C0",
+                SecondaryContrastText = "#111415",
 
                 // Tertiary / accent
-                Tertiary          = "#FFB547",
-                TertiaryContrastText = "#090B0F",
+                Tertiary          = "#E2B340",
+                TertiaryContrastText = "#121211",
 
                 // Semantic
-                Success           = "#3DDC84",
+                Success           = "#5BB974",
                 SuccessContrastText = "#000000",
-                Warning           = "#FFB547",
+                Warning           = "#E2B340",
                 WarningContrastText = "#000000",
-                Error             = "#FF5A5F",
-                ErrorContrastText = "#FFFFFF",
-                Info              = "#6EE7FF",
-                InfoContrastText  = "#090B0F",
+                Error             = "#E5534B",
+                ErrorContrastText = "#EEEBE5",
+                Info              = "#9DB4C0",
+                InfoContrastText  = "#121211",
 
                 // Text
-                TextPrimary       = "#FFFFFF",
-                TextSecondary     = "#B8C0CC",
-                TextDisabled      = "#7D8795",
+                TextPrimary       = "#EEEBE5",
+                TextSecondary     = "#B9B4AA",
+                TextDisabled      = "#8C877E",
 
                 // Lines & overlays
-                Divider           = "rgba(255,255,255,0.08)",
-                DividerLight      = "rgba(255,255,255,0.04)",
-                TableLines        = "rgba(255,255,255,0.08)",
-                LinesDefault      = "rgba(255,255,255,0.08)",
-                LinesInputs       = "rgba(255,255,255,0.14)",
+                Divider           = "rgba(238,235,229,0.08)",
+                DividerLight      = "rgba(238,235,229,0.04)",
+                TableLines        = "rgba(238,235,229,0.08)",
+                LinesDefault      = "rgba(238,235,229,0.08)",
+                LinesInputs       = "rgba(238,235,229,0.14)",
 
                 // Action states
-                ActionDefault     = "#B8C0CC",
-                ActionDisabled    = "#7D8795",
-                ActionDisabledBackground = "rgba(255,255,255,0.06)",
+                ActionDefault     = "#B9B4AA",
+                ActionDisabled    = "#8C877E",
+                ActionDisabledBackground = "rgba(238,235,229,0.06)",
 
                 // Overlay / drawer
                 OverlayDark       = "rgba(0,0,0,0.7)",
-                DrawerText        = "#B8C0CC",
-                DrawerIcon        = "#7D8795",
-                AppbarText        = "#FFFFFF",
+                DrawerText        = "#B9B4AA",
+                DrawerIcon        = "#8C877E",
+                AppbarText        = "#EEEBE5",
             },
             Typography = new Typography
             {
                 Default = new DefaultTypography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "1rem",
                     FontWeight = "400",
                     LineHeight = "1.6",
@@ -76,81 +76,81 @@ public static class AppTheme
                 },
                 H1 = new H1Typography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "1.875rem",
                     FontWeight = "700",
                     LineHeight = "1.25",
-                    LetterSpacing = "-0.01em",
+                    LetterSpacing = "normal",
                 },
                 H2 = new H2Typography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "1.5rem",
                     FontWeight = "700",
                     LineHeight = "1.25",
-                    LetterSpacing = "-0.01em",
+                    LetterSpacing = "normal",
                 },
                 H3 = new H3Typography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "1.25rem",
                     FontWeight = "600",
                     LineHeight = "1.25",
                 },
                 H4 = new H4Typography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "1.125rem",
                     FontWeight = "600",
                     LineHeight = "1.3",
                 },
                 H5 = new H5Typography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "1rem",
                     FontWeight = "600",
                     LineHeight = "1.4",
                 },
                 H6 = new H6Typography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "0.875rem",
                     FontWeight = "600",
                     LineHeight = "1.4",
                 },
                 Body1 = new Body1Typography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "1rem",
                     FontWeight = "400",
                     LineHeight = "1.6",
                 },
                 Body2 = new Body2Typography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "0.875rem",
                     FontWeight = "400",
                     LineHeight = "1.6",
                 },
                 Button = new ButtonTypography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "0.9375rem",
                     FontWeight = "600",
                     LineHeight = "1.5",
-                    LetterSpacing = "-0.01em",
+                    LetterSpacing = "normal",
                     TextTransform = "none",
                 },
                 Caption = new CaptionTypography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "0.75rem",
                     FontWeight = "400",
                     LineHeight = "1.4",
                 },
                 Overline = new OverlineTypography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "0.6875rem",
                     FontWeight = "700",
                     LineHeight = "1.4",
@@ -159,14 +159,14 @@ public static class AppTheme
                 },
                 Subtitle1 = new Subtitle1Typography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "1rem",
                     FontWeight = "500",
                     LineHeight = "1.5",
                 },
                 Subtitle2 = new Subtitle2Typography
                 {
-                    FontFamily = ["Inter", "-apple-system", "BlinkMacSystemFont", "Segoe UI", "sans-serif"],
+                    FontFamily = ["Barlow", "system-ui", "-apple-system", "Segoe UI", "sans-serif"],
                     FontSize   = "0.875rem",
                     FontWeight = "500",
                     LineHeight = "1.5",
@@ -174,7 +174,7 @@ public static class AppTheme
             },
             LayoutProperties = new LayoutProperties
             {
-                DefaultBorderRadius = "14px",
+                DefaultBorderRadius = "6px",
                 DrawerWidthLeft     = "220px",
                 DrawerWidthRight    = "240px",
                 AppbarHeight        = "56px",

@@ -14,11 +14,10 @@
     padding: 0.65rem 0.85rem;
     border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
-    background: rgba(25, 28, 35, 0.94);
+    background: var(--color-surface-2);
     color: var(--color-text-muted);
     font-size: var(--text-sm);
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
-    backdrop-filter: blur(8px);
 }
 
 .voice-notes-status.error {
@@ -32,24 +31,23 @@
     gap: 0.45rem;
     min-height: 56px;
     padding: 0.85rem 1.1rem;
-    border: 1px solid var(--color-border);
-    border-radius: 999px;
-    background: rgba(25, 28, 35, 0.88);
+    border: 1px solid var(--color-border-2);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-2);
     color: var(--color-text);
     box-shadow: 0 4px 18px rgba(0, 0, 0, 0.35);
     font: inherit;
     font-size: var(--text-sm);
     font-weight: 600;
     cursor: pointer;
-    backdrop-filter: blur(8px);
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
 }
 
 .voice-notes-fab.listening {
-    border-color: #ef4444;
-    background: rgba(153, 27, 27, 0.94);
-    color: #fff;
+    border-color: var(--color-danger);
+    background: var(--color-danger);
+    color: var(--color-text);
     animation: voice-notes-pulse 1.5s ease-in-out infinite;
 }
 
@@ -58,8 +56,8 @@
 }
 
 @keyframes voice-notes-pulse {
-    0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.45); }
-    50% { box-shadow: 0 0 0 10px rgba(239, 68, 68, 0); }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(229, 83, 75, 0.45); }
+    50% { box-shadow: 0 0 0 10px rgba(229, 83, 75, 0); }
 }
 
 @media (min-width: 768px) {

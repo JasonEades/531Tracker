@@ -509,6 +509,331 @@ public sealed class WorkoutExportTests
     }
 
     [Fact]
+    public async Task DeletingPplProgramRemovesSessionsAndIgnoresOtherUsers()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var ownerService = CreatePplProgramService(context, new TestCurrentUserService("owner"));
+        var otherService = CreatePplProgramService(context, new TestCurrentUserService("other"));
+        var ownerSessions = new PplSessionService(context, new TestCurrentUserService("owner"));
+
+        var program = await ownerService.CreateProgramAsync("Owner PPL", 3);
+        var session = await ownerService.GetOrCreateNextSessionAsync(program.Id);
+        await ownerSessions.CompleteSessionAsync(session.Id);
+        await ownerService.GetOrCreateNextSessionAsync(program.Id);
+        context.ChangeTracker.Clear();
+
+        await otherService.DeleteProgramAsync(program.Id);
+        Assert.True(await context.PplPrograms.AnyAsync(p => p.Id == program.Id));
+
+        await ownerService.DeleteProgramAsync(program.Id);
+        Assert.False(await context.PplPrograms.AnyAsync());
+        Assert.False(await context.PplSessions.AnyAsync());
+        Assert.False(await context.PplSessionExercises.AnyAsync());
+        Assert.False(await context.PplExerciseSlots.AnyAsync());
+    }
+
+    [Fact]
+    public async Task PplProgressionAppliesOnceWithSmallIncrementsAndRequiresAllSets()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new TestCurrentUserService("owner");
+        var programService = CreatePplProgramService(context, user);
+        var sessionService = new PplSessionService(context, user);
+        var progression = new PplProgressionService(context, new WeightCalculator(), user);
+        var otherProgression = new PplProgressionService(context, new WeightCalculator(), new TestCurrentUserService("other"));
+
+        var program = await programService.CreateProgramAsync("PPL", 3);
+        var details = await programService.GetProgramWithDetailsAsync(program.Id);
+        var slot = details!.DayTemplates.OrderBy(d => d.OrderInWeek).First().ExerciseSlots.First(s => !s.IsBodyweight);
+        await programService.ConfigureStartingWeightsAsync(program.Id, new Dictionary<int, double?> { [slot.Id] = 100 });
+        slot.ProgressionIncrement = 2.5;
+        await context.SaveChangesAsync();
+
+        var session = await programService.GetOrCreateNextSessionAsync(program.Id);
+        var exercise = (await sessionService.GetSessionWithDetailsAsync(session.Id))!.Exercises.Single(e => e.PplExerciseSlotId == slot.Id);
+        var sets = exercise.Sets.OrderBy(s => s.SetNumber).ToList();
+
+        await sessionService.UpdateSetAsync(sets[0].Id, 100, exercise.RepsMax, true);
+        context.ChangeTracker.Clear();
+        Assert.False(await progression.ApplyProgressionAsync(exercise.Id));
+
+        foreach (var set in sets)
+            await sessionService.UpdateSetAsync(set.Id, 100, exercise.RepsMax, true);
+        context.ChangeTracker.Clear();
+
+        Assert.False(await otherProgression.ApplyProgressionAsync(exercise.Id));
+        Assert.True(await progression.ApplyProgressionAsync(exercise.Id));
+        Assert.False(await progression.ApplyProgressionAsync(exercise.Id));
+
+        await sessionService.CompleteSessionAsync(session.Id);
+        Assert.Equal(0, await progression.ApplySessionProgressionAsync(session.Id));
+        context.ChangeTracker.Clear();
+        Assert.Equal(102.5, (await context.PplExerciseSlots.SingleAsync(s => s.Id == slot.Id)).CurrentWeight);
+    }
+
+    [Fact]
+    public async Task PplSessionCompletionAutoProgressesEarnedExercises()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new TestCurrentUserService("owner");
+        var programService = CreatePplProgramService(context, user);
+        var sessionService = new PplSessionService(context, user);
+        var progression = new PplProgressionService(context, new WeightCalculator(), user);
+
+        var program = await programService.CreateProgramAsync("PPL", 3);
+        var details = await programService.GetProgramWithDetailsAsync(program.Id);
+        var slot = details!.DayTemplates.OrderBy(d => d.OrderInWeek).First().ExerciseSlots.First(s => !s.IsBodyweight);
+        await programService.ConfigureStartingWeightsAsync(program.Id, new Dictionary<int, double?> { [slot.Id] = 135 });
+
+        var session = await programService.GetOrCreateNextSessionAsync(program.Id);
+        Assert.Equal(0, await progression.ApplySessionProgressionAsync(session.Id));
+
+        var exercise = (await sessionService.GetSessionWithDetailsAsync(session.Id))!.Exercises.Single(e => e.PplExerciseSlotId == slot.Id);
+        foreach (var set in exercise.Sets)
+            await sessionService.UpdateSetAsync(set.Id, 135, exercise.RepsMax, true);
+        await sessionService.CompleteSessionAsync(session.Id);
+        context.ChangeTracker.Clear();
+
+        Assert.Equal(1, await progression.ApplySessionProgressionAsync(session.Id));
+        Assert.Equal(0, await progression.ApplySessionProgressionAsync(session.Id));
+        var progressed = await context.PplExerciseSlots.SingleAsync(s => s.Id == slot.Id);
+        Assert.Equal(135 + progressed.ProgressionIncrement, progressed.CurrentWeight);
+    }
+
+    [Fact]
+    public async Task PplWeeksAdvanceByCompletedRotationsNotCalendarTime()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new TestCurrentUserService("owner");
+        var programService = CreatePplProgramService(context, user);
+        var sessionService = new PplSessionService(context, user);
+        var program = await programService.CreateProgramAsync("PPL", 3);
+        program.CreatedAt = DateTime.UtcNow.AddDays(-60);
+        await context.SaveChangesAsync();
+
+        var dayTypes = new List<PplDayType>();
+        var weeks = new List<int>();
+        for (var i = 0; i < 4; i++)
+        {
+            var session = await programService.GetOrCreateNextSessionAsync(program.Id);
+            dayTypes.Add(session.DayTemplate.DayType);
+            weeks.Add(session.Week!.WeekNumber);
+            await sessionService.CompleteSessionAsync(session.Id);
+        }
+
+        Assert.Equal([PplDayType.Push, PplDayType.Pull, PplDayType.Legs, PplDayType.Push], dayTypes);
+        Assert.Equal([1, 1, 1, 2], weeks);
+        Assert.Equal(2, await programService.GetCurrentWeekNumberAsync(program.Id));
+    }
+
+    [Fact]
+    public async Task PplSetUpdatesRejectInvalidValues()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new TestCurrentUserService("owner");
+        var programService = CreatePplProgramService(context, user);
+        var sessionService = new PplSessionService(context, user);
+        var program = await programService.CreateProgramAsync("PPL", 3);
+        var session = await programService.GetOrCreateNextSessionAsync(program.Id);
+        var set = (await sessionService.GetSessionWithDetailsAsync(session.Id))!.Exercises.First().Sets.First();
+
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => sessionService.UpdateSetAsync(set.Id, -5, 8, true));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => sessionService.UpdateSetAsync(set.Id, 100, -1, true));
+        await Assert.ThrowsAsync<ArgumentOutOfRangeException>(() => sessionService.UpdateSetAsync(set.Id, double.NaN, 8, true));
+        await sessionService.UpdateSetAsync(set.Id, 0, 0, false);
+    }
+
+    [Fact]
+    public async Task FirstPplProgramUsesMostRecent531CycleNotAllTimeBest()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var bench = new Lift { UserId = "test-user", LiftType = LiftType.BenchPress, Name = "Bench Press", TrainingMax = 200 };
+        AddCompleted531BenchSet(context, bench, cycleNumber: 1, occurredOn: DateTime.UtcNow.AddDays(-90), weight: 210, reps: 5);
+        AddCompleted531BenchSet(context, bench, cycleNumber: 2, occurredOn: DateTime.UtcNow.AddDays(-5), weight: 170, reps: 5);
+        await context.SaveChangesAsync();
+
+        var service = CreatePplProgramService(context, new TestCurrentUserService());
+        var program = await service.CreateProgramAsync("PPL after 531", 3);
+        var details = await service.GetProgramWithDetailsAsync(program.Id);
+        var benchSlot = details!.DayTemplates.SelectMany(d => d.ExerciseSlots).Single(s => s.ExerciseName == "Barbell Bench Press");
+
+        // Most recent cycle: 170x5 → e1RM 200 → 200 / (1 + 8/30) ≈ 160 (the older 245 e1RM would give 195).
+        Assert.Equal(160, benchSlot.StartingWeight);
+    }
+
+    [Fact]
+    public async Task First531CycleUsesMostRecentPplProgramEvenWhenTrainingMaxWasCustomized()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+        context.Lifts.AddRange(
+            new Lift { UserId = "test-user", LiftType = LiftType.Squat, Name = "Squat", TrainingMax = 315 },
+            new Lift { UserId = "test-user", LiftType = LiftType.BenchPress, Name = "Bench Press", TrainingMax = 250 },
+            new Lift { UserId = "test-user", LiftType = LiftType.Deadlift, Name = "Deadlift", TrainingMax = 365 },
+            new Lift { UserId = "test-user", LiftType = LiftType.OverheadPress, Name = "Overhead Press", TrainingMax = 145 });
+        await context.SaveChangesAsync();
+
+        var user = new TestCurrentUserService();
+        var calculator = new WeightCalculator();
+        var pplService = CreatePplProgramService(context, user);
+        var pplSessions = new PplSessionService(context, user);
+
+        async Task CompleteBenchSessionAsync(string name, double weight, DateTime occurredOn)
+        {
+            var program = await pplService.CreateProgramAsync(name, 3);
+            var session = await pplService.GetOrCreateNextSessionAsync(program.Id);
+            var details = await pplSessions.GetSessionWithDetailsAsync(session.Id);
+            var set = details!.Exercises.Single(e => e.ExerciseName == "Barbell Bench Press").Sets.First();
+            await pplSessions.UpdateSetAsync(set.Id, weight, 5, true);
+            await pplSessions.UpdateSessionDateAsync(session.Id, occurredOn);
+            await pplSessions.CompleteSessionAsync(session.Id);
+        }
+
+        await CompleteBenchSessionAsync("Older PPL", 210, DateTime.UtcNow.AddDays(-60));
+        await CompleteBenchSessionAsync("Recent PPL", 170, DateTime.UtcNow.AddDays(-2));
+
+        var cycleService = new CycleService(
+            context,
+            new LiftService(context, user),
+            new BbbMappingService(),
+            calculator,
+            user,
+            new EstimatedStrengthService(context, calculator));
+        await cycleService.CreateCycleAsync();
+
+        // Recent PPL 170x5 → e1RM 200 → TM 90% = 180 (older 245 e1RM would give 220; customized 250 is replaced).
+        var bench = await context.Lifts.SingleAsync(lift => lift.LiftType == LiftType.BenchPress);
+        Assert.Equal(180, bench.TrainingMax);
+        var squat = await context.Lifts.SingleAsync(lift => lift.LiftType == LiftType.Squat);
+        Assert.Equal(315, squat.TrainingMax);
+    }
+
+    private static void AddCompleted531BenchSet(AppDbContext context, Lift bench, int cycleNumber, DateTime occurredOn, double weight, int reps)
+    {
+        var cycle = new Cycle { UserId = bench.UserId, Name = $"Cycle {cycleNumber}", CycleNumber = cycleNumber };
+        var week = new Week { Cycle = cycle, WeekNumber = WeekNumber.Week1 };
+        var workout = new Workout { Week = week, MainLiftType = LiftType.BenchPress, Status = WorkoutStatus.Completed, OccurredOn = occurredOn };
+        context.WorkoutSets.Add(new WorkoutSet
+        {
+            Workout = workout,
+            Lift = bench,
+            SetType = SetType.Main,
+            IsCompleted = true,
+            ActualWeight = weight,
+            ActualReps = reps
+        });
+    }
+
+    [Fact]
+    public async Task PplSwapOffersSameMuscleOptionsAndSupportsOneOffAndPermanentSwaps()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new TestCurrentUserService("owner");
+        var calculator = new WeightCalculator();
+        var programService = CreatePplProgramService(context, user);
+        var sessionService = new PplSessionService(context, user);
+        var progression = new PplProgressionService(context, calculator, user);
+        var swap = new PplExerciseSwapService(context, user, new EstimatedStrengthService(context, calculator), calculator);
+        var otherSwap = new PplExerciseSwapService(context, new TestCurrentUserService("other"), new EstimatedStrengthService(context, calculator), calculator);
+
+        var program = await programService.CreateProgramAsync("PPL", 3);
+        var session = await programService.GetOrCreateNextSessionAsync(program.Id);
+        var details = await sessionService.GetSessionWithDetailsAsync(session.Id);
+        var incline = details!.Exercises.Single(e => e.ExerciseName == "Incline DB Press");
+        var pushdown = details.Exercises.Single(e => e.ExerciseName == "Tricep Pushdown");
+
+        var chestOptions = await swap.GetSwapOptionsAsync(incline.Id);
+        Assert.NotEmpty(chestOptions);
+        Assert.All(chestOptions, o => Assert.Equal(MuscleGroup.Chest, o.PrimaryMuscle));
+        Assert.DoesNotContain(chestOptions, o => o.Name == "Incline DB Press");
+        Assert.Equal("Incline Barbell Bench", chestOptions[0].Name); // same movement type ranks first
+        Assert.Empty(await otherSwap.GetSwapOptionsAsync(incline.Id));
+
+        var pushUp = chestOptions.Single(o => o.Name == "Push-Up");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => otherSwap.SwapAsync(incline.Id, pushUp.Id, PplSwapScope.ThisWorkout));
+
+        // One-off: session snapshot changes, plan and progression stay on the original exercise.
+        await swap.SwapAsync(incline.Id, chestOptions.Single(o => o.Name == "Dumbbell Fly").Id, PplSwapScope.ThisWorkout);
+        context.ChangeTracker.Clear();
+        var oneOff = await context.PplSessionExercises.Include(e => e.ExerciseSlot).Include(e => e.Sets).SingleAsync(e => e.Id == incline.Id);
+        Assert.Equal("Dumbbell Fly", oneOff.ExerciseName);
+        Assert.Equal("Incline DB Press", oneOff.ExerciseSlot.ExerciseName);
+        foreach (var set in oneOff.Sets)
+            await sessionService.UpdateSetAsync(set.Id, 40, oneOff.RepsMax, true);
+        context.ChangeTracker.Clear();
+        Assert.False(await progression.ApplyProgressionAsync(incline.Id));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => swap.SwapAsync(incline.Id, pushUp.Id, PplSwapScope.ThisWorkout));
+
+        // Permanent: the plan slot is replaced and the next session uses it.
+        var tricepOptions = await swap.GetSwapOptionsAsync(pushdown.Id);
+        var skullCrusher = tricepOptions.Single(o => o.Name == "Skull Crusher");
+        await swap.SwapAsync(pushdown.Id, skullCrusher.Id, PplSwapScope.FutureWorkouts);
+        context.ChangeTracker.Clear();
+        var slot = await context.PplExerciseSlots.SingleAsync(s => s.Id == pushdown.PplExerciseSlotId);
+        Assert.Equal("Skull Crusher", slot.ExerciseName);
+        Assert.Equal(skullCrusher.Id, slot.ExerciseDefinitionId);
+        Assert.Equal("Skull Crusher", (await context.PplSessionExercises.SingleAsync(e => e.Id == pushdown.Id)).ExerciseName);
+
+        await sessionService.CompleteSessionAsync(session.Id);
+        await programService.GetOrCreateNextSessionAsync(program.Id); // pull
+        context.ChangeTracker.Clear();
+        var completedSecond = await context.PplSessions.SingleAsync(s => s.Status != WorkoutStatus.Completed);
+        await sessionService.CompleteSessionAsync(completedSecond.Id);
+        var legs = await programService.GetOrCreateNextSessionAsync(program.Id);
+        await sessionService.CompleteSessionAsync(legs.Id);
+        var nextPush = await programService.GetOrCreateNextSessionAsync(program.Id);
+        var nextPushDetails = await sessionService.GetSessionWithDetailsAsync(nextPush.Id);
+        Assert.Contains(nextPushDetails!.Exercises, e => e.ExerciseName == "Skull Crusher");
+        Assert.Contains(nextPushDetails.Exercises, e => e.ExerciseName == "Incline DB Press");
+    }
+
+    [Fact]
     public void PdfIsGeneratedFromTheSameDocument()
     {
         var document = CreateDocument();

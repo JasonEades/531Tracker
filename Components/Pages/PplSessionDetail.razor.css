@@ -3,7 +3,7 @@
 .ppl-exercise-section {
     background: var(--color-surface);
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-lg);
+    border-radius: var(--radius-md);
     padding: var(--space-4) var(--space-5);
     margin-bottom: var(--space-3);
 }
@@ -17,8 +17,10 @@
 }
 
 .ppl-exercise-name {
-    font-size: var(--text-lg);
+    font-family: var(--font-display);
+    font-size: var(--text-xl);
     font-weight: 700;
+    line-height: 1.15;
     color: var(--color-text);
     margin-bottom: 4px;
 }
@@ -30,18 +32,13 @@
     align-items: center;
 }
 
-/* PPL day-type badges */
-.badge-push { background: rgba(94,124,255,0.2); color: #7690FF; }
-.badge-pull { background: rgba(110,231,255,0.2); color: #6EE7FF; }
-.badge-legs { background: rgba(61,220,132,0.2); color: #3DDC84; }
-
 /* e1RM card */
 .e1rm-card {
     display: flex;
     align-items: center;
     gap: var(--space-3);
-    background: rgba(110,231,255,0.08);
-    border: 1px solid rgba(110,231,255,0.25);
+    background: var(--color-surface-2);
+    border: 1px solid var(--color-border);
     border-radius: var(--radius-md);
     padding: var(--space-3) var(--space-4);
     margin-top: var(--space-3);
@@ -56,9 +53,11 @@
 }
 
 .e1rm-value {
-    font-size: 1.4rem;
-    font-weight: 800;
-    color: var(--color-accent);
+    font-family: var(--font-display);
+    font-size: var(--text-2xl);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    color: var(--color-text);
     flex: 1;
 }
 .workout-notes-section {
@@ -97,4 +96,21 @@
     .section-heading-row {
         flex-direction: column;
     }
+}
+
+.ppl-swap-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-2);
+    margin: var(--space-2) 0 var(--space-3);
+    padding: var(--space-3);
+    border: 1px solid var(--color-border-2);
+    border-radius: var(--radius-md);
+    background: var(--color-surface-2);
+}
+
+.ppl-swap-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--space-2);
 }

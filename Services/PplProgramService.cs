@@ -16,6 +16,7 @@ public interface IPplProgramService
     Task SetActiveProgramAsync(int programId);
     Task DeleteProgramAsync(int programId);
     Task<PplSession> GetOrCreateNextSessionAsync(int programId);
+    Task<int> GetCurrentWeekNumberAsync(int programId);
 }
 
 public class PplProgramService(
@@ -281,9 +282,32 @@ public class PplProgramService(
         var program = await db.PplPrograms.FirstOrDefaultAsync(p => p.Id == programId && p.UserId == userId);
         if (program is not null)
         {
+            // Sessions reference day templates/slots with RESTRICT FKs; PostgreSQL checks those during
+            // the program cascade, so remove sessions before the program.
+            var sessions = await db.PplSessions.Where(s => s.PplProgramId == program.Id).ToListAsync();
+            db.PplSessions.RemoveRange(sessions);
+            await db.SaveChangesAsync();
+
             db.PplPrograms.Remove(program);
             await db.SaveChangesAsync();
         }
+    }
+
+    public async Task<int> GetCurrentWeekNumberAsync(int programId)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        if (!await db.PplPrograms.AnyAsync(p => p.Id == programId && p.UserId == userId))
+            throw new InvalidOperationException("PPL program was not found.");
+
+        var completedCount = await db.PplSessions
+            .CountAsync(s => s.PplProgramId == programId && s.Status == WorkoutStatus.Completed);
+        return await GetCurrentWeekNumberCoreAsync(programId, completedCount);
+    }
+
+    private async Task<int> GetCurrentWeekNumberCoreAsync(int programId, int completedCount)
+    {
+        var daysPerRotation = await db.PplDayTemplates.CountAsync(d => d.PplProgramId == programId && d.WeekNumber == null);
+        return daysPerRotation == 0 ? 1 : completedCount / daysPerRotation + 1;
     }
 
     public async Task<PplSession> GetOrCreateNextSessionAsync(int programId)
@@ -304,9 +328,10 @@ public class PplProgramService(
 
         if (existing is not null) return existing;
 
-        var programCreatedDate = program.CreatedAt.ToUniversalTime();
         var sessionDate = DateTime.UtcNow.Date;
-        var weekNumber = Math.Max(1, (int)Math.Floor((sessionDate - programCreatedDate.Date).TotalDays / 7) + 1);
+        var completedCount = await db.PplSessions
+            .CountAsync(s => s.PplProgramId == programId && s.Status == WorkoutStatus.Completed);
+        var weekNumber = await GetCurrentWeekNumberCoreAsync(programId, completedCount);
 
         // Select this week's customized schedule when one exists, otherwise use the program defaults.
         var availableTemplates = await db.PplDayTemplates
@@ -321,22 +346,8 @@ public class PplProgramService(
 
         if (templates.Count == 0) throw new InvalidOperationException("Program has no day templates.");
 
-        var lastSession = await db.PplSessions
-            .Where(s => s.PplProgramId == programId && s.Program.UserId == userId && s.Status == WorkoutStatus.Completed)
-            .OrderByDescending(s => s.CompletedAt)
-            .FirstOrDefaultAsync();
-
-        PplDayTemplate nextTemplate;
-        if (lastSession is null)
-        {
-            nextTemplate = templates[0];
-        }
-        else
-        {
-            var lastTemplate = templates.FirstOrDefault(t => t.Id == lastSession.PplDayTemplateId);
-            var lastOrder = lastTemplate?.OrderInWeek ?? 0;
-            nextTemplate = templates.FirstOrDefault(t => t.OrderInWeek > lastOrder) ?? templates[0];
-        }
+        // Weeks advance by completed rotations, not calendar time, so missed days/weeks don't skip workouts.
+        var nextTemplate = templates[completedCount % templates.Count];
 
         // Build the session with exercise snapshots
         var slots = await db.PplExerciseSlots
@@ -360,7 +371,7 @@ public class PplProgramService(
         var pplWeek = await db.PplWeeks.FirstOrDefaultAsync(w => w.PplProgramId == programId && w.WeekNumber == weekNumber);
         if (pplWeek is null)
         {
-            pplWeek = new PplWeek { PplProgramId = programId, WeekNumber = weekNumber, StartDate = programCreatedDate.Date.AddDays((weekNumber - 1) * 7) };
+            pplWeek = new PplWeek { PplProgramId = programId, WeekNumber = weekNumber, StartDate = sessionDate };
             db.PplWeeks.Add(pplWeek);
             await db.SaveChangesAsync();
         }

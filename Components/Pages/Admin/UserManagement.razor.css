@@ -13,20 +13,20 @@
 
 .admin-title {
     font-size: var(--text-xl);
-    font-weight: 800;
+    font-weight: 700;
     color: var(--color-text);
     margin: 0;
 }
 
 .admin-badge {
-    background: linear-gradient(135deg, #f59e0b, #d97706);
-    color: #fff;
+    border: 1px solid var(--color-warning);
+    color: var(--color-warning);
     font-size: 0.65rem;
     font-weight: 700;
     letter-spacing: 0.08em;
     text-transform: uppercase;
-    padding: 3px 8px;
-    border-radius: 999px;
+    padding: 2px 7px;
+    border-radius: var(--radius-sm);
 }
 
 .admin-loading,
@@ -39,7 +39,7 @@
 .admin-table-wrap {
     overflow-x: auto;
     border: 1px solid var(--color-border);
-    border-radius: var(--radius-xl);
+    border-radius: var(--radius-md);
 }
 
 .admin-table {
@@ -96,15 +96,15 @@
 }
 
 .badge-admin {
-    background: rgba(245, 158, 11, 0.15);
-    color: #f59e0b;
-    border: 1px solid rgba(245, 158, 11, 0.3);
+    background: var(--color-warning-dim);
+    color: var(--color-warning);
+    border: 1px solid var(--color-warning);
     font-size: 0.65rem;
     font-weight: 700;
     text-transform: uppercase;
     letter-spacing: 0.06em;
     padding: 2px 8px;
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
 }
 
 .badge-user {
@@ -116,26 +116,26 @@
     text-transform: uppercase;
     letter-spacing: 0.06em;
     padding: 2px 8px;
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
 }
 
 .status-chip {
     font-size: 0.7rem;
     font-weight: 700;
     padding: 3px 10px;
-    border-radius: 999px;
+    border-radius: var(--radius-sm);
 }
 
 .status-enabled {
-    background: rgba(34, 197, 94, 0.12);
-    color: #22c55e;
-    border: 1px solid rgba(34, 197, 94, 0.25);
+    background: var(--color-success-dim);
+    color: var(--color-success);
+    border: 1px solid var(--color-success);
 }
 
 .status-disabled {
-    background: rgba(239, 68, 68, 0.12);
-    color: #ef4444;
-    border: 1px solid rgba(239, 68, 68, 0.25);
+    background: var(--color-danger-dim);
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger);
 }
 
 .btn-toggle {
@@ -154,23 +154,23 @@
 }
 
 .btn-disable {
-    background: rgba(239, 68, 68, 0.12);
-    color: #ef4444;
-    border: 1px solid rgba(239, 68, 68, 0.3);
+    background: var(--color-danger-dim);
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger);
 }
 
 .btn-disable:hover:not(:disabled) {
-    background: rgba(239, 68, 68, 0.2);
+    background: var(--color-danger-dim);
 }
 
 .btn-enable {
-    background: rgba(34, 197, 94, 0.12);
-    color: #22c55e;
-    border: 1px solid rgba(34, 197, 94, 0.3);
+    background: var(--color-success-dim);
+    color: var(--color-success);
+    border: 1px solid var(--color-success);
 }
 
 .btn-enable:hover:not(:disabled) {
-    background: rgba(34, 197, 94, 0.2);
+    background: var(--color-success-dim);
 }
 
 .admin-toast {
@@ -182,13 +182,13 @@
 }
 
 .toast-success {
-    background: rgba(34, 197, 94, 0.1);
-    color: #22c55e;
-    border: 1px solid rgba(34, 197, 94, 0.25);
+    background: var(--color-success-dim);
+    color: var(--color-success);
+    border: 1px solid var(--color-success);
 }
 
 .toast-error {
-    background: rgba(239, 68, 68, 0.1);
-    color: #ef4444;
-    border: 1px solid rgba(239, 68, 68, 0.25);
+    background: var(--color-danger-dim);
+    color: var(--color-danger);
+    border: 1px solid var(--color-danger);
 }

@@ -9,7 +9,7 @@
             }
             else
             {
-                <div class="nav-avatar nav-avatar-placeholder">👤</div>
+                <div class="nav-avatar nav-avatar-placeholder" aria-hidden="true">@GetDisplayName(context.User)[..1].ToUpperInvariant()</div>
             }
             <span class="nav-user-name">@GetDisplayName(context.User)</span>
             <a href="/logout" class="nav-logout-btn" title="Sign out">

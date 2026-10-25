@@ -23,7 +23,7 @@ else if (cycle is null)
 else
 {
     @* ── Header ──────────────────────────────────────────── *@
-    <div class="workout-header animate-fade-in">
+    <div class="workout-header">
         <button class="btn btn-ghost btn-sm back-btn" @onclick='() => Nav.NavigateTo("/cycles")'>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             History
@@ -80,7 +80,7 @@ else
     </div>
 
     @* ── Overall progress ─────────────────────────────────── *@
-    <div class="progress-strip mb-4 animate-fade-in">
+    <div class="progress-strip mb-4">
         <div class="flex items-center justify-between mb-1">
             <span class="sets-progress-label">Cycle Progress</span>
             <span class="sets-progress-label">@CycleDone / @CycleTotal workouts · @CyclePct%</span>
@@ -93,7 +93,7 @@ else
     @* ── Next cycle progression form ──────────────────────── *@
     @if (showProgression)
     {
-        <div class="setup-sheet animate-slide-up mb-4">
+        <div class="setup-sheet mb-4">
             <div class="setup-sheet-header">
                 <h3>Next Cycle Progression</h3>
                 <button class="btn btn-ghost btn-sm" @onclick="() => showProgression = false">✕</button>
@@ -148,7 +148,7 @@ else
             </div>
             <div class="flex gap-1 mt-3">
                 <button class="btn btn-primary flex-1" @onclick="CreateNextCycle" disabled="@creating">
-                    🚀 Create Next Cycle
+                    Create Next Cycle
                 </button>
                 <button class="btn btn-outline" @onclick="() => showProgression = false">Cancel</button>
             </div>
@@ -156,7 +156,7 @@ else
     }
 
     @* ── Week / Workout list ───────────────────────────────── *@
-    <div class="animate-fade-in">
+    <div>
         @foreach (var week in cycle.Weeks.OrderBy(w => w.WeekNumber))
         {
             var weekWorkouts = week.Workouts.ToList();
@@ -268,6 +268,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         cycle = await CycleService.GetCycleWithDetailsAsync(CycleId);
         loading = false;
     }

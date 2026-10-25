@@ -6,7 +6,7 @@
 
 <PageTitle>@(exercise?.Name ?? "Exercise") — Exercise Library</PageTitle>
 
-<div class="animate-fade-in">
+<div>
     <div class="page-header mb-4">
         <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo("/exercise-library")'>← Exercise Library</button>
         @if (exercise is not null)
@@ -58,6 +58,9 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         exercise = await Library.GetExerciseAsync(Id);
         loading = false;
     }

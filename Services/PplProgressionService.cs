@@ -6,17 +6,20 @@ namespace FiveThreeOneTracker.Services;
 
 public interface IPplProgressionService
 {
-    /// <summary>Returns true if all completed sets hit or exceeded repsMax — time to add weight.</summary>
+    /// <summary>Returns true when every set is completed at or above repsMax — time to add weight.</summary>
     bool ShouldProgress(IEnumerable<PplSessionSet> sets, int repsMax);
 
-    /// <summary>Increments CurrentWeight on the slot by ProgressionIncrement and persists.</summary>
-    Task ApplyProgressionAsync(int exerciseSlotId);
+    /// <summary>
+    /// Increments the exercise's slot by ProgressionIncrement once. No-op when the slot has already
+    /// moved past the weight this session was planned at, or when the exercise has not earned progression.
+    /// </summary>
+    Task<bool> ApplyProgressionAsync(int sessionExerciseId);
+
+    /// <summary>Applies earned progression for every exercise in a completed session; returns the count applied.</summary>
+    Task<int> ApplySessionProgressionAsync(int sessionId);
 
     /// <summary>Epley e1RM from the top-weight completed set of a session exercise.</summary>
     double? CalculateE1Rm(PplSessionExercise exercise);
-
-    /// <summary>How many sessions have been completed for this slot since the last weight increase.</summary>
-    Task<int> SessionsSinceLastProgressionAsync(int exerciseSlotId);
 }
 
 public class PplProgressionService(AppDbContext db, IWeightCalculator weightCalc, ICurrentUserService userContext)
@@ -24,23 +27,52 @@ public class PplProgressionService(AppDbContext db, IWeightCalculator weightCalc
 {
     public bool ShouldProgress(IEnumerable<PplSessionSet> sets, int repsMax)
     {
-        var completed = sets.Where(s => s.IsCompleted && s.ActualReps.HasValue).ToList();
-        return completed.Count > 0 && completed.All(s => s.ActualReps!.Value >= repsMax);
+        var all = sets.ToList();
+        return all.Count > 0 && all.All(s => s.IsCompleted && s.ActualReps is int reps && reps >= repsMax);
     }
 
-    public async Task ApplyProgressionAsync(int exerciseSlotId)
+    public async Task<bool> ApplyProgressionAsync(int sessionExerciseId)
     {
         var userId = await userContext.GetUserIdAsync();
-        var slot = await db.PplExerciseSlots
-            .Include(s => s.DayTemplate)
-                .ThenInclude(d => d.Program)
-            .FirstOrDefaultAsync(s => s.Id == exerciseSlotId && s.DayTemplate.Program.UserId == userId);
-        if (slot is null || slot.IsBodyweight) return;
+        var exercise = await db.PplSessionExercises
+            .Include(e => e.Sets)
+            .Include(e => e.ExerciseSlot)
+            .FirstOrDefaultAsync(e => e.Id == sessionExerciseId && e.Session.Program.UserId == userId);
+        if (exercise is null || !TryProgress(exercise)) return false;
 
-        if (!slot.CurrentWeight.HasValue) return;
-
-        slot.CurrentWeight = weightCalc.RoundToNearest5(slot.CurrentWeight.Value + slot.ProgressionIncrement);
         await db.SaveChangesAsync();
+        return true;
+    }
+
+    public async Task<int> ApplySessionProgressionAsync(int sessionId)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var exercises = await db.PplSessionExercises
+            .Include(e => e.Sets)
+            .Include(e => e.ExerciseSlot)
+            .Where(e => e.PplSessionId == sessionId
+                     && e.Session.Program.UserId == userId
+                     && e.Session.Status == WorkoutStatus.Completed)
+            .ToListAsync();
+
+        var applied = exercises.Count(TryProgress);
+        if (applied > 0) await db.SaveChangesAsync();
+        return applied;
+    }
+
+    private bool TryProgress(PplSessionExercise exercise)
+    {
+        var slot = exercise.ExerciseSlot;
+        if (slot.IsBodyweight || slot.ProgressionIncrement <= 0) return false;
+        if (slot.CurrentWeight is not double current || exercise.SuggestedWeight is not double planned) return false;
+        // Only progress from the weight this session was planned at, so repeated clicks or re-completing don't stack.
+        if (current != planned) return false;
+        // A one-off swap ("this workout only") must not progress the plan's original exercise.
+        if (!string.Equals(exercise.ExerciseName, slot.ExerciseName, StringComparison.OrdinalIgnoreCase)) return false;
+        if (!ShouldProgress(exercise.Sets, exercise.RepsMax)) return false;
+
+        slot.CurrentWeight = current + slot.ProgressionIncrement;
+        return true;
     }
 
     public double? CalculateE1Rm(PplSessionExercise exercise)
@@ -53,22 +85,5 @@ public class PplProgressionService(AppDbContext db, IWeightCalculator weightCalc
 
         if (topSet is null) return null;
         return weightCalc.CalculateEstimated1RM(topSet.ActualWeight!.Value, topSet.ActualReps!.Value);
-    }
-
-    public async Task<int> SessionsSinceLastProgressionAsync(int exerciseSlotId)
-    {
-        var userId = await userContext.GetUserIdAsync();
-        var slot = await db.PplExerciseSlots
-            .Include(s => s.DayTemplate)
-                .ThenInclude(d => d.Program)
-            .FirstOrDefaultAsync(s => s.Id == exerciseSlotId && s.DayTemplate.Program.UserId == userId);
-        if (slot is null) return 0;
-
-        // Count sessions where the slot was used at the current weight
-        return await db.PplSessionExercises
-            .Where(e => e.PplExerciseSlotId == exerciseSlotId
-                     && e.Session.Program.UserId == userId
-                     && e.SuggestedWeight == slot.CurrentWeight)
-            .CountAsync();
     }
 }

@@ -31,14 +31,12 @@ public sealed class EstimatedStrengthProfile(
 
     public double? GetOneRepMax(string exerciseName)
     {
-        var estimates = new List<double>();
-        if (exerciseOneRepMaxes.TryGetValue(exerciseName, out var exerciseEstimate))
-            estimates.Add(exerciseEstimate);
+        // Main-lift estimates already pick the most recent source across 5/3/1 and PPL.
         if (MainLiftNames.TryGetValue(exerciseName, out var liftType)
             && mainLiftOneRepMaxes.TryGetValue(liftType, out var mainLiftEstimate))
-            estimates.Add(mainLiftEstimate);
+            return mainLiftEstimate;
 
-        return estimates.Count == 0 ? null : estimates.Max();
+        return exerciseOneRepMaxes.TryGetValue(exerciseName, out var exerciseEstimate) ? exerciseEstimate : null;
     }
 
     public IReadOnlyDictionary<LiftType, double> MainLiftOneRepMaxes => mainLiftOneRepMaxes;
@@ -47,6 +45,10 @@ public sealed class EstimatedStrengthProfile(
 public sealed class EstimatedStrengthService(AppDbContext db, IWeightCalculator weightCalculator)
     : IEstimatedStrengthService
 {
+    /// <summary>
+    /// Builds estimates from the user's previous training: for each lift/exercise, the best e1RM within the most
+    /// recently trained 5/3/1 cycle or PPL program that contains completed sets for it (not the all-time best).
+    /// </summary>
     public async Task<EstimatedStrengthProfile> GetProfileAsync(string userId)
     {
         var mainLiftSets = await db.WorkoutSets.AsNoTracking()
@@ -58,7 +60,9 @@ public sealed class EstimatedStrengthService(AppDbContext db, IWeightCalculator 
                 && set.ActualReps > 0)
             .Select(set => new
             {
+                set.Workout.Week.CycleId,
                 set.Workout.MainLiftType,
+                set.Workout.OccurredOn,
                 Weight = set.ActualWeight!.Value,
                 Reps = set.ActualReps!.Value
             })
@@ -72,28 +76,47 @@ public sealed class EstimatedStrengthService(AppDbContext db, IWeightCalculator 
                 && set.ActualReps > 0)
             .Select(set => new
             {
+                set.SessionExercise.Session.PplProgramId,
                 set.SessionExercise.ExerciseName,
+                set.SessionExercise.Session.OccurredOn,
                 Weight = set.ActualWeight!.Value,
                 Reps = set.ActualReps!.Value
             })
             .ToListAsync();
 
-        var mainLiftEstimates = mainLiftSets
-            .Select(set => (set.MainLiftType, Estimate: weightCalculator.CalculateEstimated1RM(set.Weight, set.Reps)))
-            .Concat(pplSets
-                .Where(set => EstimatedStrengthProfile.MainLiftNameType(set.ExerciseName).HasValue)
-                .Select(set => (EstimatedStrengthProfile.MainLiftNameType(set.ExerciseName)!.Value,
-                    Estimate: weightCalculator.CalculateEstimated1RM(set.Weight, set.Reps))))
-            .Where(set => set.Estimate > 0)
-            .GroupBy(set => set.Item1)
-            .ToDictionary(group => group.Key, group => group.Max(set => set.Estimate));
+        var observations = mainLiftSets
+            .Select(set => new Observation($"531:{set.CycleId}", set.MainLiftType, null, set.OccurredOn,
+                weightCalculator.CalculateEstimated1RM(set.Weight, set.Reps)))
+            .Concat(pplSets.Select(set => new Observation($"ppl:{set.PplProgramId}",
+                EstimatedStrengthProfile.MainLiftNameType(set.ExerciseName), set.ExerciseName, set.OccurredOn,
+                weightCalculator.CalculateEstimated1RM(set.Weight, set.Reps))))
+            .Where(o => o.Estimate > 0)
+            .ToList();
 
-        var exerciseEstimates = pplSets
-            .Select(set => (set.ExerciseName, Estimate: weightCalculator.CalculateEstimated1RM(set.Weight, set.Reps)))
-            .Where(set => set.Estimate > 0)
-            .GroupBy(set => set.ExerciseName, StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(group => group.Key, group => group.Max(set => set.Estimate), StringComparer.OrdinalIgnoreCase);
+        var sourceRecency = observations
+            .GroupBy(o => o.Source)
+            .ToDictionary(g => g.Key, g => g.Max(o => o.OccurredOn));
+
+        var mainLiftEstimates = observations
+            .Where(o => o.LiftType.HasValue)
+            .GroupBy(o => o.LiftType!.Value)
+            .ToDictionary(g => g.Key, g => FromMostRecentSource(g, sourceRecency));
+
+        var exerciseEstimates = observations
+            .Where(o => o.ExerciseName is not null)
+            .GroupBy(o => o.ExerciseName!, StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => FromMostRecentSource(g, sourceRecency), StringComparer.OrdinalIgnoreCase);
 
         return new EstimatedStrengthProfile(mainLiftEstimates, exerciseEstimates);
     }
+
+    private static double FromMostRecentSource(IEnumerable<Observation> observations, IReadOnlyDictionary<string, DateTime> sourceRecency) =>
+        observations
+            .GroupBy(o => o.Source)
+            .OrderByDescending(g => sourceRecency[g.Key])
+            .ThenByDescending(g => g.Key, StringComparer.Ordinal)
+            .First()
+            .Max(o => o.Estimate);
+
+    private sealed record Observation(string Source, LiftType? LiftType, string? ExerciseName, DateTime OccurredOn, double Estimate);
 }

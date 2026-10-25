@@ -9,10 +9,11 @@
 @inject ICycleService CycleService
 @inject IPplProgramService PplService
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>Workouts — Jason's Garage Lab</PageTitle>
 
-<div class="page-header animate-fade-in">
+<div class="page-header">
     <h1>Workouts</h1>
     <p class="page-subtitle">All training cycles</p>
 </div>
@@ -51,7 +52,7 @@
 @* ── New Cycle setup form (inline sheet) ──────────────────── *@
 @if (showCreate)
 {
-    <div class="setup-sheet animate-slide-up mb-3">
+    <div class="setup-sheet mb-3">
         <div class="setup-sheet-header">
             <h3>New Cycle</h3>
             <button class="btn btn-ghost btn-sm" @onclick="() => showCreate = false">✕</button>
@@ -108,7 +109,7 @@
 
         <div class="flex gap-1 mt-2">
             <button class="btn btn-primary flex-1" @onclick="CreateCycle" disabled="@creating">
-                🚀 Create Cycle
+                Create Cycle
             </button>
             <button class="btn btn-outline" @onclick="() => showCreate = false">Cancel</button>
         </div>
@@ -123,7 +124,6 @@
 else if (cycles.Count == 0 && !showCreate)
 {
     <div class="empty-state">
-        <div class="empty-state-icon">📅</div>
         <h3>No Cycles Yet</h3>
         <p>Create your first cycle to begin training.</p>
         <button class="btn btn-primary mt-2" @onclick="ShowCreateForm">+ New Cycle</button>
@@ -131,7 +131,7 @@ else if (cycles.Count == 0 && !showCreate)
 }
 else
 {
-    <div class="animate-fade-in">
+    <div>
         @foreach (var cycle in cycles)
         {
             var allWorkouts = cycle.Weeks.SelectMany(w => w.Workouts).ToList();
@@ -190,14 +190,13 @@ else
 }
 
 @* ── PPL Programs ────────────────────────────────────────────────────────────────────────── *@
-<div class="page-header animate-fade-in" style="margin-top:var(--space-8)">
+<div class="page-header" style="margin-top:var(--space-8)">
     <h2 style="font-size:var(--text-lg);font-weight:600">Push-Pull-Legs Programs</h2>
 </div>
 
 @if (pplPrograms.Count == 0)
 {
     <div class="empty-state" style="padding:var(--space-8) 0">
-        <div class="empty-state-icon">&#x1F3CB;</div>
         <h3>No PPL Programs Yet</h3>
         <p>Create a Push-Pull-Legs program to get started.</p>
         <button class="btn btn-primary mt-2" @onclick='() => Nav.NavigateTo("/ppl/new")'>+ Create PPL Program</button>
@@ -205,7 +204,7 @@ else
 }
 else
 {
-    <div class="animate-fade-in">
+    <div>
         @foreach (var prog in pplPrograms)
         {
             var completedSessions = prog.Sessions.Count(s => s.Status == WorkoutStatus.Completed);
@@ -238,8 +237,12 @@ else
                     <div class="cycle-progress-fill" style="width:@pplPct%"></div>
                 </div>
                 <div class="cycle-card-actions">
-                    <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo("/ppl/history")'>View Sessions</button>
+                    <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo($"/ppl/history?programId={prog.Id}")'>View Sessions</button>
                     <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo($"/ppl/{prog.Id}/workouts")'>Configure Workouts</button>
+                    @if (!prog.IsActive)
+                    {
+                        <button class="btn btn-ghost btn-sm" @onclick="() => SetActivePplProgram(prog.Id)">Set Active</button>
+                    }
                     <button class="btn btn-sm" style="color:var(--color-danger);background:var(--color-danger-dim);"
                             @onclick="() => DeletePplProgram(prog.Id)">Delete</button>
                 </div>
@@ -265,6 +268,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         var userId = await UserContext.GetUserIdAsync();
         var today = DateTime.UtcNow.Date;
         var start = today.AddDays(-13);
@@ -309,8 +315,17 @@ else
         cycles = await CycleService.GetAllCyclesAsync();
     }
 
+    private async Task SetActivePplProgram(int id)
+    {
+        await PplService.SetActiveProgramAsync(id);
+        pplPrograms = await PplService.GetAllProgramsAsync();
+    }
+
     private async Task DeletePplProgram(int id)
     {
+        if (!await JS.InvokeAsync<bool>("confirm", "Delete this PPL program and all of its sessions? This cannot be undone."))
+            return;
+
         await PplService.DeleteProgramAsync(id);
         pplPrograms = await PplService.GetAllProgramsAsync();
     }

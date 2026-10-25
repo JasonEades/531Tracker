@@ -113,6 +113,14 @@ public sealed class UserIsolationTests
         Assert.Equal(1, cycleA.CycleNumber);
         Assert.Equal(1, cycleB.CycleNumber);
         Assert.Equal(2, nextA.CycleNumber);
+
+        context.ChangeTracker.Clear();
+        var currentA = await cycleServiceA.GetCurrentCycleAsync();
+        var currentB = await cycleServiceB.GetCurrentCycleAsync();
+        Assert.Equal(nextA.Id, currentA!.Id);
+        Assert.Equal(cycleB.Id, currentB!.Id);
+        Assert.NotEmpty(currentA.Weeks.SelectMany(w => w.Workouts));
+        Assert.Empty(context.ChangeTracker.Entries());
     }
 
     private sealed class TestCurrentUserService(string userId) : ICurrentUserService

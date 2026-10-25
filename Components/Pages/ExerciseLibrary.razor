@@ -6,7 +6,7 @@
 
 <PageTitle>Exercise Library — Jason's Garage Lab</PageTitle>
 
-<div class="animate-fade-in">
+<div>
     <div class="page-header mb-4">
         <div class="flex items-center gap-1">
             <h1>Exercise Library</h1>
@@ -138,6 +138,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         var allExercises = await Library.GetExercisesAsync();
         equipmentOptions = allExercises.Select(exercise => exercise.Equipment)
             .Where(value => !string.IsNullOrWhiteSpace(value))

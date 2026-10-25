@@ -6,7 +6,7 @@
 
 <PageTitle>Lifts — Jason's Garage Lab</PageTitle>
 
-<div class="page-header animate-fade-in">
+<div class="page-header">
     <h1>Lifts</h1>
     <p class="page-subtitle">Training maxes and BBB configuration</p>
 </div>
@@ -22,7 +22,7 @@ else
         <h3>Training Maxes</h3>
     </div>
 
-    <div class="lift-list animate-fade-in">
+    <div class="lift-list">
         @foreach (var lift in lifts)
         {
             var isEditing = editingLiftId == lift.Id;
@@ -79,7 +79,7 @@ else
         <h3>BBB Mapping Reference</h3>
     </div>
 
-    <div class="card animate-fade-in mb-3">
+    <div class="card mb-3">
         <div class="card-header">
             Opposite Day
             <span class="badge badge-muted">Recommended</span>
@@ -96,7 +96,7 @@ else
         </div>
     </div>
 
-    <div class="card animate-fade-in">
+    <div class="card">
         <div class="card-header">Same Day</div>
         <div class="card-body" style="padding:0">
             @foreach (var mapping in BbbMapping.GetMappings(BbbMode.SameDay))
@@ -120,6 +120,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         lifts = await LiftService.GetAllLiftsAsync();
         loading = false;
     }

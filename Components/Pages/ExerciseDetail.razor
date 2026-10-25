@@ -6,7 +6,7 @@
 
 <PageTitle>@(history?.Name ?? "Exercise") — Jason's Garage Lab</PageTitle>
 
-<div class="animate-fade-in">
+<div>
     @if (loading)
     {
         <div class="loading"><div class="spinner"></div></div>
@@ -14,7 +14,6 @@
     else if (history is null)
     {
         <div class="empty-state">
-            <div class="empty-state-icon">🔍</div>
             <h3>Exercise not found</h3>
             <p>No completed sets have been logged for this exercise.</p>
             <button class="btn btn-primary mt-2" @onclick='() => Nav.NavigateTo("/exercises")'>Back to exercises</button>
@@ -111,6 +110,9 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         loading = true;
         history = await HistoryService.GetExerciseHistoryAsync(Key);
         loading = false;

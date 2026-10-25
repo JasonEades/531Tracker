@@ -27,7 +27,7 @@ else if (workout is null)
 else
 {
     @* ── Page Header ───────────────────────────────────── *@
-    <div class="workout-header animate-fade-in">
+    <div class="workout-header">
         <button class="btn btn-ghost btn-sm back-btn" @onclick="GoBack">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             Back
@@ -66,7 +66,7 @@ else
     }
     </div>
 
-    <div class="session-date-row animate-fade-in">
+    <div class="session-date-row">
         <label for="workout-date">Workout date</label>
         <input id="workout-date" class="form-control form-control-sm" type="date" @bind="workoutDate" />
         <button class="btn btn-outline btn-sm" @onclick="SaveWorkoutDate" disabled="@savingWorkoutDate">
@@ -74,7 +74,7 @@ else
         </button>
     </div>
 
-    <div class="session-date-row animate-fade-in">
+    <div class="session-date-row">
         <label for="workout-rest">Rest timer</label>
         <input id="workout-rest" class="form-control form-control-sm" type="number" min="0" max="600" step="5"
                value="@restSeconds" @onchange="SaveRestSeconds" />
@@ -89,7 +89,7 @@ else
     <RestTimerOverlay RemainingSeconds="restRemaining" OnStop="StopRestTimer" />
 
     @* ── Bar Selector ─────────────────────────────────── *@
-    <div class="bar-selector-row animate-fade-in">
+    <div class="bar-selector-row">
         @if (showBarPicker)
         {
             <select class="form-control" style="max-width:260px" value="@(workout.BarId ?? 0)" @onchange="OnBarSelected">
@@ -103,13 +103,13 @@ else
         }
         else
         {
-            <span class="bar-selector-label">🏋️ Bar: <strong>@CurrentBarName</strong> (@FormatPlate(CurrentBarWeight) lbs)</span>
+            <span class="bar-selector-label">Bar: <strong>@CurrentBarName</strong> (@FormatPlate(CurrentBarWeight) lbs)</span>
             <button class="btn btn-sm btn-outline" @onclick="() => showBarPicker = true">Change Bar</button>
         }
     </div>
 
     @* ── Progress bar ─────────────────────────────────── *@
-    <div class="sets-progress mb-3 animate-fade-in">
+    <div class="sets-progress mb-3">
         <div class="flex items-center justify-between mb-1">
             <span class="sets-progress-label">Sets Completed</span>
             <span class="sets-progress-label">@SetsDone / @SetsTotal</span>
@@ -120,7 +120,7 @@ else
     </div>
 
     @* ── Workout Notes ─────────────────────────────────── *@
-    <div class="workout-notes-section animate-slide-up">
+    <div class="workout-notes-section">
         <div class="section-heading-row">
             <div>
                 <h2 class="section-heading">Workout Notes</h2>
@@ -142,10 +142,10 @@ else
     @* ── Warmup Sets ──────────────────────────────────── *@
     @if (warmupSets.Count > 0)
     {
-        <div class="exercise-section animate-slide-up">
+        <div class="exercise-section">
             <div class="exercise-section-header">
                 <div class="exercise-section-title">
-                    🔥 Warmup — @GetLiftDisplayName(workout.MainLiftType)
+                    Warmup — @GetLiftDisplayName(workout.MainLiftType)
                 </div>
                 <span class="badge badge-muted">2×5</span>
             </div>
@@ -163,7 +163,7 @@ else
                                 {
                                     @for (int i = 0; i < p.CountPerSide; i++)
                                     {
-                                        <span class="plate-chip-sm" style="@GetPlateStyle(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
+                                        <span class="plate-chip-sm @PlateTone.For(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
                                     }
                                 }
                             </div>
@@ -190,10 +190,10 @@ else
     }
 
     @* ── Main Lift Sets ───────────────────────────────── *@
-    <div class="exercise-section animate-slide-up">
+    <div class="exercise-section">
         <div class="exercise-section-header">
             <div class="exercise-section-title">
-                🏋️ Main Lift — @GetLiftDisplayName(workout.MainLiftType)
+                Main Lift — @GetLiftDisplayName(workout.MainLiftType)
             </div>
             <span class="badge badge-primary">@GetWeekLabel(workout.Week.WeekNumber)</span>
         </div>
@@ -227,7 +227,7 @@ else
                             {
                                 @for (int i = 0; i < p.CountPerSide; i++)
                                 {
-                                    <span class="plate-chip-sm" style="@GetPlateStyle(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
+                                    <span class="plate-chip-sm @PlateTone.For(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
                                 }
                             }
                         </div>
@@ -253,9 +253,9 @@ else
     </div>
 
     @* ── Additional Sets ───────────────────────────────── *@
-    <div class="exercise-section animate-slide-up">
+    <div class="exercise-section">
         <div class="exercise-section-header">
-            <div class="exercise-section-title">➕ Additional Sets — @GetLiftDisplayName(workout.MainLiftType)</div>
+            <div class="exercise-section-title">Additional Sets — @GetLiftDisplayName(workout.MainLiftType)</div>
             @if (!showAdditionalSetForm)
             {
                 <button class="btn btn-sm btn-primary" @onclick="BeginAdditionalSet">+ Add Set</button>
@@ -329,7 +329,7 @@ else
     @if (EstimatedOneRepMax.HasValue)
     {
         var topSet = mainSets.LastOrDefault();
-        <div class="exercise-section animate-slide-up" style="border-left: 3px solid var(--color-accent)">
+        <div class="exercise-section" style="border-left: 3px solid var(--color-accent)">
             <div class="flex items-center justify-between metric-card-content">
                 <span style="font-size:0.75rem;font-weight:700;letter-spacing:0.08em;color:var(--color-text-muted)">ESTIMATED 1RM</span>
                 <span style="font-size:1.5rem;font-weight:800;color:var(--color-accent)">@EstimatedOneRepMax lbs</span>
@@ -341,10 +341,10 @@ else
     @* ── FSL Sets ───────────────────────────────────────────────── *@
     @if (fslSets.Count > 0)
     {
-        <div class="exercise-section animate-slide-up">
+        <div class="exercise-section">
             <div class="exercise-section-header">
                 <div class="exercise-section-title">
-                    📋 First Set Last — @GetLiftDisplayName(workout.MainLiftType)
+                    First Set Last — @GetLiftDisplayName(workout.MainLiftType)
                 </div>
                 <span class="badge badge-muted">5×5</span>
             </div>
@@ -362,7 +362,7 @@ else
                                 {
                                     @for (int i = 0; i < p.CountPerSide; i++)
                                     {
-                                        <span class="plate-chip-sm" style="@GetPlateStyle(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
+                                        <span class="plate-chip-sm @PlateTone.For(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
                                     }
                                 }
                             </div>
@@ -389,10 +389,10 @@ else
     }
     @if (bbbSets.Count > 0)
     {
-        <div class="exercise-section animate-slide-up">
+        <div class="exercise-section">
             <div class="exercise-section-header">
                 <div class="exercise-section-title">
-                    🔁 BBB — @BbbMapping.GetBbbLiftName(workout.MainLiftType, workout.Week.Cycle.BbbMode)
+                    BBB — @BbbMapping.GetBbbLiftName(workout.MainLiftType, workout.Week.Cycle.BbbMode)
                 </div>
                 <span class="badge badge-warning">@GetBbbModeLabel(workout.Week.Cycle.BbbMode)</span>
             </div>
@@ -410,7 +410,7 @@ else
                                 {
                                     @for (int i = 0; i < p.CountPerSide; i++)
                                     {
-                                        <span class="plate-chip-sm" style="@GetPlateStyle(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
+                                        <span class="plate-chip-sm @PlateTone.For(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
                                     }
                                 }
                             </div>
@@ -437,9 +437,9 @@ else
     }
 
     @* ── Accessories ──────────────────────────────────── *@
-    <div class="exercise-section animate-slide-up">
+    <div class="exercise-section">
         <div class="exercise-section-header">
-            <div class="exercise-section-title">💪 Accessories</div>
+            <div class="exercise-section-title">Accessories</div>
             @if (workout.Status != WorkoutStatus.Completed)
             {
                 <button class="btn btn-sm btn-outline" @onclick="() => showAddAccessory = !showAddAccessory">
@@ -463,7 +463,7 @@ else
                 </div>
                 @if (suggestedUsage is not null)
                 {
-                    <p class="text-muted mb-1" style="font-size:var(--text-sm)">💡 Last used: @suggestedUsage.Weight lbs · @suggestedUsage.Sets × @suggestedUsage.Reps</p>
+                    <p class="text-muted mb-1" style="font-size:var(--text-sm)">Last used: @suggestedUsage.Weight lbs · @suggestedUsage.Sets × @suggestedUsage.Reps</p>
                 }
                 <div class="acc-inputs-row">
                     <div class="form-group">
@@ -647,9 +647,9 @@ else
         var prevCycleNumber = workout.Week.Cycle.CycleNumber - 1;
         return diff switch
         {
-            > 0 => ($"🎉 Nice! This is {diff:0.#} lbs more than Cycle {prevCycleNumber}!", true),
-            < 0 => ($"{Math.Abs(diff):0.#} lbs less than Cycle {prevCycleNumber}.", false),
-            _   => ($"Same as Cycle {prevCycleNumber}.", false)
+            > 0 => ($"+{diff:0.#} lbs over Cycle {prevCycleNumber}", true),
+            < 0 => ($"{Math.Abs(diff):0.#} lbs under Cycle {prevCycleNumber}", false),
+            _   => ($"Same as Cycle {prevCycleNumber}", false)
         };
     }
 
@@ -676,6 +676,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         bars = await PlateCalc.GetBarsAsync();
         defaultBar = bars.FirstOrDefault(b => b.IsDefault) ?? bars.FirstOrDefault();
         await LoadWorkout();
@@ -1063,15 +1066,4 @@ else
 
     private static string FormatPlate(double w) =>
         w == (int)w ? ((int)w).ToString() : w.ToString("0.#");
-
-    private static string GetPlateStyle(double weight) => weight switch
-    {
-        >= 45 => "color:#2563eb;",
-        >= 35 => "color:#ca8a04;",
-        >= 25 => "color:#16a34a;",
-        >= 15 => "color:#8b5cf6;",
-        >= 10 => "color:#94a3b8;",
-        >= 5  => "color:#ef4444;",
-        _     => "color:#6b7280;"
-    };
 }

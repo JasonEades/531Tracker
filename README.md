@@ -56,7 +56,7 @@ The `+` marks the final set as AMRAP (as many reps as possible). The optional 5s
 
 - Dashboard showing every active program (5/3/1 and PPL side by side) with direct open actions, so neither requires a trip to History
 - Cycle creation and history across weeks and primary lifts
-- Starting Training Maxes derive from estimated 1RMs: from completed 5/3/1 main sets and completed PPL sets, falling back to 90% of the estimate for untouched defaults; manual edits are preserved
+- Starting Training Maxes derive from estimated 1RMs (TM = 90% of e1RM): when you create your first 5/3/1 cycle and have previous PPL or 5/3/1 training, each lift's TM is set from the most recent program/cycle that trained it, replacing defaults or earlier edits; later cycles keep the normal increments and any manual overrides
 - Main, warmup, BBB, FSL, and AMRAP set prescriptions
 - Optional BBB (Boring But Big) work with Same Day and Opposite Day modes
 - Optional FSL (First Set Last) 5×5 work
@@ -121,12 +121,15 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 - Searchable exercise library with 81 curated strength exercises, muscle and equipment filters, exercise instructions, and account-private custom entries; PPL workout configuration selects catalog or custom exercises while retaining legacy labels and historical exercise-name snapshots
 - Week-by-week workout configuration at `/ppl/{id}/workouts`: edit workout names, exercises, muscle groups, sets, and rep ranges per week; unconfigured weeks use the default schedule
 - **Add Accessory Exercise** on any PPL day; accessories carry into generated sessions
-- New programs derive starting weights from estimated strength in prior 5/3/1 and PPL cycles instead of defaults
-- Exercise slots and session tracking
-- Double progression within configured rep ranges
-- Estimated 1RM history for compound exercises
-- Optional synchronization of PPL progress to 5/3/1 Training Maxes
-- Completed-session history and volume statistics
+- **⇄ Swap** any exercise in an unstarted PPL session for another catalog or custom exercise that trains the same muscle (same movement type listed first). Choose **This workout only** (the plan and its progression stay unchanged) or **All future workouts** (replaces the plan exercise). The swapped exercise's weight is derived from your e1RM history when available
+- New programs derive starting weights from your previous training: each exercise uses the best e1RM from the most recent 5/3/1 cycle or PPL program that trained it (not the all-time best), falling back to manual entry when there is no history
+- Exercise slots and session tracking; set weights (0–2000 lbs) and reps (0–100) are validated
+- Weeks advance by completed rotations (e.g. every 3 sessions on a 3-day split), so missed days never skip workouts
+- Double progression within configured rep ranges: when every set reaches the top of the range, the slot's weight increases by its exact configured increment (including 2.5 lb steps) on **Finish Session**, or earlier via the session's progression button; progression applies once per session and then shows the next-session weight
+- Per-exercise estimated 1RM on the session page, plus estimated 1RM history for compound exercises on the dashboard
+- Completed-session history and volume statistics, viewable for any program
+- Switch the active PPL program from the Workouts page
+- Program deletion asks for confirmation and removes all of the program's sessions
 
 ### Notes, history, and exports
 
@@ -164,7 +167,8 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 │   ├── AccessoryService        # Accessory tracking
 │   ├── PplProgramService       # PPL program management
 │   ├── PplSessionService       # PPL session tracking
-│   ├── PplProgressionService   # PPL progression and TM sync
+│   ├── PplProgressionService   # PPL double progression and e1RM
+│   ├── PplExerciseSwapService  # Same-muscle PPL exercise swaps (one-off or permanent)
 │   ├── ExerciseLibraryService  # Curated and account-private exercise definitions
 │   ├── EstimatedStrengthService # User-scoped e1RM used to seed 5/3/1 and PPL weights
 │   ├── SiteContentSeo / SiteContentSitemap # Canonical URLs, metadata, sitemap.xml, robots.txt
@@ -188,7 +192,9 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 | Authentication | ASP.NET Core Identity + Google OAuth 2.0 |
 | PDF export | QuestPDF |
 | Markdown export | Custom renderer with Markdig support |
-| Styling | Custom dark, mobile-first CSS |
+| Styling | Custom dark, mobile-first CSS: design tokens in `wwwroot/app.css` (charcoal + safety-orange, Barlow / Barlow Condensed); plate colors shared via `PlateTone` + `.plate-tone-*` classes |
+
+Authenticated pages prerender only their shell and loading state; data loads once the interactive circuit starts (`RendererInfo.IsInteractive`) to avoid querying twice per page view.
 
 ---
 
@@ -362,6 +368,8 @@ e1RM = round(weight × (1 + reps / 30), nearest 5 lb)
 
 Example: 180 lb × 8 reps produces an estimated 1RM of approximately 230 lb.
 
+When seeding a first 5/3/1 cycle or a new PPL program, estimates come from the **previous** cycle/program: for each lift, the most recently trained 5/3/1 cycle or PPL program (by workout date) that contains completed sets for it, using that source's best e1RM.
+
 ---
 
 ## 🧪 Testing
@@ -378,8 +386,12 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - PDF generation with additional-set data
 - Workout note persistence and export behavior
 - PPL weekly templates, accessory persistence, and estimated-1RM weight derivation
+- PPL program deletion with existing sessions and cross-user delete isolation
+- First-cycle/program weight seeding from the most recent previous 5/3/1 cycle or PPL program
+- PPL progression (once-only, 2.5 lb increments, auto-apply on finish, user isolation), rotation-based week numbering, and set-value validation
+- PPL exercise swaps: same-muscle options, one-off vs. permanent scope, no progression of the plan exercise after a one-off swap, rejection after sets are logged, and cross-user isolation
 - Exercise-library search/filtering, custom-exercise ownership isolation, and PPL catalog selection
-- Multi-user isolation of settings, bars, programs, and accessories
+- Multi-user isolation of settings, bars, programs, accessories, and the dashboard's current-cycle lookup
 - Sitemap, robots.txt, and SEO metadata for published content
 
 Run the full solution build and focused tests with:

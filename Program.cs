@@ -251,6 +251,7 @@ builder.Services.AddScoped<IPlateCalculatorService, PlateCalculatorService>();
 builder.Services.AddScoped<IPplProgramService, PplProgramService>();
 builder.Services.AddScoped<IPplSessionService, PplSessionService>();
 builder.Services.AddScoped<IPplProgressionService, PplProgressionService>();
+builder.Services.AddScoped<IPplExerciseSwapService, PplExerciseSwapService>();
 
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents(options =>

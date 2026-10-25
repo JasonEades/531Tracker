@@ -20,12 +20,17 @@ public interface IPplSessionService
 
 public class PplSessionService(AppDbContext db, ICurrentUserService userContext) : IPplSessionService
 {
+    public const double MaxWeight = 2000;
+    public const int MaxReps = 100;
+
+    public static bool IsValidWeight(double weight) => double.IsFinite(weight) && weight is >= 0 and <= MaxWeight;
+    public static bool IsValidReps(int reps) => reps is >= 0 and <= MaxReps;
+
     public async Task<PplSession?> GetSessionWithDetailsAsync(int sessionId)
     {
         var userId = await userContext.GetUserIdAsync();
         return await db.PplSessions
             .Include(s => s.Program)
-            .Include(s => s.Week)
             .Include(s => s.DayTemplate)
             .Include(s => s.Week)
             .Include(s => s.Exercises.OrderBy(e => e.OrderInSession))
@@ -84,7 +89,7 @@ public class PplSessionService(AppDbContext db, ICurrentUserService userContext)
 
     public async Task SetStartingWeightAsync(int exerciseSlotId, double weight)
     {
-        if (weight <= 0) return;
+        if (weight <= 0 || !IsValidWeight(weight)) return;
 
         var userId = await userContext.GetUserIdAsync();
         var slot = await db.PplExerciseSlots
@@ -127,6 +132,11 @@ public class PplSessionService(AppDbContext db, ICurrentUserService userContext)
 
     public async Task UpdateSetAsync(int setId, double? actualWeight, int? actualReps, bool isCompleted)
     {
+        if (actualWeight is double w && !IsValidWeight(w))
+            throw new ArgumentOutOfRangeException(nameof(actualWeight), $"Weight must be between 0 and {MaxWeight}.");
+        if (actualReps is int r && !IsValidReps(r))
+            throw new ArgumentOutOfRangeException(nameof(actualReps), $"Reps must be between 0 and {MaxReps}.");
+
         var userId = await userContext.GetUserIdAsync();
         var set = await db.PplSessionSets
             .Include(s => s.SessionExercise)

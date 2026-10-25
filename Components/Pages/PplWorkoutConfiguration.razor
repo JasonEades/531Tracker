@@ -9,7 +9,7 @@
 
 <PageTitle>Configure PPL Workouts — Jason's Garage Lab</PageTitle>
 
-<div class="ppl-setup animate-fade-in">
+<div class="ppl-setup">
     <div class="setup-header">
         <button class="btn btn-ghost btn-sm back-btn" @onclick='() => Nav.NavigateTo("/")'>← Dashboard</button>
         <h1>Configure PPL Workouts</h1>
@@ -137,12 +137,14 @@
 
     protected override async Task OnParametersSetAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         libraryExercises = await ExerciseLibrary.GetExercisesAsync();
         program = await PplService.GetProgramWithDetailsAsync(ProgramId);
         if (program is not null)
         {
-            var elapsedDays = (DateTime.UtcNow.Date - program.CreatedAt.ToUniversalTime().Date).TotalDays;
-            selectedWeek = Math.Max(1, (int)Math.Floor(elapsedDays / 7) + 1);
+            selectedWeek = await PplService.GetCurrentWeekNumberAsync(ProgramId);
             await LoadWeek();
         }
         loading = false;

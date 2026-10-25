@@ -7,7 +7,7 @@
 
 <div class="admin-page">
     <div class="admin-header">
-        <h2 class="admin-title">👥 User Management</h2>
+        <h2 class="admin-title">User Management</h2>
         <span class="admin-badge">Admin</span>
     </div>
 
@@ -101,6 +101,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         users = await AdminService.GetAllUsersAsync();
         loading = false;
     }

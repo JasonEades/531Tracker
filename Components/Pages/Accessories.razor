@@ -6,7 +6,7 @@
 
 <PageTitle>Accessories — Jason's Garage Lab</PageTitle>
 
-<div class="page-header animate-fade-in">
+<div class="page-header">
     <div>
         <h1>Accessories</h1>
         <p class="page-subtitle">Exercise library used in your workouts</p>
@@ -20,7 +20,7 @@
 @* ── Add / Edit form ──────────────────────────────────────── *@
 @if (showForm)
 {
-    <div class="setup-sheet animate-slide-up mb-4">
+    <div class="setup-sheet mb-4">
         <div class="setup-sheet-header">
             <h3>@(editingId.HasValue ? "Edit" : "New") Accessory</h3>
             <button class="btn btn-ghost btn-sm" @onclick="CancelForm">✕</button>
@@ -63,7 +63,6 @@
 else if (accessories.Count == 0 && !showForm)
 {
     <div class="empty-state">
-        <div class="empty-state-icon">💪</div>
         <h3>No Accessories Yet</h3>
         <p>Add exercises to your library to track alongside your main lifts.</p>
         <button class="btn btn-primary mt-2" @onclick="ShowAdd">+ Add Accessory</button>
@@ -71,7 +70,7 @@ else if (accessories.Count == 0 && !showForm)
 }
 else
 {
-    <div class="acc-library animate-fade-in">
+    <div class="acc-library">
         @foreach (var acc in accessories)
         {
             <div class="acc-library-row @(acc.IsActive ? "" : "acc-inactive")">
@@ -133,6 +132,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         currentUserId = await CurrentUserService.GetUserIdOrNullAsync();
         await LoadAccessories();
         loading = false;

@@ -6,7 +6,7 @@
 
 <PageTitle>Protocol — Jason's Garage Lab</PageTitle>
 
-<div class="page-header animate-fade-in">
+<div class="page-header">
     <div>
         <h1>Protocol</h1>
         <p class="page-subtitle">Write and maintain your personal workout protocol in Markdown.</p>
@@ -23,7 +23,7 @@
 }
 else
 {
-    <div class="card animate-fade-in">
+    <div class="card">
         <div class="card-body">
             @if (isPreview)
             {
@@ -73,6 +73,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         var protocol = await ProtocolService.GetAsync();
         markdown = protocol.Markdown;
         loading = false;

@@ -5,7 +5,7 @@
 
 <PageTitle>Body — Jason's Garage Lab</PageTitle>
 
-<div class="animate-fade-in">
+<div>
     <div class="page-header mb-4">
         <h1>Body</h1>
     </div>
@@ -290,6 +290,9 @@
 
     protected override async Task OnInitializedAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         await ReloadAsync();
         loading = false;
     }

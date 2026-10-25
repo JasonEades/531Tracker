@@ -83,7 +83,3 @@
     text-transform: uppercase;
     letter-spacing: 0.05em;
 }
-
-.badge-push { background: rgba(94,124,255,0.2); color: #7690FF; }
-.badge-pull { background: rgba(110,231,255,0.2); color: #6EE7FF; }
-.badge-legs { background: rgba(61,220,132,0.2); color: #3DDC84; }

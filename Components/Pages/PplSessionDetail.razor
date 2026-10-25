@@ -4,6 +4,7 @@
 @implements IAsyncDisposable
 @inject IPplSessionService SessionService
 @inject IPplProgressionService Progression
+@inject IPplExerciseSwapService SwapService
 @inject IPlateCalculatorService PlateCalc
 @inject NavigationManager Nav
 
@@ -23,7 +24,7 @@ else if (session is null)
 else
 {
     @* ── Header ─────────────────────────────────────────────── *@
-    <div class="workout-header animate-fade-in">
+    <div class="workout-header">
         <button class="btn btn-ghost btn-sm back-btn" @onclick='() => Nav.NavigateTo("/")'>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             Back
@@ -50,7 +51,7 @@ else
         </div>
     </div>
 
-    <div class="session-date-row animate-fade-in">
+    <div class="session-date-row">
         <label for="ppl-session-date">Session date</label>
         <input id="ppl-session-date" class="form-control form-control-sm" type="date" @bind="sessionDate" />
         <button class="btn btn-outline btn-sm" @onclick="SaveSessionDate" disabled="@savingSessionDate">
@@ -58,7 +59,7 @@ else
         </button>
     </div>
 
-    <div class="session-date-row animate-fade-in">
+    <div class="session-date-row">
         <label for="ppl-session-rest">Rest timer</label>
         <input id="ppl-session-rest" class="form-control form-control-sm" type="number" min="0" max="600" step="5"
                value="@restSeconds" @onchange="SaveRestSeconds" />
@@ -72,7 +73,7 @@ else
 
     <RestTimerOverlay RemainingSeconds="restRemaining" OnStop="StopRestTimer" />
 
-    <div class="workout-notes-section animate-slide-up">
+    <div class="workout-notes-section">
         <div class="section-heading-row">
             <div>
                 <h2 class="section-heading">Workout Notes</h2>
@@ -92,7 +93,7 @@ else
     }
 
     @* ── Progress bar ────────────────────────────────────────── *@
-    <div class="sets-progress mb-3 animate-fade-in">
+    <div class="sets-progress mb-3">
         <div class="flex items-center justify-between mb-1">
             <span class="sets-progress-label">Sets Completed</span>
             <span class="sets-progress-label">@SetsDone / @SetsTotal</span>
@@ -106,28 +107,82 @@ else
     @foreach (var exercise in session.Exercises.OrderBy(e => e.OrderInSession))
     {
         var displayWeight = exercise.Sets.Select(s => s.ActualWeight).FirstOrDefault(w => w.HasValue) ?? exercise.SuggestedWeight;
-        var shouldProgress = Progression.ShouldProgress(exercise.Sets, exercise.RepsMax);
+        var isOneOffSwap = !string.Equals(exercise.ExerciseName, exercise.ExerciseSlot.ExerciseName, StringComparison.OrdinalIgnoreCase);
+        var alreadyProgressed = !isOneOffSwap && exercise.SuggestedWeight.HasValue && exercise.ExerciseSlot.CurrentWeight != exercise.SuggestedWeight;
+        var shouldProgress = !isOneOffSwap
+            && !exercise.ExerciseSlot.IsBodyweight
+            && exercise.ExerciseSlot.ProgressionIncrement > 0
+            && exercise.SuggestedWeight.HasValue
+            && !alreadyProgressed
+            && Progression.ShouldProgress(exercise.Sets, exercise.RepsMax);
+        var e1Rm = exercise.ExerciseSlot.IsBodyweight ? null : Progression.CalculateE1Rm(exercise);
+        var canSwap = session.Status != WorkoutStatus.Completed && !exercise.Sets.Any(s => s.IsCompleted);
 
-        <div class="ppl-exercise-section animate-slide-up">
+        <div class="ppl-exercise-section">
             <div class="ppl-exercise-header">
                 <div>
                     <div class="ppl-exercise-name">@exercise.ExerciseName</div>
                     <div class="ppl-exercise-meta">
                         <span class="badge badge-muted">@exercise.TargetSets×@exercise.RepsMin–@exercise.RepsMax</span>
                         <span class="badge @GetMuscleGroupBadge(exercise.ExerciseSlot.MuscleGroup)">@exercise.ExerciseSlot.MuscleGroup</span>
+                        @if (isOneOffSwap)
+                        {
+                            <span class="badge badge-muted" title="Plan exercise: @exercise.ExerciseSlot.ExerciseName">⇄ Swapped for this workout</span>
+                        }
                          @if (!exercise.SuggestedWeight.HasValue && !exercise.ExerciseSlot.IsBodyweight)
                          {
                              <span class="badge badge-warning">⚠ Starting weight not set</span>
                          }
+                        @if (e1Rm is > 0)
+                        {
+                            <span class="badge badge-muted">e1RM @DisplayWeight(e1Rm) lbs</span>
+                        }
                     </div>
                 </div>
                 @if (shouldProgress && session.Status != WorkoutStatus.Completed)
                 {
-                    <button class="btn btn-success btn-sm" @onclick="() => ApplyProgression(exercise.PplExerciseSlotId)">
+                    <button class="btn btn-success btn-sm" @onclick="() => ApplyProgression(exercise.Id)">
                         ↑ +@exercise.ExerciseSlot.ProgressionIncrement lbs next session
                     </button>
                 }
+                else if (alreadyProgressed && exercise.ExerciseSlot.CurrentWeight.HasValue)
+                {
+                    <span class="badge badge-success">↑ @DisplayWeight(exercise.ExerciseSlot.CurrentWeight) lbs next session</span>
+                }
+                @if (canSwap && swapExerciseId != exercise.Id)
+                {
+                    <button class="btn btn-outline btn-sm" @onclick="() => OpenSwap(exercise.Id)">⇄ Swap</button>
+                }
             </div>
+
+            @if (swapExerciseId == exercise.Id)
+            {
+                <div class="ppl-swap-panel">
+                    @if (swapOptions.Count == 0)
+                    {
+                        <p class="text-muted">No other @exercise.ExerciseSlot.MuscleGroup exercises in your library. Add a custom exercise in the exercise library.</p>
+                    }
+                    else
+                    {
+                        <label for="swap-@exercise.Id">Replace @exercise.ExerciseName with</label>
+                        <select id="swap-@exercise.Id" class="form-control form-control-sm" @bind="swapSelectionId">
+                            @foreach (var option in swapOptions)
+                            {
+                                <option value="@option.Id">@option.Name@(string.IsNullOrWhiteSpace(option.Equipment) ? "" : $" — {option.Equipment}")</option>
+                            }
+                        </select>
+                        <div class="ppl-swap-actions">
+                            <button class="btn btn-primary btn-sm" disabled="@swapping" @onclick="() => ConfirmSwap(PplSwapScope.ThisWorkout)">This workout only</button>
+                            <button class="btn btn-outline btn-sm" disabled="@swapping" @onclick="() => ConfirmSwap(PplSwapScope.FutureWorkouts)">All future workouts</button>
+                        </div>
+                    }
+                    @if (swapError is not null)
+                    {
+                        <p class="text-danger">@swapError</p>
+                    }
+                    <button class="btn btn-ghost btn-sm" @onclick="CloseSwap">Cancel</button>
+                </div>
+            }
 
             @foreach (var set in exercise.Sets.OrderBy(s => s.SetNumber))
             {
@@ -148,7 +203,7 @@ else
                                 {
                                     @for (int i = 0; i < p.CountPerSide; i++)
                                     {
-                                        <span class="plate-chip-sm" style="@GetPlateStyle(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
+                                        <span class="plate-chip-sm @PlateTone.For(p.PlateWeight)">@FormatPlate(p.PlateWeight)</span>
                                     }
                                 }
                             </div>
@@ -159,12 +214,12 @@ else
                         {
                             <input class="set-input" type="number" inputmode="numeric"
                                    value="@DisplayWeight(set.ActualWeight ?? exercise.SuggestedWeight)"
-                                   @onchange="e => OnWeightChanged(set, exercise, e)" step="2.5"
+                                   @onchange="e => OnWeightChanged(set, exercise, e)" step="2.5" min="0" max="@PplSessionService.MaxWeight"
                                    disabled="@(session.Status == WorkoutStatus.Completed)" />
                         }
                         <input class="set-input" type="number" inputmode="numeric"
                                value="@(set.ActualReps ?? set.TargetReps)"
-                               @onchange="e => OnRepsChanged(set, e)" min="0"
+                               @onchange="e => OnRepsChanged(set, e)" min="0" max="@PplSessionService.MaxReps"
                                disabled="@(session.Status == WorkoutStatus.Completed)" />
                     </div>
                     <button class="check-btn @(set.IsCompleted ? "checked" : "")"
@@ -202,6 +257,47 @@ else
     private int restRemaining;
     private Timer? restTimer;
     private Dictionary<double, List<PlateLoadingResult>> plateMap = [];
+    private int? swapExerciseId;
+    private List<ExerciseDefinition> swapOptions = [];
+    private int swapSelectionId;
+    private bool swapping;
+    private string? swapError;
+
+    private async Task OpenSwap(int sessionExerciseId)
+    {
+        swapError = null;
+        swapOptions = await SwapService.GetSwapOptionsAsync(sessionExerciseId);
+        swapSelectionId = swapOptions.FirstOrDefault()?.Id ?? 0;
+        swapExerciseId = sessionExerciseId;
+    }
+
+    private void CloseSwap()
+    {
+        swapExerciseId = null;
+        swapOptions = [];
+        swapError = null;
+    }
+
+    private async Task ConfirmSwap(PplSwapScope scope)
+    {
+        if (swapExerciseId is not int exerciseId || swapSelectionId == 0) return;
+
+        swapping = true;
+        try
+        {
+            await SwapService.SwapAsync(exerciseId, swapSelectionId, scope);
+            CloseSwap();
+            await LoadSession();
+        }
+        catch (InvalidOperationException ex)
+        {
+            swapError = ex.Message;
+        }
+        finally
+        {
+            swapping = false;
+        }
+    }
 
     private int SetsTotal => session?.Exercises.Sum(e => e.Sets.Count) ?? 0;
     private int SetsDone  => session?.Exercises.Sum(e => e.Sets.Count(s => s.IsCompleted)) ?? 0;
@@ -209,6 +305,9 @@ else
 
     protected override async Task OnInitializedAsync()
     {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
         await LoadSession();
         loading = false;
     }
@@ -306,6 +405,7 @@ else
     {
         StopRestTimer();
         await SessionService.CompleteSessionAsync(SessionId);
+        await Progression.ApplySessionProgressionAsync(SessionId);
         await LoadSession();
     }
 
@@ -318,11 +418,12 @@ else
 
     private async Task OnWeightChanged(PplSessionSet set, PplSessionExercise exercise, ChangeEventArgs e)
     {
-        if (double.TryParse(e.Value?.ToString(), out var w))
+        if (double.TryParse(e.Value?.ToString(), out var w) && PplSessionService.IsValidWeight(w))
         {
             set.ActualWeight = w;
             await SessionService.UpdateSetAsync(set.Id, set.ActualWeight, set.ActualReps, set.IsCompleted);
-            if (!exercise.SuggestedWeight.HasValue && !exercise.ExerciseSlot.IsBodyweight)
+            if (!exercise.SuggestedWeight.HasValue && !exercise.ExerciseSlot.IsBodyweight
+                && string.Equals(exercise.ExerciseName, exercise.ExerciseSlot.ExerciseName, StringComparison.OrdinalIgnoreCase))
             {
                 await SessionService.SetStartingWeightAsync(exercise.PplExerciseSlotId, w);
                 exercise.ExerciseSlot.StartingWeight ??= w;
@@ -335,7 +436,7 @@ else
 
     private async Task OnRepsChanged(PplSessionSet set, ChangeEventArgs e)
     {
-        if (int.TryParse(e.Value?.ToString(), out var r))
+        if (int.TryParse(e.Value?.ToString(), out var r) && PplSessionService.IsValidReps(r))
         {
             set.ActualReps = r;
             await SessionService.UpdateSetAsync(set.Id, set.ActualWeight, set.ActualReps, set.IsCompleted);
@@ -398,9 +499,9 @@ else
         return ValueTask.CompletedTask;
     }
 
-    private async Task ApplyProgression(int slotId)
+    private async Task ApplyProgression(int sessionExerciseId)
     {
-        await Progression.ApplyProgressionAsync(slotId);
+        await Progression.ApplyProgressionAsync(sessionExerciseId);
         await LoadSession();
     }
 
@@ -449,14 +550,4 @@ else
     private static string FormatPlate(double w) =>
         w == (int)w ? ((int)w).ToString() : w.ToString("0.#");
 
-    private static string GetPlateStyle(double w) => w switch
-    {
-        45   => "background:#1a1aff;color:#fff",
-        35   => "background:#2563eb;color:#fff",
-        25   => "background:#16a34a;color:#fff",
-        10   => "background:#111;color:#fff;border:1px solid #444",
-        5    => "background:#fff;color:#111",
-        2.5  => "background:#dc2626;color:#fff",
-        _    => "background:var(--color-surface-3);color:var(--color-text)"
-    };
 }

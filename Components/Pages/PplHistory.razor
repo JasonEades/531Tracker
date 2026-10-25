@@ -4,10 +4,11 @@
 @inject IPplProgramService PplService
 @inject IPplSessionService SessionService
 @inject NavigationManager Nav
+@inject IJSRuntime JS
 
 <PageTitle>PPL History — Jason's Garage Lab</PageTitle>
 
-<div class="animate-fade-in">
+<div>
     <div class="page-header mb-4">
         <h1>PPL History</h1>
     </div>
@@ -21,7 +22,6 @@
         @if (program is null)
         {
             <div class="empty-state">
-                <div class="empty-state-icon">🏋️</div>
                 <h3>No PPL program yet</h3>
                 <p>Create a Push-Pull-Legs program to get started.</p>
                 <button class="btn btn-primary mt-2" @onclick='() => Nav.NavigateTo("/ppl/new")'>+ Create PPL Program</button>
@@ -45,7 +45,6 @@
         @if (!sessions.Any(s => s.Status == WorkoutStatus.Completed))
         {
             <div class="empty-state" style="padding:var(--space-8) 0">
-                <div class="empty-state-icon">📋</div>
                 <p>No completed sessions yet. Go train!</p>
             </div>
         }
@@ -91,13 +90,20 @@
 </div>
 
 @code {
+    [SupplyParameterFromQuery] public int? ProgramId { get; set; }
+
     private PplProgram? program;
     private List<PplSession> sessions = [];
     private bool loading = true;
 
     protected override async Task OnInitializedAsync()
     {
-        program = await PplService.GetActiveProgramAsync();
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
+        program = ProgramId is int id
+            ? (await PplService.GetAllProgramsAsync()).FirstOrDefault(p => p.Id == id)
+            : await PplService.GetActiveProgramAsync();
         if (program is not null)
             sessions = await SessionService.GetSessionHistoryAsync(program.Id);
         loading = false;
@@ -117,6 +123,8 @@
     private async Task DeleteProgram()
     {
         if (program is null) return;
+        if (!await JS.InvokeAsync<bool>("confirm", "Delete this PPL program and all of its sessions? This cannot be undone."))
+            return;
 
         await PplService.DeleteProgramAsync(program.Id);
         program = null;

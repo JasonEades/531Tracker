@@ -8,12 +8,12 @@
 }
 
 .nav-item-admin {
-    color: #f59e0b;
+    color: var(--color-warning);
     opacity: 0.85;
 }
 
 .nav-item-admin:hover,
 .nav-item-admin.active {
-    color: #f59e0b;
+    color: var(--color-warning);
     opacity: 1;
 }
