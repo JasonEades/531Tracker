@@ -170,28 +170,52 @@ else
     @* -- PPL Hero -- *@
     @if (activePplProgram is not null)
     {
+        var suggestedDay = pplWeekPlan?.Suggested;
         <div class="ppl-hero-card mb-4">
             <div class="ppl-hero-top">
                 <div>
                     <div class="hero-subtitle">ACTIVE PPL PROGRAM</div>
-                    @if (nextPplSession is not null)
+                    @if (suggestedDay is not null)
                     {
-                        <div class="hero-title">@nextPplSession.DayTemplate.Name</div>
+                        <div class="hero-title">@suggestedDay.Name</div>
                         <div class="hero-meta">
-                            @activePplProgram.Name · Today's session
-                            <span class="badge @GetDayTypeBadge(nextPplSession.DayTemplate.DayType) ml-1">@nextPplSession.DayTemplate.DayType</span>
+                            @activePplProgram.Name · Week @pplWeekPlan!.WeekNumber · @pplWeekPlan.Days.Count(d => d.State == PplDayState.Completed) of @pplWeekPlan.Days.Count done
+                            <span class="badge @GetDayTypeBadge(suggestedDay.DayType) ml-1">@suggestedDay.DayType</span>
                         </div>
                     }
                     else
                     {
-                        <div class="hero-title">Rotation complete!</div>
-                        <div class="hero-meta">@activePplProgram.Name - Start next round</div>
+                        <div class="hero-title">Week complete</div>
+                        <div class="hero-meta">@activePplProgram.Name · Next week starts with your next session</div>
                     }
                 </div>
                 <div class="ppl-hero-badge">PPL</div>
             </div>
-            <button class="btn btn-ppl btn-full mt-3" @onclick="StartNextPplSession">
-                Open PPL Session
+
+            @if (pplWeekPlan is not null)
+            {
+                <div class="ppl-week-days" role="list" aria-label="This week's PPL workouts">
+                    @foreach (var day in pplWeekPlan.Days)
+                    {
+                        var isSuggested = day.DayTemplateId == pplWeekPlan.SuggestedDayTemplateId;
+                        <button role="listitem"
+                                class="ppl-week-day @(day.State == PplDayState.Completed ? "done" : "") @(isSuggested ? "next" : "")"
+                                disabled="@pplStarting"
+                                @onclick="() => OpenPplDay(day)">
+                            <span class="badge @GetDayTypeBadge(day.DayType)">@day.DayType</span>
+                            <span class="ppl-week-day-name">@day.Name</span>
+                            <span class="ppl-week-day-state">@GetPplDayStateLabel(day, isSuggested)</span>
+                        </button>
+                    }
+                </div>
+                @if (!string.IsNullOrWhiteSpace(pplError))
+                {
+                    <div class="alert alert-danger mt-2">@pplError</div>
+                }
+            }
+
+            <button class="btn btn-ppl btn-full mt-3" @onclick="StartNextPplSession" disabled="@pplStarting">
+                @(pplWeekPlan?.OpenDay is { } openDay ? $"Continue {openDay.Name}" : suggestedDay is not null ? $"Start {suggestedDay.Name}" : "Start Next Week")
             </button>
             <button class="btn btn-outline btn-full mt-2" @onclick='() => Nav.NavigateTo($"/ppl/{activePplProgram.Id}/workouts")'>
                 Configure Weekly Workouts
@@ -450,7 +474,9 @@ else
     private List<Lift> lifts = [];
     private List<Workout> upcomingWorkouts = [];
     private PplProgram? activePplProgram;
-    private PplSession? nextPplSession;
+    private PplWeekPlan? pplWeekPlan;
+    private bool pplStarting;
+    private string? pplError;
     private bool loading = true;
     private DashboardAnalytics? analytics;
     private SiteContent? recentReview;
@@ -505,8 +531,8 @@ else
         activePplProgram = await PplProgramService.GetActiveProgramAsync();
         if (activePplProgram is not null)
         {
-            try { nextPplSession = await PplProgramService.GetOrCreateNextSessionAsync(activePplProgram.Id); }
-            catch { nextPplSession = null; }
+            try { pplWeekPlan = await PplProgramService.GetWeekPlanAsync(activePplProgram.Id); }
+            catch (InvalidOperationException) { pplWeekPlan = null; }
         }
 
         if (currentCycle is not null)
@@ -549,9 +575,51 @@ else
     private async Task StartNextPplSession()
     {
         if (activePplProgram is null) return;
-        var session = await PplProgramService.GetOrCreateNextSessionAsync(activePplProgram.Id);
-        Nav.NavigateTo($"/ppl/session/{session.Id}");
+        var target = pplWeekPlan?.OpenDay ?? pplWeekPlan?.Suggested;
+        if (target is not null)
+        {
+            await OpenPplDay(target);
+            return;
+        }
+        await RunPplStart(() => PplProgramService.GetOrCreateNextSessionAsync(activePplProgram.Id));
     }
+
+    private async Task OpenPplDay(PplWeekDay day)
+    {
+        if (activePplProgram is null) return;
+        if (day.SessionId is int sessionId && day.State != PplDayState.Available)
+        {
+            Nav.NavigateTo($"/ppl/session/{sessionId}");
+            return;
+        }
+        await RunPplStart(() => PplProgramService.StartSessionAsync(activePplProgram.Id, day.DayTemplateId));
+    }
+
+    private async Task RunPplStart(Func<Task<PplSession>> start)
+    {
+        pplStarting = true;
+        pplError = null;
+        try
+        {
+            var session = await start();
+            Nav.NavigateTo($"/ppl/session/{session.Id}");
+        }
+        catch (InvalidOperationException ex)
+        {
+            pplError = ex.Message;
+        }
+        finally
+        {
+            pplStarting = false;
+        }
+    }
+
+    private static string GetPplDayStateLabel(PplWeekDay day, bool isSuggested) => day.State switch
+    {
+        PplDayState.Completed => "Done",
+        PplDayState.Open => day.HasLoggedSets ? "In progress" : "Ready",
+        _ => isSuggested ? "Up next" : "Start"
+    };
 
     private void GoToWorkout(int id) => Nav.NavigateTo("/workout/" + id);
 

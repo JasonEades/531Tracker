@@ -765,6 +765,73 @@ public sealed class WorkoutExportTests
     }
 
     [Fact]
+    public async Task PplWeekDaysCanBeStartedInAnyOrder()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new TestCurrentUserService("owner");
+        var programService = CreatePplProgramService(context, user);
+        var otherService = CreatePplProgramService(context, new TestCurrentUserService("other"));
+        var sessionService = new PplSessionService(context, user);
+
+        var program = await programService.CreateProgramAsync("PPL", 6);
+        var plan = await programService.GetWeekPlanAsync(program.Id);
+        Assert.Equal(1, plan.WeekNumber);
+        Assert.Equal(6, plan.Days.Count);
+        Assert.All(plan.Days, d => Assert.Equal(PplDayState.Available, d.State));
+        Assert.Equal(PplDayType.Push, plan.Suggested!.DayType);
+        Assert.Empty(await context.PplSessions.ToListAsync()); // viewing the week creates nothing
+        await Assert.ThrowsAsync<InvalidOperationException>(() => otherService.GetWeekPlanAsync(program.Id));
+
+        // Start with Legs B instead of Push A.
+        var legsB = plan.Days[5];
+        var legsSession = await programService.StartSessionAsync(program.Id, legsB.DayTemplateId);
+        Assert.Equal(legsB.DayTemplateId, legsSession.PplDayTemplateId);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => otherService.StartSessionAsync(program.Id, legsB.DayTemplateId));
+
+        // An untouched open session is replaced when switching days.
+        var pullA = plan.Days[1];
+        var pullSession = await programService.StartSessionAsync(program.Id, pullA.DayTemplateId);
+        context.ChangeTracker.Clear();
+        Assert.Equal(pullSession.Id, (await context.PplSessions.SingleAsync()).Id);
+
+        // Once sets are logged, switching is blocked until it's finished.
+        var pullDetails = await sessionService.GetSessionWithDetailsAsync(pullSession.Id);
+        var firstSet = pullDetails!.Exercises.First().Sets.First();
+        await sessionService.UpdateSetAsync(firstSet.Id, 100, 8, true);
+        context.ChangeTracker.Clear();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => programService.StartSessionAsync(program.Id, legsB.DayTemplateId));
+        plan = await programService.GetWeekPlanAsync(program.Id);
+        Assert.Equal(PplDayState.Open, plan.Days[1].State);
+        Assert.True(plan.Days[1].HasLoggedSets);
+        Assert.Equal(pullA.DayTemplateId, plan.SuggestedDayTemplateId);
+
+        await sessionService.CompleteSessionAsync(pullSession.Id);
+        context.ChangeTracker.Clear();
+        plan = await programService.GetWeekPlanAsync(program.Id);
+        Assert.Equal(PplDayState.Completed, plan.Days[1].State);
+        Assert.Equal(plan.Days[0].DayTemplateId, plan.SuggestedDayTemplateId); // Push A is next, Pull A is skipped
+        await Assert.ThrowsAsync<InvalidOperationException>(() => programService.StartSessionAsync(program.Id, pullA.DayTemplateId));
+
+        // Default "next" fills the remaining days in order, then rolls into week 2.
+        foreach (var expected in new[] { 0, 2, 3, 4, 5 })
+        {
+            var next = await programService.GetOrCreateNextSessionAsync(program.Id);
+            Assert.Equal(plan.Days[expected].DayTemplateId, next.PplDayTemplateId);
+            await sessionService.CompleteSessionAsync(next.Id);
+            context.ChangeTracker.Clear();
+        }
+        plan = await programService.GetWeekPlanAsync(program.Id);
+        Assert.Equal(2, plan.WeekNumber);
+        Assert.All(plan.Days, d => Assert.Equal(PplDayState.Available, d.State));
+    }
+
+    [Fact]
     public async Task PplSwapOffersSameMuscleOptionsAndSupportsOneOffAndPermanentSwaps()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

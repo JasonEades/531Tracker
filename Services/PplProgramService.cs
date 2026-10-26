@@ -16,6 +16,8 @@ public interface IPplProgramService
     Task SetActiveProgramAsync(int programId);
     Task DeleteProgramAsync(int programId);
     Task<PplSession> GetOrCreateNextSessionAsync(int programId);
+    Task<PplWeekPlan> GetWeekPlanAsync(int programId);
+    Task<PplSession> StartSessionAsync(int programId, int dayTemplateId);
     Task<int> GetCurrentWeekNumberAsync(int programId);
 }
 
@@ -313,12 +315,90 @@ public class PplProgramService(
     public async Task<PplSession> GetOrCreateNextSessionAsync(int programId)
     {
         var userId = await userContext.GetUserIdAsync();
-        var program = await db.PplPrograms
-            .FirstOrDefaultAsync(p => p.Id == programId && p.UserId == userId)
-            ?? throw new InvalidOperationException("PPL program was not found.");
+        await EnsureProgramOwnedAsync(programId, userId);
 
-        // Check for an existing incomplete session first
-        var existing = await db.PplSessions
+        var open = await LoadOpenSessionAsync(programId, userId);
+        if (open is not null) return open;
+
+        var week = await LoadWeekContextAsync(programId);
+        var nextTemplate = week.Templates.FirstOrDefault(t => !week.CompletedOrders.Contains(t.OrderInWeek))
+            ?? week.Templates[week.CompletedCount % week.Templates.Count];
+        return await CreateSessionAsync(programId, userId, nextTemplate, week.WeekNumber);
+    }
+
+    public async Task<PplWeekPlan> GetWeekPlanAsync(int programId)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        await EnsureProgramOwnedAsync(programId, userId);
+
+        var week = await LoadWeekContextAsync(programId);
+        var openSessions = await db.PplSessions.AsNoTracking()
+            .Where(s => s.PplProgramId == programId && s.Status != WorkoutStatus.Completed)
+            .OrderByDescending(s => s.CreatedAt)
+            .Select(s => new
+            {
+                s.Id,
+                s.DayTemplate.OrderInWeek,
+                HasLoggedSets = s.Exercises.SelectMany(e => e.Sets).Any(set => set.IsCompleted || set.ActualWeight != null || set.ActualReps != null)
+            })
+            .ToListAsync();
+        var open = openSessions.FirstOrDefault();
+
+        var days = week.Templates
+            .Select(t =>
+            {
+                if (open is not null && open.OrderInWeek == t.OrderInWeek)
+                    return new PplWeekDay(t.Id, t.OrderInWeek, t.Name, t.DayType, PplDayState.Open, open.Id, open.HasLoggedSets);
+                var completedId = week.CompletedSessionIds.GetValueOrDefault(t.OrderInWeek);
+                return week.CompletedOrders.Contains(t.OrderInWeek)
+                    ? new PplWeekDay(t.Id, t.OrderInWeek, t.Name, t.DayType, PplDayState.Completed, completedId, true)
+                    : new PplWeekDay(t.Id, t.OrderInWeek, t.Name, t.DayType, PplDayState.Available, null, false);
+            })
+            .ToList();
+
+        var suggested = days.FirstOrDefault(d => d.State == PplDayState.Open)
+            ?? days.FirstOrDefault(d => d.State == PplDayState.Available);
+        return new PplWeekPlan(week.WeekNumber, days, suggested?.DayTemplateId);
+    }
+
+    public async Task<PplSession> StartSessionAsync(int programId, int dayTemplateId)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        await EnsureProgramOwnedAsync(programId, userId);
+
+        var week = await LoadWeekContextAsync(programId);
+        var template = week.Templates.FirstOrDefault(t => t.Id == dayTemplateId)
+            ?? throw new InvalidOperationException("That workout isn't part of this week.");
+        if (week.CompletedOrders.Contains(template.OrderInWeek))
+            throw new InvalidOperationException($"{template.Name} is already done this week.");
+
+        var open = await LoadOpenSessionAsync(programId, userId);
+        if (open is not null)
+        {
+            if (open.DayTemplate.OrderInWeek == template.OrderInWeek)
+                return open;
+
+            var hasLoggedSets = open.Exercises.SelectMany(e => e.Sets)
+                .Any(set => set.IsCompleted || set.ActualWeight != null || set.ActualReps != null);
+            if (hasLoggedSets)
+                throw new InvalidOperationException($"Finish or delete your in-progress {open.DayTemplate.Name} session first.");
+
+            // Nothing logged yet, so switching days just replaces the untouched session.
+            db.PplSessions.Remove(open);
+            await db.SaveChangesAsync();
+        }
+
+        return await CreateSessionAsync(programId, userId, template, week.WeekNumber);
+    }
+
+    private async Task EnsureProgramOwnedAsync(int programId, string userId)
+    {
+        if (!await db.PplPrograms.AnyAsync(p => p.Id == programId && p.UserId == userId))
+            throw new InvalidOperationException("PPL program was not found.");
+    }
+
+    private Task<PplSession?> LoadOpenSessionAsync(int programId, string userId) =>
+        db.PplSessions
             .Include(s => s.DayTemplate)
             .Include(s => s.Exercises)
                 .ThenInclude(e => e.Sets)
@@ -326,16 +406,21 @@ public class PplProgramService(
             .OrderByDescending(s => s.CreatedAt)
             .FirstOrDefaultAsync();
 
-        if (existing is not null) return existing;
+    private sealed record WeekContext(
+        int WeekNumber,
+        int CompletedCount,
+        List<PplDayTemplate> Templates,
+        HashSet<int> CompletedOrders,
+        Dictionary<int, int> CompletedSessionIds);
 
-        var sessionDate = DateTime.UtcNow.Date;
+    private async Task<WeekContext> LoadWeekContextAsync(int programId)
+    {
         var completedCount = await db.PplSessions
             .CountAsync(s => s.PplProgramId == programId && s.Status == WorkoutStatus.Completed);
         var weekNumber = await GetCurrentWeekNumberCoreAsync(programId, completedCount);
 
         // Select this week's customized schedule when one exists, otherwise use the program defaults.
         var availableTemplates = await db.PplDayTemplates
-            .Include(d => d.ExerciseSlots)
             .Where(d => d.PplProgramId == programId && (d.WeekNumber == weekNumber || d.WeekNumber == null))
             .OrderBy(d => d.OrderInWeek)
             .ToListAsync();
@@ -343,12 +428,28 @@ public class PplProgramService(
         var templates = weekTemplates.Count > 0
             ? weekTemplates
             : availableTemplates.Where(d => d.WeekNumber is null).ToList();
-
         if (templates.Count == 0) throw new InvalidOperationException("Program has no day templates.");
 
-        // Weeks advance by completed rotations, not calendar time, so missed days/weeks don't skip workouts.
-        var nextTemplate = templates[completedCount % templates.Count];
+        // Weeks advance by completed rotations, not calendar time; days within a week can be done in any order.
+        // Days are matched by slot order so they survive week-specific template customization.
+        var completedThisWeek = await db.PplSessions.AsNoTracking()
+            .Where(s => s.PplProgramId == programId && s.Status == WorkoutStatus.Completed
+                && s.Week != null && s.Week.WeekNumber == weekNumber)
+            .OrderByDescending(s => s.CompletedAt)
+            .Select(s => new { s.Id, s.DayTemplate.OrderInWeek })
+            .ToListAsync();
 
+        return new WeekContext(
+            weekNumber,
+            completedCount,
+            templates,
+            completedThisWeek.Select(s => s.OrderInWeek).ToHashSet(),
+            completedThisWeek.GroupBy(s => s.OrderInWeek).ToDictionary(g => g.Key, g => g.First().Id));
+    }
+
+    private async Task<PplSession> CreateSessionAsync(int programId, string userId, PplDayTemplate nextTemplate, int weekNumber)
+    {
+        var sessionDate = DateTime.UtcNow.Date;
         // Build the session with exercise snapshots
         var slots = await db.PplExerciseSlots
             .Include(s => s.Lift)

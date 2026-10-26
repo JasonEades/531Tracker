@@ -118,6 +118,7 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 ### Push/Pull/Legs
 
 - Three-day or six-day splits
+- Choose any day of the current week from the dashboard: the PPL card lists every session for the week with Done / In progress / Up next state, and you can start them in any order (e.g. Pull before Push). Viewing the dashboard never creates sessions; switching days replaces an open session only if no sets have been logged, and the week advances once every day is complete
 - Searchable exercise library with 81 curated strength exercises, muscle and equipment filters, exercise instructions, and account-private custom entries; PPL workout configuration selects catalog or custom exercises while retaining legacy labels and historical exercise-name snapshots
 - Week-by-week workout configuration at `/ppl/{id}/workouts`: edit workout names, exercises, muscle groups, sets, and rep ranges per week; unconfigured weeks use the default schedule
 - **Add Accessory Exercise** on any PPL day; accessories carry into generated sessions
@@ -391,7 +392,7 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - PPL program deletion with existing sessions and cross-user delete isolation
 - First-cycle/program weight seeding from the most recent previous 5/3/1 cycle or PPL program
 - PPL progression (once-only, 2.5 lb increments, auto-apply on finish, user isolation), rotation-based week numbering, and set-value validation
-- PPL exercise swaps: same-muscle options, one-off vs. permanent scope, no progression of the plan exercise after a one-off swap, rejection after sets are logged, and cross-user isolation
+- PPL week plan: starting days in any order, replacing untouched open sessions, blocking switches after sets are logged, rejecting days already done this week, and cross-user isolation- PPL exercise swaps: same-muscle options, one-off vs. permanent scope, no progression of the plan exercise after a one-off swap, rejection after sets are logged, and cross-user isolation
 - Exercise-library search/filtering, custom-exercise ownership isolation, and PPL catalog selection
 - Multi-user isolation of settings, bars, programs, accessories, latest accessory weights, and the dashboard's current-cycle lookup
 - Exercise-name matching (equivalent names auto-match, different movements/equipment are rejected) and accessory weight rep-range conversion
