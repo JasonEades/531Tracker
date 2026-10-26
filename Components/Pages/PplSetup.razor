@@ -2,6 +2,7 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject IPplProgramService PplService
+@inject IAccessoryService AccessoryService
 @inject NavigationManager Nav
 
 <PageTitle>New PPL Program — Jason's Garage Lab</PageTitle>
@@ -81,7 +82,7 @@
         <div class="setup-card mt-3">
             <div class="preview-title" style="margin-bottom:var(--space-2)">Set Your Starting Weights</div>
             <p class="option-hint" style="margin-bottom:var(--space-4)">
-                Starting weights are estimated from your completed workouts when available. Adjust any values to your preference.
+                Starting weights are estimated from your completed workouts when available. Exercises without an estimate are matched to accessories you've logged; pick a different accessory or adjust any value.
             </p>
             @foreach (var day in programDetails.DayTemplates.OrderBy(d => d.OrderInWeek))
             {
@@ -89,6 +90,7 @@
                     <div class="ex-group-header @GetDayCss(day.DayType)">@day.Name</div>
                     @foreach (var slot in day.ExerciseSlots.OrderBy(s => s.OrderInDay))
                     {
+                        <div class="ex-slot">
                         <div class="ex-row">
                             <span class="ex-name">@slot.ExerciseName</span>
                             <span class="ex-meta">@slot.TargetSets×@slot.RepsMin–@slot.RepsMax</span>
@@ -103,6 +105,38 @@
                                        @bind="startingWeightDraft[slot.Id]" />
                                 <span class="set-unit">lbs</span>
                             }
+                        </div>
+                        @if (!slot.IsBodyweight && accessoryOptions.Count > 0)
+                        {
+                            var ranked = rankedOptions[slot.Id];
+                            var sourceId = accessorySource.GetValueOrDefault(slot.Id);
+                            <div class="ex-source">
+                                <label class="ex-source-label" for="src-@slot.Id">Use weight from</label>
+                                <select id="src-@slot.Id" class="form-control ex-source-select" value="@sourceId"
+                                        @onchange="e => SelectAccessorySource(slot, e)">
+                                    <option value="0">@(slot.StartingWeight is null ? "Nothing (enter manually)" : "Workout history estimate")</option>
+                                    @if (ranked.Any(r => r.Score >= ExerciseNameMatcher.SuggestThreshold))
+                                    {
+                                        <optgroup label="Likely matches">
+                                            @foreach (var r in ranked.Where(r => r.Score >= ExerciseNameMatcher.SuggestThreshold))
+                                            {
+                                                <option value="@r.Option.AccessoryId">@FormatOption(r.Option, slot)</option>
+                                            }
+                                        </optgroup>
+                                    }
+                                    <optgroup label="All logged accessories">
+                                        @foreach (var r in ranked.Where(r => r.Score < ExerciseNameMatcher.SuggestThreshold))
+                                        {
+                                            <option value="@r.Option.AccessoryId">@FormatOption(r.Option, slot)</option>
+                                        }
+                                    </optgroup>
+                                </select>
+                                @if (autoMatched.Contains(slot.Id) && sourceId != 0)
+                                {
+                                    <span class="badge badge-muted">Auto-matched</span>
+                                }
+                            </div>
+                        }
                         </div>
                     }
                 </div>
@@ -136,7 +170,65 @@
     private PplProgram? createdProgram;
     private PplProgram? programDetails;
     private Dictionary<int, string?> startingWeightDraft = [];
+    private List<AccessoryWeightOption> accessoryOptions = [];
+    private Dictionary<int, List<RankedAccessory>> rankedOptions = [];
+    private Dictionary<int, int> accessorySource = [];
+    private HashSet<int> autoMatched = [];
 
+    private sealed record RankedAccessory(AccessoryWeightOption Option, double Score);
+
+    private async Task MatchAccessoriesAsync()
+    {
+        accessoryOptions = await AccessoryService.GetLatestWeightsAsync();
+        rankedOptions.Clear();
+        accessorySource.Clear();
+        autoMatched.Clear();
+        if (programDetails is null || accessoryOptions.Count == 0) return;
+
+        foreach (var slot in programDetails.DayTemplates.SelectMany(d => d.ExerciseSlots).Where(s => !s.IsBodyweight))
+        {
+            var ranked = accessoryOptions
+                .Select(option => new RankedAccessory(option, ExerciseNameMatcher.Score(slot.ExerciseName, option.Name)))
+                .OrderByDescending(r => r.Score)
+                .ThenBy(r => r.Option.Name, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+            rankedOptions[slot.Id] = ranked;
+
+            // Workout-history estimates win; accessories fill exercises that have no estimate yet.
+            var best = ranked[0];
+            if (slot.StartingWeight is null && best.Score >= ExerciseNameMatcher.AutoMatchThreshold)
+            {
+                accessorySource[slot.Id] = best.Option.AccessoryId;
+                startingWeightDraft[slot.Id] = FormatWeight(best.Option.WeightForRepRange(slot.RepsMin, slot.RepsMax));
+                autoMatched.Add(slot.Id);
+            }
+        }
+    }
+
+    private void SelectAccessorySource(PplExerciseSlot slot, ChangeEventArgs e)
+    {
+        var accessoryId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+        var option = accessoryOptions.FirstOrDefault(o => o.AccessoryId == accessoryId);
+        if (option is null)
+        {
+            accessorySource.Remove(slot.Id);
+            startingWeightDraft[slot.Id] = FormatWeight(slot.StartingWeight);
+            return;
+        }
+
+        accessorySource[slot.Id] = option.AccessoryId;
+        startingWeightDraft[slot.Id] = FormatWeight(option.WeightForRepRange(slot.RepsMin, slot.RepsMax));
+    }
+
+    private static string FormatOption(AccessoryWeightOption option, PplExerciseSlot slot)
+    {
+        var target = option.WeightForRepRange(slot.RepsMin, slot.RepsMax);
+        var logged = $"{option.Name}: {option.Weight:0.#} lb × {option.Reps} ({option.LastUsed:MMM d})";
+        return target == option.Weight ? logged : $"{logged} → {target:0.#} lb";
+    }
+
+    private static string? FormatWeight(double? weight) =>
+        weight?.ToString(System.Globalization.CultureInfo.InvariantCulture);
     private async Task CreateProgram()
     {
         if (string.IsNullOrWhiteSpace(programName))
@@ -155,12 +247,16 @@
             {
                 startingWeightDraft = programDetails.DayTemplates
                     .SelectMany(d => d.ExerciseSlots)
-                    .ToDictionary(s => s.Id, s => s.StartingWeight?.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    .ToDictionary(s => s.Id, s => FormatWeight(s.StartingWeight));
+                await MatchAccessoriesAsync();
             }
         }
         catch (Exception ex)
         {
             error = ex.Message;
+        }
+        finally
+        {
             loading = false;
         }
     }
@@ -176,7 +272,17 @@
                 ? weight
                 : (double?)null);
         loading = true;
-        await PplService.ConfigureStartingWeightsAsync(createdProgram.Id, weights);
+        error = null;
+        try
+        {
+            await PplService.ConfigureStartingWeightsAsync(createdProgram.Id, weights);
+        }
+        catch (Exception ex)
+        {
+            error = ex.Message;
+            loading = false;
+            return;
+        }
         Nav.NavigateTo("/");
     }
 

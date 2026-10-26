@@ -122,7 +122,8 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 - Week-by-week workout configuration at `/ppl/{id}/workouts`: edit workout names, exercises, muscle groups, sets, and rep ranges per week; unconfigured weeks use the default schedule
 - **Add Accessory Exercise** on any PPL day; accessories carry into generated sessions
 - **⇄ Swap** any exercise in an unstarted PPL session for another catalog or custom exercise that trains the same muscle (same movement type listed first). Choose **This workout only** (the plan and its progression stay unchanged) or **All future workouts** (replaces the plan exercise). The swapped exercise's weight is derived from your e1RM history when available
-- New programs derive starting weights from your previous training: each exercise uses the best e1RM from the most recent 5/3/1 cycle or PPL program that trained it (not the all-time best), falling back to manual entry when there is no history
+- New programs derive starting weights from your previous training: each exercise uses the best e1RM from the most recent 5/3/1 cycle or PPL program that trained it (not the all-time best), then to your most recently logged weight for a matching accessory, falling back to manual entry when there is no history
+- Accessory matching during PPL setup: names are matched fuzzily (plurals, hyphens, DB/BB/Ext/RDL/OHP abbreviations) while conflicting equipment or movement words are rejected (e.g. Leg Curl ≠ Dumbbell Curl); each exercise has a "Use weight from" picker listing likely matches first, and logged weights outside the PPL rep range are converted via e1RM
 - Exercise slots and session tracking; set weights (0–2000 lbs) and reps (0–100) are validated
 - Weeks advance by completed rotations (e.g. every 3 sessions on a 3-day split), so missed days never skip workouts
 - Double progression within configured rep ranges: when every set reaches the top of the range, the slot's weight increases by its exact configured increment (including 2.5 lb steps) on **Finish Session**, or earlier via the session's progression button; progression applies once per session and then shows the next-session weight
@@ -164,7 +165,8 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 │   ├── CycleService            # Cycle creation and workout generation
 │   ├── WeightCalculator        # Training Max and set-scheme calculations
 │   ├── PlateCalculatorService  # Plate-loading calculations
-│   ├── AccessoryService        # Accessory tracking
+│   ├── AccessoryService        # Accessory tracking and latest logged weights (user-scoped)
+│   ├── ExerciseNameMatcher     # Fuzzy exercise-name matching for accessory → PPL weight reuse
 │   ├── PplProgramService       # PPL program management
 │   ├── PplSessionService       # PPL session tracking
 │   ├── PplProgressionService   # PPL double progression and e1RM
@@ -391,7 +393,8 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - PPL progression (once-only, 2.5 lb increments, auto-apply on finish, user isolation), rotation-based week numbering, and set-value validation
 - PPL exercise swaps: same-muscle options, one-off vs. permanent scope, no progression of the plan exercise after a one-off swap, rejection after sets are logged, and cross-user isolation
 - Exercise-library search/filtering, custom-exercise ownership isolation, and PPL catalog selection
-- Multi-user isolation of settings, bars, programs, accessories, and the dashboard's current-cycle lookup
+- Multi-user isolation of settings, bars, programs, accessories, latest accessory weights, and the dashboard's current-cycle lookup
+- Exercise-name matching (equivalent names auto-match, different movements/equipment are rejected) and accessory weight rep-range conversion
 - Sitemap, robots.txt, and SEO metadata for published content
 
 Run the full solution build and focused tests with:

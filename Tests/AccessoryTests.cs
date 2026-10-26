@@ -109,6 +109,78 @@ public sealed class AccessoryTests
         Assert.Empty(await context.AccessoryHistory.ToListAsync());
     }
 
+    [Fact]
+    public async Task LatestAccessoryWeightsAreUserScopedAndUseMostRecentEntry()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var facePull = new Accessory { Name = "Face Pulls" };
+        var otherPrivate = new Accessory { UserId = "other-user", Name = "Other Private Curl" };
+        var ownCycle = new Cycle { UserId = "test-user", Name = "Mine" };
+        var otherCycle = new Cycle { UserId = "other-user", Name = "Theirs" };
+        var ownWorkout = new Workout { Week = new Week { Cycle = ownCycle, WeekNumber = WeekNumber.Week1 }, MainLiftType = LiftType.Squat, OccurredOn = new DateTime(2026, 9, 1) };
+        var otherWorkout = new Workout { Week = new Week { Cycle = otherCycle, WeekNumber = WeekNumber.Week1 }, MainLiftType = LiftType.Squat, OccurredOn = new DateTime(2026, 10, 1) };
+        ownWorkout.WorkoutAccessories.Add(new WorkoutAccessory { Accessory = facePull, Weight = 40, Reps = 15, Sets = 3 });
+        otherWorkout.WorkoutAccessories.Add(new WorkoutAccessory { Accessory = facePull, Weight = 200, Reps = 15, Sets = 3 });
+        otherWorkout.WorkoutAccessories.Add(new WorkoutAccessory { Accessory = otherPrivate, Weight = 60, Reps = 10, Sets = 3 });
+        context.Workouts.AddRange(ownWorkout, otherWorkout);
+        context.AccessoryHistory.Add(new AccessoryHistory { Accessory = facePull, UserId = "test-user", Weight = 45, Reps = 15, Sets = 3, RecordedAt = new DateTime(2026, 9, 10) });
+        context.AccessoryHistory.Add(new AccessoryHistory { Accessory = facePull, UserId = "other-user", Weight = 300, Reps = 15, Sets = 3, RecordedAt = new DateTime(2026, 10, 10) });
+        await context.SaveChangesAsync();
+
+        var mine = await new AccessoryService(context, new TestCurrentUserService()).GetLatestWeightsAsync();
+
+        var option = Assert.Single(mine);
+        Assert.Equal(facePull.Id, option.AccessoryId);
+        Assert.Equal(45, option.Weight);
+        Assert.Equal(15, option.Reps);
+    }
+
+    [Theory]
+    [InlineData("Face Pulls", "Face Pull")]
+    [InlineData("Incline DB Press", "Incline Dumbbell Press")]
+    [InlineData("Tricep Dips", "Dips")]
+    [InlineData("Overhead Tricep Ext", "Overhead Tricep Extension")]
+    [InlineData("Lat Pulldown", "Lat Pull-Down")]
+    [InlineData("Romanian Deadlift", "RDL")]
+    [InlineData("Weighted Pull-ups", "Pull Ups")]
+    [InlineData("Standing Calf Raise", "Calf Raises")]
+    [InlineData("Tricep Pushdown", "Cable Tricep Pushdown")]
+    [InlineData("Shrug", "Dumbbell Shrugs")]
+    public void ExerciseNameMatcherAutoMatchesEquivalentNames(string plan, string accessory) =>
+        Assert.True(ExerciseNameMatcher.Score(plan, accessory) >= ExerciseNameMatcher.AutoMatchThreshold,
+            $"{plan} vs {accessory} scored {ExerciseNameMatcher.Score(plan, accessory)}");
+
+    [Theory]
+    [InlineData("Dumbbell Curl", "Leg Curl")]
+    [InlineData("Barbell Row", "Dumbbell Row")]
+    [InlineData("Cable Row", "Barbell Row")]
+    [InlineData("Hammer Curl", "Dumbbell Curl")]
+    [InlineData("Romanian Deadlift", "Deadlift")]
+    [InlineData("Leg Press", "Leg Curl")]
+    [InlineData("Overhead Press", "DB Shoulder Press")]
+    [InlineData("Weighted Pull-ups", "Chin-Ups")]
+    [InlineData("Lateral Raise", "Front Raise")]
+    public void ExerciseNameMatcherRejectsDifferentMovements(string plan, string accessory) =>
+        Assert.True(ExerciseNameMatcher.Score(plan, accessory) < ExerciseNameMatcher.AutoMatchThreshold,
+            $"{plan} vs {accessory} scored {ExerciseNameMatcher.Score(plan, accessory)}");
+
+    [Fact]
+    public void AccessoryWeightConvertsToPplRepRange()
+    {
+        var inRange = new AccessoryWeightOption(1, "Cable Fly", 30, 12, DateTime.UtcNow);
+        Assert.Equal(30, inRange.WeightForRepRange(12, 15));
+
+        // 100 × 5 ≈ 116.7 e1RM → 15 reps ≈ 77.8 → 77.5
+        var heavy = new AccessoryWeightOption(2, "Dumbbell Row", 100, 5, DateTime.UtcNow);
+        Assert.Equal(77.5, heavy.WeightForRepRange(10, 15));
+    }
+
     private sealed class TestCurrentUserService(string userId = "test-user") : ICurrentUserService
     {
         public Task<string> GetUserIdAsync() => Task.FromResult(userId);

@@ -144,6 +144,31 @@
 
 .ex-row:last-child { border-bottom: none; }
 
+.ex-slot { border-bottom: 1px solid var(--color-border); }
+.ex-slot:last-child { border-bottom: none; }
+.ex-slot .ex-row { border-bottom: none; }
+
+.ex-source {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: var(--space-2);
+    padding: 0 0 var(--space-2);
+}
+
+.ex-source-label {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+    white-space: nowrap;
+}
+
+.ex-source-select {
+    flex: 1;
+    min-width: 0;
+    padding: 4px 8px;
+    font-size: var(--text-xs);
+}
+
 .ex-name {
     flex: 1;
     font-size: var(--text-sm);

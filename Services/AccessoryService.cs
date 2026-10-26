@@ -15,6 +15,7 @@ public interface IAccessoryService
     Task UpdateWorkoutAccessoryAsync(int id, double weight, int reps, int sets, string? notes, bool isCompleted);
     Task RemoveWorkoutAccessoryAsync(int id);
     Task<AccessoryUsageSuggestion?> GetSuggestedUsageAsync(int accessoryId);
+    Task<List<AccessoryWeightOption>> GetLatestWeightsAsync();
     Task RecordAccessoryHistoryAsync(int accessoryId, double weight, int reps, int sets);
 }
 
@@ -165,6 +166,33 @@ public class AccessoryService(AppDbContext db, ICurrentUserService userContext) 
                 Notes = w.Notes
             })
             .FirstOrDefaultAsync();
+    }
+
+    public async Task<List<AccessoryWeightOption>> GetLatestWeightsAsync()
+    {
+        var userId = await userContext.GetUserIdAsync();
+
+        var workoutRows = await db.WorkoutAccessories.AsNoTracking()
+            .Where(w => w.Weight > 0 && w.Reps > 0
+                && w.Workout.Week.Cycle.UserId == userId
+                && (w.Accessory.UserId == null || w.Accessory.UserId == userId)
+                && w.Accessory.Category != AccessoryCategory.Cardio)
+            .Select(w => new { w.AccessoryId, w.Accessory.Name, w.Weight, w.Reps, Date = w.Workout.OccurredOn, w.Id })
+            .ToListAsync();
+
+        var historyRows = await db.AccessoryHistory.AsNoTracking()
+            .Where(h => h.Weight > 0 && h.Reps > 0 && h.UserId == userId
+                && (h.Accessory.UserId == null || h.Accessory.UserId == userId)
+                && h.Accessory.Category != AccessoryCategory.Cardio)
+            .Select(h => new { h.AccessoryId, h.Accessory.Name, h.Weight, h.Reps, Date = h.RecordedAt, h.Id })
+            .ToListAsync();
+
+        return workoutRows.Concat(historyRows)
+            .GroupBy(r => r.AccessoryId)
+            .Select(g => g.OrderByDescending(r => r.Date).ThenByDescending(r => r.Id).First())
+            .Select(r => new AccessoryWeightOption(r.AccessoryId, r.Name, r.Weight, r.Reps, r.Date))
+            .OrderBy(o => o.Name)
+            .ToList();
     }
 
     public async Task RecordAccessoryHistoryAsync(int accessoryId, double weight, int reps, int sets)
