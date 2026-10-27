@@ -106,7 +106,6 @@ else
     @* ── Exercise cards ──────────────────────────────────────── *@
     @foreach (var exercise in session.Exercises.OrderBy(e => e.OrderInSession))
     {
-        var displayWeight = exercise.Sets.Select(s => s.ActualWeight).FirstOrDefault(w => w.HasValue) ?? exercise.SuggestedWeight;
         var isOneOffSwap = !string.Equals(exercise.ExerciseName, exercise.ExerciseSlot.ExerciseName, StringComparison.OrdinalIgnoreCase);
         var alreadyProgressed = !isOneOffSwap && exercise.SuggestedWeight.HasValue && exercise.ExerciseSlot.CurrentWeight != exercise.SuggestedWeight;
         var shouldProgress = !isOneOffSwap
@@ -117,6 +116,7 @@ else
             && Progression.ShouldProgress(exercise.Sets, exercise.RepsMax);
         var e1Rm = exercise.ExerciseSlot.IsBodyweight ? null : Progression.CalculateE1Rm(exercise);
         var canSwap = session.Status != WorkoutStatus.Completed && !exercise.Sets.Any(s => s.IsCompleted);
+        var exerciseBar = BarFor(exercise);
 
         <div class="ppl-exercise-section">
             <div class="ppl-exercise-header">
@@ -158,17 +158,31 @@ else
             @if (swapExerciseId == exercise.Id)
             {
                 <div class="ppl-swap-panel">
-                    @if (swapOptions.Count == 0)
+                    @if (swapOptions.Count == 0 && accessoryOptions.Count == 0)
                     {
-                        <p class="text-muted">No other @exercise.ExerciseSlot.MuscleGroup exercises in your library. Add a custom exercise in the exercise library.</p>
+                        <p class="text-muted">No other @exercise.ExerciseSlot.MuscleGroup exercises or accessories available. Add a custom exercise in the exercise library or an accessory on the Accessories page.</p>
                     }
                     else
                     {
                         <label for="swap-@exercise.Id">Replace @exercise.ExerciseName with</label>
-                        <select id="swap-@exercise.Id" class="form-control form-control-sm" @bind="swapSelectionId">
-                            @foreach (var option in swapOptions)
+                        <select id="swap-@exercise.Id" class="form-control form-control-sm" @bind="swapSelection">
+                            @if (swapOptions.Count > 0)
                             {
-                                <option value="@option.Id">@option.Name@(string.IsNullOrWhiteSpace(option.Equipment) ? "" : $" — {option.Equipment}")</option>
+                                <optgroup label="@($"{exercise.ExerciseSlot.MuscleGroup} exercises")">
+                                    @foreach (var option in swapOptions)
+                                    {
+                                        <option value="d:@option.Id">@option.Name@(string.IsNullOrWhiteSpace(option.Equipment) ? "" : $" — {option.Equipment}")</option>
+                                    }
+                                </optgroup>
+                            }
+                            @if (accessoryOptions.Count > 0)
+                            {
+                                <optgroup label="Your accessories (last weight)">
+                                    @foreach (var option in accessoryOptions)
+                                    {
+                                        <option value="a:@option.AccessoryId">@FormatAccessoryOption(option)</option>
+                                    }
+                                </optgroup>
                             }
                         </select>
                         <div class="ppl-swap-actions">
@@ -184,6 +198,32 @@ else
                 </div>
             }
 
+            @if (!exercise.ExerciseSlot.IsBodyweight)
+            {
+                <div class="ppl-bar-row">
+                    @if (barPickerExerciseId == exercise.Id)
+                    {
+                        <select id="bar-@exercise.Id" class="form-control form-control-sm" aria-label="Bar for @exercise.ExerciseName" value="@(exercise.BarId ?? 0)"
+                                @onchange="e => OnExerciseBarSelected(exercise, e)">
+                            <option value="0">Default — @(defaultBar?.Name ?? "Bar") (@FormatPlate(defaultBar?.Weight ?? 45) lbs)</option>
+                            @foreach (var bar in bars.Where(b => !b.IsDefault))
+                            {
+                                <option value="@bar.Id">@bar.Name (@FormatPlate(bar.Weight) lbs)</option>
+                            }
+                        </select>
+                        <button class="btn btn-ghost btn-sm" @onclick="() => barPickerExerciseId = null">Done</button>
+                    }
+                    else
+                    {
+                        <span class="ppl-bar-label">Bar: <strong>@exerciseBar.Name</strong> (@FormatPlate(exerciseBar.Weight) lbs)</span>
+                        @if (session.Status != WorkoutStatus.Completed)
+                        {
+                            <button class="btn btn-ghost btn-sm" @onclick="() => barPickerExerciseId = exercise.Id">Change bar</button>
+                        }
+                    }
+                </div>
+            }
+
             @foreach (var set in exercise.Sets.OrderBy(s => s.SetNumber))
             {
                 <div class="set-card @(set.IsCompleted ? "completed-set" : "")">
@@ -194,8 +234,8 @@ else
                         </div>
                         <div class="set-reps-label">× @set.TargetReps reps target</div>
                         @if (!exercise.ExerciseSlot.IsBodyweight &&
-                             displayWeight.HasValue &&
-                             plateMap.TryGetValue(displayWeight.Value, out var plates) &&
+                             (set.ActualWeight ?? exercise.SuggestedWeight) is double setWeight &&
+                             plateMap.TryGetValue((setWeight, exerciseBar.Weight), out var plates) &&
                              plates.Count > 0)
                         {
                             <div class="plate-chips-inline">
@@ -256,18 +296,54 @@ else
     private int restSeconds = 90;
     private int restRemaining;
     private Timer? restTimer;
-    private Dictionary<double, List<PlateLoadingResult>> plateMap = [];
+    private Dictionary<(double Weight, double BarWeight), List<PlateLoadingResult>> plateMap = [];
+    private List<Bar> bars = [];
+    private Bar? defaultBar;
+    private int? barPickerExerciseId;
     private int? swapExerciseId;
     private List<ExerciseDefinition> swapOptions = [];
-    private int swapSelectionId;
+    private List<PplAccessorySwapOption> accessoryOptions = [];
+    private string swapSelection = "";
     private bool swapping;
     private string? swapError;
+
+    private Bar BarFor(PplSessionExercise exercise) =>
+        bars.FirstOrDefault(b => b.Id == exercise.BarId)
+        ?? defaultBar
+        ?? new Bar { Name = "Standard Olympic", Weight = 45 };
+
+    private async Task OnExerciseBarSelected(PplSessionExercise exercise, ChangeEventArgs e)
+    {
+        int? barId = int.TryParse(e.Value?.ToString(), out var id) && id > 0 ? id : null;
+        try
+        {
+            await SessionService.SetExerciseBarAsync(exercise.Id, barId);
+            exercise.BarId = barId;
+            if (string.Equals(exercise.ExerciseName, exercise.ExerciseSlot.ExerciseName, StringComparison.OrdinalIgnoreCase))
+                exercise.ExerciseSlot.BarId = barId;
+            barPickerExerciseId = null;
+            await BuildPlateMap();
+        }
+        catch (InvalidOperationException)
+        {
+            bars = await PlateCalc.GetBarsAsync();
+            defaultBar = bars.FirstOrDefault(b => b.IsDefault) ?? bars.FirstOrDefault();
+        }
+    }
+
+    private static string FormatAccessoryOption(PplAccessorySwapOption option) =>
+        option.LastWeight is double weight
+            ? $"{option.Name} — last {DisplayWeight(weight)} lbs × {option.LastReps}"
+            : $"{option.Name} — no weight logged yet";
 
     private async Task OpenSwap(int sessionExerciseId)
     {
         swapError = null;
         swapOptions = await SwapService.GetSwapOptionsAsync(sessionExerciseId);
-        swapSelectionId = swapOptions.FirstOrDefault()?.Id ?? 0;
+        accessoryOptions = await SwapService.GetAccessorySwapOptionsAsync(sessionExerciseId);
+        swapSelection = swapOptions.FirstOrDefault() is { } first
+            ? $"d:{first.Id}"
+            : accessoryOptions.FirstOrDefault() is { } accessory ? $"a:{accessory.AccessoryId}" : "";
         swapExerciseId = sessionExerciseId;
     }
 
@@ -275,17 +351,22 @@ else
     {
         swapExerciseId = null;
         swapOptions = [];
+        accessoryOptions = [];
         swapError = null;
     }
 
     private async Task ConfirmSwap(PplSwapScope scope)
     {
-        if (swapExerciseId is not int exerciseId || swapSelectionId == 0) return;
+        if (swapExerciseId is not int exerciseId || swapSelection.Length < 3
+            || !int.TryParse(swapSelection[2..], out var targetId)) return;
 
         swapping = true;
         try
         {
-            await SwapService.SwapAsync(exerciseId, swapSelectionId, scope);
+            if (swapSelection.StartsWith("a:", StringComparison.Ordinal))
+                await SwapService.SwapToAccessoryAsync(exerciseId, targetId, scope);
+            else
+                await SwapService.SwapAsync(exerciseId, targetId, scope);
             CloseSwap();
             await LoadSession();
         }
@@ -318,6 +399,8 @@ else
         if (session is not null)
         {
             restSeconds = Math.Clamp(session.RestSeconds, 0, 600);
+            bars = await PlateCalc.GetBarsAsync();
+            defaultBar = bars.FirstOrDefault(b => b.IsDefault) ?? bars.FirstOrDefault();
             await BuildPlateMap();
         }
     }
@@ -325,15 +408,15 @@ else
     private async Task BuildPlateMap()
     {
         if (session is null) return;
-        var weights = session.Exercises
-            .SelectMany(e => e.Sets.Select(s => s.ActualWeight ?? e.SuggestedWeight))
-            .Concat(session.Exercises.Select(e => e.SuggestedWeight))
-            .Where(w => w.HasValue)
-            .Select(w => w!.Value)
+        var keys = session.Exercises
+            .SelectMany(e => e.Sets.Select(s => s.ActualWeight ?? e.SuggestedWeight)
+                .Append(e.SuggestedWeight)
+                .Where(w => w.HasValue)
+                .Select(w => (Weight: w!.Value, BarWeight: BarFor(e).Weight)))
             .Distinct();
         plateMap = [];
-        foreach (var w in weights)
-            plateMap[w] = await PlateCalc.CalculatePlates(w);
+        foreach (var key in keys)
+            plateMap[key] = await PlateCalc.CalculatePlates(key.Weight, key.BarWeight);
     }
 
     private async Task StartSession()

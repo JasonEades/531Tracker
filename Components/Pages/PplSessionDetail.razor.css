@@ -109,6 +109,28 @@
     background: var(--color-surface-2);
 }
 
+.ppl-bar-row {
+    display: flex;
+    align-items: center;
+    gap: var(--space-2);
+    margin-bottom: var(--space-2);
+    min-height: 32px;
+}
+
+.ppl-bar-row select {
+    max-width: 260px;
+}
+
+.ppl-bar-label {
+    font-size: var(--text-xs);
+    color: var(--color-text-muted);
+}
+
+.ppl-bar-label strong {
+    color: var(--color-text-2);
+    font-weight: 600;
+}
+
 .ppl-swap-actions {
     display: flex;
     flex-wrap: wrap;

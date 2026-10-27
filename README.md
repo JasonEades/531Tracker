@@ -122,7 +122,8 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 - Searchable exercise library with 81 curated strength exercises, muscle and equipment filters, exercise instructions, and account-private custom entries; PPL workout configuration selects catalog or custom exercises while retaining legacy labels and historical exercise-name snapshots
 - Week-by-week workout configuration at `/ppl/{id}/workouts`: edit workout names, exercises, muscle groups, sets, and rep ranges per week; unconfigured weeks use the default schedule
 - **Add Accessory Exercise** on any PPL day; accessories carry into generated sessions
-- **⇄ Swap** any exercise in an unstarted PPL session for another catalog or custom exercise that trains the same muscle (same movement type listed first). Choose **This workout only** (the plan and its progression stay unchanged) or **All future workouts** (replaces the plan exercise). The swapped exercise's weight is derived from your e1RM history when available
+- **⇄ Swap** any exercise in an unstarted PPL session for another catalog or custom exercise that trains the same muscle (same movement type listed first). Choose **This workout only** (the plan and its progression stay unchanged) or **All future workouts** (replaces the plan exercise). The swapped exercise's weight is derived from your e1RM history when available, otherwise from a matching logged accessory. You can also swap to any of your generic accessories (cardio excluded); it starts at the last weight you logged for that accessory
+- **Change bar** on any weighted PPL exercise (e.g. EZ curl, trap, or women's bar from Settings): the plate breakdown recalculates for that bar's weight and the choice is remembered for future sessions of that plan exercise (one-off swaps reset to the default bar)
 - New programs derive starting weights from your previous training: each exercise uses the best e1RM from the most recent 5/3/1 cycle or PPL program that trained it (not the all-time best), then to your most recently logged weight for a matching accessory, falling back to manual entry when there is no history
 - Accessory matching during PPL setup: names are matched fuzzily (plurals, hyphens, DB/BB/Ext/RDL/OHP abbreviations) while conflicting equipment or movement words are rejected (e.g. Leg Curl ≠ Dumbbell Curl); each exercise has a "Use weight from" picker listing likely matches first, and logged weights outside the PPL rep range are converted via e1RM
 - Exercise slots and session tracking; set weights (0–2000 lbs) and reps (0–100) are validated
@@ -171,7 +172,7 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 │   ├── PplProgramService       # PPL program management
 │   ├── PplSessionService       # PPL session tracking
 │   ├── PplProgressionService   # PPL double progression and e1RM
-│   ├── PplExerciseSwapService  # Same-muscle PPL exercise swaps (one-off or permanent)
+│   ├── PplExerciseSwapService  # Same-muscle and generic-accessory PPL swaps (one-off or permanent)
 │   ├── ExerciseLibraryService  # Curated and account-private exercise definitions
 │   ├── EstimatedStrengthService # User-scoped e1RM used to seed 5/3/1 and PPL weights
 │   ├── SiteContentSeo / SiteContentSitemap # Canonical URLs, metadata, sitemap.xml, robots.txt
@@ -392,7 +393,9 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - PPL program deletion with existing sessions and cross-user delete isolation
 - First-cycle/program weight seeding from the most recent previous 5/3/1 cycle or PPL program
 - PPL progression (once-only, 2.5 lb increments, auto-apply on finish, user isolation), rotation-based week numbering, and set-value validation
-- PPL week plan: starting days in any order, replacing untouched open sessions, blocking switches after sets are logged, rejecting days already done this week, and cross-user isolation- PPL exercise swaps: same-muscle options, one-off vs. permanent scope, no progression of the plan exercise after a one-off swap, rejection after sets are logged, and cross-user isolation
+- PPL week plan: starting days in any order, replacing untouched open sessions, blocking switches after sets are logged, rejecting days already done this week, and cross-user isolation
+- PPL exercise swaps: same-muscle options, one-off vs. permanent scope, no progression of the plan exercise after a one-off swap, rejection after sets are logged, and cross-user isolation
+- PPL generic-accessory swaps (last logged weight, cardio and other users' accessories excluded) and per-exercise bars (user-owned bars only, remembered for future sessions, plate loading per bar, default fallback when a bar is deleted)
 - Exercise-library search/filtering, custom-exercise ownership isolation, and PPL catalog selection
 - Multi-user isolation of settings, bars, programs, accessories, latest accessory weights, and the dashboard's current-cycle lookup
 - Exercise-name matching (equivalent names auto-match, different movements/equipment are rejected) and accessory weight rep-range conversion

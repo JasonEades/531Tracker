@@ -1720,6 +1720,9 @@ namespace FiveThreeOneTracker.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("BarId")
+                        .HasColumnType("integer");
+
                     b.Property<double?>("CurrentWeight")
                         .HasColumnType("double precision");
 
@@ -1769,6 +1772,8 @@ namespace FiveThreeOneTracker.Migrations
                         .HasColumnType("boolean");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BarId");
 
                     b.HasIndex("ExerciseDefinitionId");
 
@@ -1873,6 +1878,9 @@ namespace FiveThreeOneTracker.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<int?>("BarId")
+                        .HasColumnType("integer");
+
                     b.Property<string>("ExerciseName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -1900,6 +1908,8 @@ namespace FiveThreeOneTracker.Migrations
                         .HasColumnType("integer");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("BarId");
 
                     b.HasIndex("PplExerciseSlotId");
 
@@ -2645,6 +2655,11 @@ namespace FiveThreeOneTracker.Migrations
 
             modelBuilder.Entity("FiveThreeOneTracker.Models.PplExerciseSlot", b =>
                 {
+                    b.HasOne("FiveThreeOneTracker.Models.Bar", "Bar")
+                        .WithMany()
+                        .HasForeignKey("BarId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("FiveThreeOneTracker.Models.ExerciseDefinition", "ExerciseDefinition")
                         .WithMany()
                         .HasForeignKey("ExerciseDefinitionId")
@@ -2660,6 +2675,8 @@ namespace FiveThreeOneTracker.Migrations
                         .HasForeignKey("PplDayTemplateId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Bar");
 
                     b.Navigation("DayTemplate");
 
@@ -2696,6 +2713,11 @@ namespace FiveThreeOneTracker.Migrations
 
             modelBuilder.Entity("FiveThreeOneTracker.Models.PplSessionExercise", b =>
                 {
+                    b.HasOne("FiveThreeOneTracker.Models.Bar", "Bar")
+                        .WithMany()
+                        .HasForeignKey("BarId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("FiveThreeOneTracker.Models.PplExerciseSlot", "ExerciseSlot")
                         .WithMany("SessionExercises")
                         .HasForeignKey("PplExerciseSlotId")
@@ -2707,6 +2729,8 @@ namespace FiveThreeOneTracker.Migrations
                         .HasForeignKey("PplSessionId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.Navigation("Bar");
 
                     b.Navigation("ExerciseSlot");
 

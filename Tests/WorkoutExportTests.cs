@@ -846,8 +846,9 @@ public sealed class WorkoutExportTests
         var programService = CreatePplProgramService(context, user);
         var sessionService = new PplSessionService(context, user);
         var progression = new PplProgressionService(context, calculator, user);
-        var swap = new PplExerciseSwapService(context, user, new EstimatedStrengthService(context, calculator), calculator);
-        var otherSwap = new PplExerciseSwapService(context, new TestCurrentUserService("other"), new EstimatedStrengthService(context, calculator), calculator);
+        var swap = new PplExerciseSwapService(context, user, new EstimatedStrengthService(context, calculator), calculator, new AccessoryService(context, user));
+        var otherUser = new TestCurrentUserService("other");
+        var otherSwap = new PplExerciseSwapService(context, otherUser, new EstimatedStrengthService(context, calculator), calculator, new AccessoryService(context, otherUser));
 
         var program = await programService.CreateProgramAsync("PPL", 3);
         var session = await programService.GetOrCreateNextSessionAsync(program.Id);
@@ -898,6 +899,130 @@ public sealed class WorkoutExportTests
         var nextPushDetails = await sessionService.GetSessionWithDetailsAsync(nextPush.Id);
         Assert.Contains(nextPushDetails!.Exercises, e => e.ExerciseName == "Skull Crusher");
         Assert.Contains(nextPushDetails.Exercises, e => e.ExerciseName == "Incline DB Press");
+    }
+
+    [Fact]
+    public async Task PplExerciseBarIsUserScopedRememberedAndDrivesPlateLoading()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new TestCurrentUserService("owner");
+        var programService = CreatePplProgramService(context, user);
+        var sessionService = new PplSessionService(context, user);
+        var otherSessionService = new PplSessionService(context, new TestCurrentUserService("other"));
+        var plates = new PlateCalculatorService(context, user);
+
+        var olympic = new Bar { UserId = "owner", Name = "Olympic", Weight = 45, IsDefault = true };
+        var ezBar = new Bar { UserId = "owner", Name = "EZ Curl", Weight = 25 };
+        var otherBar = new Bar { UserId = "other", Name = "Theirs", Weight = 35, IsDefault = true };
+        context.Bars.AddRange(olympic, ezBar, otherBar);
+        await context.SaveChangesAsync();
+
+        var program = await programService.CreateProgramAsync("PPL", 3);
+        var session = await programService.GetOrCreateNextSessionAsync(program.Id);
+        var exercise = (await sessionService.GetSessionWithDetailsAsync(session.Id))!.Exercises.First();
+        Assert.Null(exercise.BarId);
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => otherSessionService.SetExerciseBarAsync(exercise.Id, otherBar.Id));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sessionService.SetExerciseBarAsync(exercise.Id, otherBar.Id));
+
+        await sessionService.SetExerciseBarAsync(exercise.Id, ezBar.Id);
+        context.ChangeTracker.Clear();
+        var saved = await context.PplSessionExercises.Include(e => e.ExerciseSlot).SingleAsync(e => e.Id == exercise.Id);
+        Assert.Equal(ezBar.Id, saved.BarId);
+        Assert.Equal(ezBar.Id, saved.ExerciseSlot.BarId);
+
+        // Plates are calculated against the selected bar: 135 on a 25 lb bar needs 55/side, not 45/side.
+        var onOlympic = await plates.CalculatePlates(135, olympic.Weight);
+        var onEz = await plates.CalculatePlates(135, ezBar.Weight);
+        Assert.Equal(45, onOlympic.Sum(p => p.PlateWeight * p.CountPerSide));
+        Assert.Equal(55, onEz.Sum(p => p.PlateWeight * p.CountPerSide));
+
+        // The next session of the same plan exercise remembers the bar.
+        await sessionService.CompleteSessionAsync(session.Id);
+        for (var i = 0; i < 2; i++)
+        {
+            var between = await programService.GetOrCreateNextSessionAsync(program.Id);
+            await sessionService.CompleteSessionAsync(between.Id);
+        }
+        var nextPush = await programService.GetOrCreateNextSessionAsync(program.Id);
+        context.ChangeTracker.Clear();
+        var remembered = await context.PplSessionExercises.SingleAsync(e => e.PplSessionId == nextPush.Id && e.PplExerciseSlotId == saved.PplExerciseSlotId);
+        Assert.Equal(ezBar.Id, remembered.BarId);
+
+        // Deleting the bar falls back to the default bar.
+        await plates.DeleteBarAsync(ezBar.Id);
+        context.ChangeTracker.Clear();
+        Assert.Null((await context.PplSessionExercises.SingleAsync(e => e.Id == remembered.Id)).BarId);
+    }
+
+    [Fact]
+    public async Task PplSwapToGenericAccessoryStartsFromLastUsedWeight()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new TestCurrentUserService("owner");
+        var otherUser = new TestCurrentUserService("other");
+        var calculator = new WeightCalculator();
+        var programService = CreatePplProgramService(context, user);
+        var sessionService = new PplSessionService(context, user);
+        var swap = new PplExerciseSwapService(context, user, new EstimatedStrengthService(context, calculator), calculator, new AccessoryService(context, user));
+        var otherSwap = new PplExerciseSwapService(context, otherUser, new EstimatedStrengthService(context, calculator), calculator, new AccessoryService(context, otherUser));
+
+        var landmine = new Accessory { UserId = "owner", Name = "Landmine Press" };
+        var neverLogged = new Accessory { UserId = "owner", Name = "Svend Press" };
+        var rower = new Accessory { UserId = "owner", Name = "Rowing Machine", Category = AccessoryCategory.Cardio };
+        var theirs = new Accessory { UserId = "other", Name = "Their Secret Press" };
+        context.Accessories.AddRange(landmine, neverLogged, rower, theirs);
+        context.AccessoryHistory.AddRange(
+            new AccessoryHistory { Accessory = landmine, UserId = "owner", Weight = 70, Reps = 10, Sets = 3, RecordedAt = new DateTime(2026, 9, 1) },
+            new AccessoryHistory { Accessory = landmine, UserId = "owner", Weight = 75, Reps = 6, Sets = 3, RecordedAt = new DateTime(2026, 10, 1) },
+            new AccessoryHistory { Accessory = landmine, UserId = "other", Weight = 200, Reps = 10, Sets = 3, RecordedAt = new DateTime(2026, 10, 20) });
+        await context.SaveChangesAsync();
+
+        var program = await programService.CreateProgramAsync("PPL", 3);
+        var session = await programService.GetOrCreateNextSessionAsync(program.Id);
+        var details = await sessionService.GetSessionWithDetailsAsync(session.Id);
+        var incline = details!.Exercises.Single(e => e.ExerciseName == "Incline DB Press");
+        var pushdown = details.Exercises.Single(e => e.ExerciseName == "Tricep Pushdown");
+
+        var accessoryOptions = await swap.GetAccessorySwapOptionsAsync(incline.Id);
+        var landmineOption = accessoryOptions.Single(o => o.AccessoryId == landmine.Id);
+        Assert.Equal(75, landmineOption.LastWeight);
+        Assert.Contains(accessoryOptions, o => o.AccessoryId == neverLogged.Id && o.LastWeight == null);
+        Assert.DoesNotContain(accessoryOptions, o => o.AccessoryId == rower.Id || o.AccessoryId == theirs.Id);
+        Assert.Empty(await otherSwap.GetAccessorySwapOptionsAsync(incline.Id));
+
+        await Assert.ThrowsAsync<InvalidOperationException>(() => otherSwap.SwapToAccessoryAsync(incline.Id, landmine.Id, PplSwapScope.ThisWorkout));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => swap.SwapToAccessoryAsync(incline.Id, theirs.Id, PplSwapScope.ThisWorkout));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => swap.SwapToAccessoryAsync(incline.Id, rower.Id, PplSwapScope.ThisWorkout));
+
+        // One-off: starts at the most recent logged weight; the plan slot is untouched.
+        await swap.SwapToAccessoryAsync(incline.Id, landmine.Id, PplSwapScope.ThisWorkout);
+        context.ChangeTracker.Clear();
+        var oneOff = await context.PplSessionExercises.Include(e => e.ExerciseSlot).SingleAsync(e => e.Id == incline.Id);
+        Assert.Equal("Landmine Press", oneOff.ExerciseName);
+        Assert.Equal(75, oneOff.SuggestedWeight);
+        Assert.Equal("Incline DB Press", oneOff.ExerciseSlot.ExerciseName);
+
+        // Permanent: the plan slot becomes the accessory, keeping its muscle group.
+        await swap.SwapToAccessoryAsync(pushdown.Id, neverLogged.Id, PplSwapScope.FutureWorkouts);
+        context.ChangeTracker.Clear();
+        var slot = await context.PplExerciseSlots.SingleAsync(s => s.Id == pushdown.PplExerciseSlotId);
+        Assert.Equal("Svend Press", slot.ExerciseName);
+        Assert.Null(slot.ExerciseDefinitionId);
+        Assert.Equal(MuscleGroup.Triceps, slot.MuscleGroup);
+        Assert.Null(slot.CurrentWeight);
     }
 
     [Fact]

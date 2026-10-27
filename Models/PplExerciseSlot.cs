@@ -48,5 +48,9 @@ public class PplExerciseSlot
 
     public bool IsBodyweight { get; set; }
 
+    /// <summary>Bar remembered for plate loading in future sessions. Null = the user's default bar.</summary>
+    public int? BarId { get; set; }
+    public Bar? Bar { get; set; }
+
     public ICollection<PplSessionExercise> SessionExercises { get; set; } = [];
 }

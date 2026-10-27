@@ -15,6 +15,8 @@ public interface IPplSessionService
     Task UpdateSessionNotesAsync(int sessionId, string? notes);
     Task UpdateSetAsync(int setId, double? actualWeight, int? actualReps, bool isCompleted);
     Task SetStartingWeightAsync(int exerciseSlotId, double weight);
+    /// <summary>Sets the bar used for plate loading (null = default bar) and remembers it for the plan exercise.</summary>
+    Task SetExerciseBarAsync(int sessionExerciseId, int? barId);
     Task<List<PplSession>> GetSessionHistoryAsync(int programId, int take = 30);
 }
 
@@ -150,6 +152,23 @@ public class PplSessionService(AppDbContext db, ICurrentUserService userContext)
             set.IsCompleted = isCompleted;
             await db.SaveChangesAsync();
         }
+    }
+
+    public async Task SetExerciseBarAsync(int sessionExerciseId, int? barId)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var exercise = await db.PplSessionExercises
+            .Include(e => e.ExerciseSlot)
+            .FirstOrDefaultAsync(e => e.Id == sessionExerciseId && e.Session.Program.UserId == userId)
+            ?? throw new InvalidOperationException("Exercise was not found.");
+        if (barId is int id && !await db.Bars.AnyAsync(b => b.Id == id && b.UserId == userId))
+            throw new InvalidOperationException("The selected bar is unavailable.");
+
+        exercise.BarId = barId;
+        // Remember the bar for future sessions of the plan exercise, but not for a one-off swap.
+        if (string.Equals(exercise.ExerciseName, exercise.ExerciseSlot.ExerciseName, StringComparison.OrdinalIgnoreCase))
+            exercise.ExerciseSlot.BarId = barId;
+        await db.SaveChangesAsync();
     }
 
     public async Task<List<PplSession>> GetSessionHistoryAsync(int programId, int take = 30)

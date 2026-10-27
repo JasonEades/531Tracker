@@ -28,6 +28,10 @@ public class PplSessionExercise
 
     public int OrderInSession { get; set; }
 
+    /// <summary>Bar used for plate loading in this session. Null = the user's default bar.</summary>
+    public int? BarId { get; set; }
+    public Bar? Bar { get; set; }
+
     public bool IsCompleted => Sets.Count > 0 && Sets.All(s => s.IsCompleted);
 
     public ICollection<PplSessionSet> Sets { get; set; } = [];

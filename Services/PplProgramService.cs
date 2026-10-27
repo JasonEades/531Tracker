@@ -188,7 +188,8 @@ public class PplProgramService(
                     IsBodyweight = exercise.IsBodyweight,
                     ProgressionIncrement = exercise.ProgressionIncrement,
                     StartingWeight = keepProgress ? source!.StartingWeight : derivedWeight,
-                    CurrentWeight = keepProgress ? source!.CurrentWeight : derivedWeight
+                    CurrentWeight = keepProgress ? source!.CurrentWeight : derivedWeight,
+                    BarId = keepProgress ? source!.BarId : null
                 });
             }
 
@@ -492,6 +493,7 @@ public class PplProgramService(
                 RepsMin = slot.RepsMin,
                 RepsMax = slot.RepsMax,
                 SuggestedWeight = slot.CurrentWeight,
+                BarId = slot.BarId,
                 OrderInSession = order++
             };
             db.PplSessionExercises.Add(exercise);

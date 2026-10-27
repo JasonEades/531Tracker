@@ -206,6 +206,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
                   .WithMany()
                   .HasForeignKey(e => e.ExerciseDefinitionId)
                   .OnDelete(DeleteBehavior.SetNull);
+            entity.HasOne(e => e.Bar)
+                  .WithMany()
+                  .HasForeignKey(e => e.BarId)
+                  .OnDelete(DeleteBehavior.SetNull);
             entity.HasOne(e => e.Lift)
                   .WithMany()
                   .HasForeignKey(e => e.LiftId)
@@ -337,6 +341,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
                   .WithMany(s => s.SessionExercises)
                   .HasForeignKey(e => e.PplExerciseSlotId)
                   .OnDelete(DeleteBehavior.Restrict);
+            entity.HasOne(e => e.Bar)
+                  .WithMany()
+                  .HasForeignKey(e => e.BarId)
+                  .OnDelete(DeleteBehavior.SetNull);
             entity.HasMany(e => e.Sets)
                   .WithOne(s => s.SessionExercise)
                   .HasForeignKey(s => s.PplSessionExerciseId)
