@@ -20,6 +20,10 @@ public class Accessory
 
     public bool IsActive { get; set; } = true;
 
+    /// <summary>Library entry this accessory represents; null for legacy custom accessories without library details.</summary>
+    public int? ExerciseDefinitionId { get; set; }
+    public ExerciseDefinition? ExerciseDefinition { get; set; }
+
     public ICollection<WorkoutAccessory> WorkoutAccessories { get; set; } = [];
     public ICollection<AccessoryHistory> History { get; set; } = [];
 }

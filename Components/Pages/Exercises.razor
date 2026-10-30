@@ -7,11 +7,29 @@
 <PageTitle>Exercises — Jason's Garage Lab</PageTitle>
 
 <div>
-    <div class="page-header mb-4">
+    <div class="page-header mb-3">
         <h1>Exercises</h1>
+        <p class="page-subtitle">Your training history, the exercise library, and 5/3/1 training maxes in one place</p>
     </div>
 
-    @if (loading)
+    <div class="exercise-tabs mb-3" role="tablist">
+        @foreach (var (key, label) in Tabs)
+        {
+            <button role="tab" aria-selected="@(ActiveTab == key)"
+                    class="btn btn-sm @(ActiveTab == key ? "btn-primary" : "btn-outline")"
+                    @onclick="() => SelectTab(key)">@label</button>
+        }
+    </div>
+
+    @if (ActiveTab == "library")
+    {
+        <ExerciseLibraryPanel />
+    }
+    else if (ActiveTab == "lifts")
+    {
+        <MainLiftsPanel />
+    }
+    else if (loading)
     {
         <div class="loading"><div class="spinner"></div></div>
     }
@@ -52,6 +70,18 @@
 </div>
 
 @code {
+    private static readonly (string Key, string Label)[] Tabs =
+    [
+        ("history", "History"),
+        ("library", "Library"),
+        ("lifts", "Training Maxes")
+    ];
+
+    [SupplyParameterFromQuery(Name = "tab")]
+    public string? Tab { get; set; }
+
+    private string ActiveTab => Tab is "library" or "lifts" ? Tab : "history";
+
     private List<ExerciseSummary> exercises = [];
     private string search = string.Empty;
     private bool loading = true;
@@ -73,6 +103,9 @@
     private void OnSearch(ChangeEventArgs e) => search = e.Value?.ToString() ?? string.Empty;
 
     private void Open(string key) => Nav.NavigateTo($"/exercises/{key}");
+
+    private void SelectTab(string key) =>
+        Nav.NavigateTo(key == "history" ? "/exercises" : $"/exercises?tab={key}");
 
     private static string FormatWeight(double value) => value <= 0 ? "—" : $"{Math.Round(value):0} lb";
 }

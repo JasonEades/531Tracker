@@ -62,7 +62,8 @@ The `+` marks the final set as AMRAP (as many reps as possible). The optional 5s
 - Optional FSL (First Set Last) 5×5 work
 - Optional warmup sets
 - Estimated 1RM using the Epley formula
-- Accessory exercise tracking
+- Dashboard **Progress Since Day One** card: for Squat, Bench Press, Deadlift, and Overhead Press, shows your estimated 1RM from your very first logged session vs. your most recent session (change in lb and %), with an all-time line chart of per-session best e1RM across 5/3/1 main work (deload weeks excluded) and PPL sessions — PPL exercises count when their slot is linked to a 5/3/1 lift or the name matches a main lift (e.g. "Barbell Back Squat", "BB Bench", "OHP"), while variations like Front Squat, RDL, Incline, Dumbbell, or Trap Bar are excluded
+- **Exercises hub** at `/exercises` with three tabs: **History** (every exercise you have trained across 5/3/1 main/BBB/FSL sets, 5/3/1 accessory logs, PPL, and additional strength work, with best e1RM per exercise), **Library** (the exercise catalog plus your custom exercises), and **Training Maxes** (5/3/1 training maxes and BBB setup). The old `/lifts`, `/accessories`, and `/exercise-library` URLs redirect to the matching tab
 - Plate-loading calculator based on available plates and bar weight
 - Equipment configuration for bars and plate inventory
 
@@ -119,13 +120,13 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 
 - Three-day or six-day splits
 - Choose any day of the current week from the dashboard: the PPL card lists every session for the week with Done / In progress / Up next state, and you can start them in any order (e.g. Pull before Push). Viewing the dashboard never creates sessions; switching days replaces an open session only if no sets have been logged, and the week advances once every day is complete
-- Searchable exercise library with 81 curated strength exercises, muscle and equipment filters, exercise instructions, and account-private custom entries; PPL workout configuration selects catalog or custom exercises while retaining legacy labels and historical exercise-name snapshots
+- Searchable exercise library with 77 curated strength exercises (one entry per movement; accessories and the library are a single list — every 5/3/1 accessory is linked to its library exercise, so it appears once in pickers and shares last-used weights and history across names); older custom accessories with no library match are listed under **Your other exercises**, where you can link them to a library exercise or hide them), muscle and equipment filters, exercise instructions, and account-private custom entries; PPL workout configuration selects catalog or custom exercises while retaining legacy labels and historical exercise-name snapshots
 - Week-by-week workout configuration at `/ppl/{id}/workouts`: edit workout names, exercises, muscle groups, sets, and rep ranges per week; unconfigured weeks use the default schedule
 - **Add Accessory Exercise** on any PPL day; accessories carry into generated sessions
 - **⇄ Swap** any exercise in an unstarted PPL session for another catalog or custom exercise that trains the same muscle (same movement type listed first). Choose **This workout only** (the plan and its weight stay unchanged) or **All future workouts** (replaces the plan exercise). The swapped exercise's weight is derived from your e1RM history when available, otherwise from a matching logged accessory. You can also swap to any of your generic accessories (cardio excluded); it starts at the last weight you logged for that accessory
 - **Change bar** on any weighted PPL exercise (e.g. EZ curl, trap, or women's bar from Settings): the plate breakdown recalculates for that bar's weight and the choice is remembered for future sessions of that plan exercise (one-off swaps reset to the default bar)
 - Changing a set's weight in a PPL session carries it forward to every later set of that exercise that isn't checked off yet, so you only enter a new weight once (earlier and completed sets are left alone)
-- Each PPL set shows **Last: N reps @ W lbs** from the same set number in your most recent earlier session of that exercise (matched by exercise name across weeks and programs; only checked-off sets count)
+- Each PPL set shows **Last: N reps @ W lbs** from the same set number in your most recent earlier session of that exercise (matched by exercise name across weeks and programs; only checked-off sets count). If the exercise has never been done in PPL, it falls back to your latest earlier 5/3/1 accessory, main-lift, or additional-strength session with the same or a closely matching name, labelled with its source (e.g. **Last (5/3/1):**)
 - New programs derive starting weights from your previous training: each exercise uses the best e1RM from the most recent 5/3/1 cycle or PPL program that trained it (not the all-time best), then to your most recently logged weight for a matching accessory, falling back to manual entry when there is no history
 - Accessory matching during PPL setup: names are matched fuzzily (plurals, hyphens, DB/BB/Ext/RDL/OHP abbreviations) while conflicting equipment or movement words are rejected (e.g. Leg Curl ≠ Dumbbell Curl); each exercise has a "Use weight from" picker listing likely matches first, and logged weights outside the PPL rep range are converted via e1RM
 - Exercise slots and session tracking; set weights (0–2000 lbs) and reps (0–100) are validated
@@ -136,6 +137,7 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 - Completed-session history and volume statistics, viewable for any program
 - Program landing page at `/ppl/{id}` (opened from the History page or **View All Sessions** on the dashboard), similar to the 5/3/1 cycle page: an **Upcoming** tab shows this week's days (start, continue, or view each in any order) plus the next three planned weeks with each day's exercises, sets × reps, and current weights (customized weeks are flagged and editable), and a **Past** tab lists every logged week with session cards, volume stats, and additional sessions. The legacy `/ppl/history` route redirects here
 - Switch the active PPL program from the Workouts page or the program page
+- PPL programs are **Active**, **Paused**, or **Ended**: **Pause** keeps every session for later, **End Program** (with confirmation) finishes the program and removes only upcoming sessions with nothing logged, and **Resume**/**Restart** reactivates either. Logged history is always kept
 - Program deletion asks for confirmation and removes all of the program's sessions
 
 ### Notes, history, and exports
@@ -157,6 +159,10 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 - Admin user management at `/admin/users`
 - Disabled accounts are blocked from access
 
+### Roadmap
+
+Planned follow-ups (stable exercise identity on logged sets, and a guided 5/3/1 ↔ PPL switch flow) are tracked in [docs/Roadmap.md](docs/Roadmap.md).
+
 ---
 
 ## 🏗️ Architecture
@@ -172,7 +178,8 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 │   ├── CycleService            # Cycle creation and workout generation
 │   ├── WeightCalculator        # Training Max and set-scheme calculations
 │   ├── PlateCalculatorService  # Plate-loading calculations
-│   ├── AccessoryService        # Accessory tracking and latest logged weights (user-scoped)
+│   ├── AccessoryService        # 5/3/1 accessory logging, unified exercise picker (library + accessories), latest weights and cross-program suggestions (user-scoped)
+│   ├── ExerciseObservations    # Shared user-scoped loader of every logged set (5/3/1, accessories, PPL, additional) used by history, e1RM, and "last time" lookups
 │   ├── ExerciseNameMatcher     # Fuzzy exercise-name matching for accessory → PPL weight reuse
 │   ├── PplProgramService       # PPL program management
 │   ├── PplSessionService       # PPL session tracking
@@ -403,11 +410,14 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - PPL week plan: starting days in any order, replacing untouched open sessions, blocking switches after sets are logged, rejecting days already done this week, and cross-user isolation
 - PPL program overview: current, upcoming (default vs. customized), and past weeks, no sessions created by viewing, and cross-user isolation
 - PPL exercise swaps: same-muscle options, one-off vs. permanent scope, plan weight unchanged after a one-off swap, rejection after sets are logged, and cross-user isolation
+- PPL program Pause/End/Resume (End removes only untouched sessions, cross-user isolation) and cross-program history: PPL "Last" sets and library-exercise suggestions from 5/3/1 or PPL logs, fuzzy-named accessory logs in starting estimates, never using another user's data
 - PPL generic-accessory swaps (last logged weight, cardio and other users' accessories excluded) and per-exercise bars (user-owned bars only, remembered for future sessions, plate loading per bar, default fallback when a bar is deleted)
 - PPL set-weight carry-forward (later incomplete sets only, completed/earlier sets untouched, cross-user isolation)
 - PPL "last time" reps per set (most recent earlier session by name, completed sets only, cross-user isolation)
 - Exercise-library search/filtering, custom-exercise ownership isolation, and PPL catalog selection
+- Accessory/library merge: picker lists each exercise once, picking a library exercise creates one user-owned linked accessory (other users' accessories and custom exercises never reused), linked accessories share last-used weights, accessory logs appear in exercise history under the library name for their owner only, and the merge migration repoints PPL slots off removed duplicate entries and links existing accessories by name without renaming any history
 - Multi-user isolation of settings, bars, programs, accessories, latest accessory weights, and the dashboard's current-cycle lookup
+- Dashboard all-time compound progression (first session outside the 1-year window, 5/3/1 + PPL merged, deloads excluded, other users' data excluded)
 - Exercise-name matching (equivalent names auto-match, different movements/equipment are rejected) and accessory weight rep-range conversion
 - Sitemap, robots.txt, and SEO metadata for published content
 

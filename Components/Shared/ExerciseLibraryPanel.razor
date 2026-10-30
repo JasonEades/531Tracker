@@ -1,19 +1,11 @@
-@page "/exercise-library"
-@attribute [Authorize]
-@rendermode InteractiveServer
 @inject IExerciseLibraryService Library
+@inject IAccessoryService AccessoryService
 @inject NavigationManager Nav
 
-<PageTitle>Exercise Library — Jason's Garage Lab</PageTitle>
+@* Exercise catalog plus the user's custom exercises. Hosted on the Exercises hub. *@
 
 <div>
-    <div class="page-header mb-4">
-        <div class="flex items-center gap-1">
-            <h1>Exercise Library</h1>
-            <a class="btn btn-ghost btn-sm" href="/exercises">Training history</a>
-        </div>
-        <p>Browse exercise references or add your own private exercise.</p>
-    </div>
+    <p class="text-muted mb-3">Every exercise you can pick in 5/3/1 accessories and PPL. Add your own private exercise at the bottom.</p>
 
     <div class="setup-card mb-3">
         <div class="form-group">
@@ -75,6 +67,41 @@
         </div>
     }
 
+    @if (FilteredLegacy.Any())
+    {
+        <div class="section-header mt-3">
+            <h3>Your other exercises</h3>
+        </div>
+        <p class="text-muted mb-2" style="font-size:var(--text-sm)">
+            Older accessories that aren't in the library yet. Link one to a library exercise to merge them; logged history is kept.
+        </p>
+        <div class="exercise-index">
+            @foreach (var accessory in FilteredLegacy)
+            {
+                <div class="exercise-index-row">
+                    <div class="exercise-index-main">
+                        <div class="exercise-index-name">@accessory.Name</div>
+                        <div class="exercise-index-meta">@(accessory.UserId is null ? "Built-in accessory" : "Custom accessory")</div>
+                    </div>
+                    @if (accessory.UserId is not null)
+                    {
+                        <div class="flex gap-1 items-center">
+                            <select class="form-control" aria-label="Link @accessory.Name to a library exercise"
+                                    @onchange="e => LinkAccessory(accessory.Id, e)">
+                                <option value="">Link to…</option>
+                                @foreach (var definition in allExercises)
+                                {
+                                    <option value="@definition.Id">@definition.Name</option>
+                                }
+                            </select>
+                            <button class="btn btn-ghost btn-sm" title="Hide" @onclick="() => HideAccessory(accessory.Id)">Hide</button>
+                        </div>
+                    }
+                </div>
+            }
+        </div>
+    }
+
     <details class="setup-card mt-3">
         <summary>Add a custom exercise</summary>
         <div class="form-group mt-2">
@@ -122,6 +149,8 @@
 
 @code {
     private List<ExerciseDefinition> exercises = [];
+    private List<ExerciseDefinition> allExercises = [];
+    private List<Accessory> legacyAccessories = [];
     private List<string> equipmentOptions = [];
     private string search = string.Empty;
     private string? muscleFilter;
@@ -141,14 +170,40 @@
         // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
         if (!RendererInfo.IsInteractive) return;
 
-        var allExercises = await Library.GetExercisesAsync();
+        allExercises = await Library.GetExercisesAsync();
         equipmentOptions = allExercises.Select(exercise => exercise.Equipment)
             .Where(value => !string.IsNullOrWhiteSpace(value))
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(value => value)
             .ToList();
         exercises = allExercises;
+        await LoadLegacyAccessories();
         loading = false;
+    }
+
+    private IEnumerable<Accessory> FilteredLegacy =>
+        string.IsNullOrEmpty(muscleFilter) && string.IsNullOrEmpty(equipmentFilter)
+            ? legacyAccessories.Where(a => string.IsNullOrWhiteSpace(search) || a.Name.Contains(search.Trim(), StringComparison.OrdinalIgnoreCase))
+            : [];
+
+    private async Task LoadLegacyAccessories()
+    {
+        legacyAccessories = (await AccessoryService.GetAllAccessoriesAsync())
+            .Where(a => a.ExerciseDefinitionId is null && a.Category != AccessoryCategory.Cardio)
+            .ToList();
+    }
+
+    private async Task LinkAccessory(int accessoryId, ChangeEventArgs e)
+    {
+        if (!int.TryParse(e.Value?.ToString(), out var definitionId)) return;
+        await AccessoryService.LinkAccessoryAsync(accessoryId, definitionId);
+        await LoadLegacyAccessories();
+    }
+
+    private async Task HideAccessory(int accessoryId)
+    {
+        await AccessoryService.DeleteAccessoryAsync(accessoryId);
+        await LoadLegacyAccessories();
     }
 
     private async Task LoadExercises()

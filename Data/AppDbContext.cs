@@ -1,4 +1,4 @@
-﻿using FiveThreeOneTracker.Models;
+using FiveThreeOneTracker.Models;
 using Microsoft.AspNetCore.DataProtection.EntityFrameworkCore;
 using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
@@ -120,6 +120,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
         modelBuilder.Entity<Accessory>(entity =>
         {
             entity.Property(e => e.Category).HasConversion<string>();
+            entity.HasOne(e => e.ExerciseDefinition)
+                  .WithMany()
+                  .HasForeignKey(e => e.ExerciseDefinitionId)
+                  .OnDelete(DeleteBehavior.SetNull);
         });
 
         modelBuilder.Entity<AccessoryHistory>(entity =>
@@ -357,21 +361,21 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
     private static void SeedData(ModelBuilder modelBuilder)
     {
         modelBuilder.Entity<Accessory>().HasData(
-            new Accessory { Id = 1, Name = "Barbell Row", Description = "Bent-over barbell row", Category = AccessoryCategory.Strength },
-            new Accessory { Id = 2, Name = "Dumbbell Row", Description = "Single-arm dumbbell row" },
-            new Accessory { Id = 3, Name = "Lat Pulldown", Description = "Cable lat pulldown" },
-            new Accessory { Id = 4, Name = "Face Pull", Description = "Cable face pull" },
-            new Accessory { Id = 5, Name = "Dips", Description = "Parallel bar dips" },
-            new Accessory { Id = 6, Name = "Chin-Ups", Description = "Chin-ups / pull-ups" },
-            new Accessory { Id = 7, Name = "Leg Curl", Description = "Lying or seated leg curl" },
-            new Accessory { Id = 8, Name = "Leg Press", Description = "Machine leg press" },
-            new Accessory { Id = 9, Name = "Ab Wheel", Description = "Ab wheel rollout" },
-            new Accessory { Id = 10, Name = "Hanging Leg Raise", Description = "Hanging leg raise" },
-            new Accessory { Id = 11, Name = "Dumbbell Curl", Description = "Standing dumbbell curl" },
-            new Accessory { Id = 12, Name = "Tricep Pushdown", Description = "Cable tricep pushdown" },
-            new Accessory { Id = 13, Name = "Lateral Raise", Description = "Dumbbell lateral raise" },
-            new Accessory { Id = 14, Name = "Romanian Deadlift", Description = "Romanian deadlift" },
-            new Accessory { Id = 15, Name = "Bulgarian Split Squat", Description = "Rear foot elevated split squat", Category = AccessoryCategory.Strength },
+            new Accessory { Id = 1, ExerciseDefinitionId = -9, Name = "Barbell Row", Description = "Bent-over barbell row", Category = AccessoryCategory.Strength },
+            new Accessory { Id = 2, ExerciseDefinitionId = -32, Name = "Dumbbell Row", Description = "Single-arm dumbbell row" },
+            new Accessory { Id = 3, ExerciseDefinitionId = -8, Name = "Lat Pulldown", Description = "Cable lat pulldown" },
+            new Accessory { Id = 4, ExerciseDefinitionId = -13, Name = "Face Pulls", Description = "Cable face pull" },
+            new Accessory { Id = 5, ExerciseDefinitionId = -27, Name = "Dips", Description = "Parallel bar dips" },
+            new Accessory { Id = 6, ExerciseDefinitionId = -34, Name = "Chin-Ups", Description = "Chin-ups / pull-ups" },
+            new Accessory { Id = 7, ExerciseDefinitionId = -19, Name = "Leg Curl", Description = "Lying or seated leg curl" },
+            new Accessory { Id = 8, ExerciseDefinitionId = -18, Name = "Leg Press", Description = "Machine leg press" },
+            new Accessory { Id = 9, ExerciseDefinitionId = -35, Name = "Ab Wheel", Description = "Ab wheel rollout" },
+            new Accessory { Id = 10, ExerciseDefinitionId = -36, Name = "Hanging Leg Raise", Description = "Hanging leg raise" },
+            new Accessory { Id = 11, ExerciseDefinitionId = -11, Name = "Dumbbell Curl", Description = "Standing dumbbell curl" },
+            new Accessory { Id = 12, ExerciseDefinitionId = -5, Name = "Tricep Pushdown", Description = "Cable tricep pushdown" },
+            new Accessory { Id = 13, ExerciseDefinitionId = -4, Name = "Lateral Raise", Description = "Dumbbell lateral raise" },
+            new Accessory { Id = 14, ExerciseDefinitionId = -17, Name = "Romanian Deadlift", Description = "Romanian deadlift" },
+            new Accessory { Id = 15, ExerciseDefinitionId = -22, Name = "Bulgarian Split Squat", Description = "Rear foot elevated split squat", Category = AccessoryCategory.Strength },
             new Accessory { Id = 16, Name = "Rowing", Category = AccessoryCategory.Cardio },
             new Accessory { Id = 17, Name = "Biking", Category = AccessoryCategory.Cardio },
             new Accessory { Id = 18, Name = "Walking", Category = AccessoryCategory.Cardio },
@@ -417,14 +421,12 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
             new ExerciseDefinition { Id = -29, Name = "Incline DB Curl", PrimaryMuscle = MuscleGroup.Biceps, SecondaryMuscles = "Forearms", Equipment = "Dumbbell, incline bench", MovementType = "Elbow flexion", Instructions = "Sit against an incline bench with arms hanging. Curl the dumbbells without swinging, then lower fully under control." },
             new ExerciseDefinition { Id = -31, Name = "Seated Calf Raise", PrimaryMuscle = MuscleGroup.Calves, SecondaryMuscles = "Soleus", Equipment = "Seated calf raise machine", MovementType = "Plantar flexion", Instructions = "Lower your heels under control, then raise them as high as comfortable. Pause briefly and avoid bouncing." },
             new ExerciseDefinition { Id = -32, Name = "Dumbbell Row", PrimaryMuscle = MuscleGroup.Back, SecondaryMuscles = "Biceps, rear delts", Equipment = "Dumbbell, bench", MovementType = "Horizontal pull", Instructions = "Support one hand and knee on a bench. Pull the dumbbell toward your hip while keeping your torso steady, then lower it under control." },
-            new ExerciseDefinition { Id = -33, Name = "Face Pull", PrimaryMuscle = MuscleGroup.RearDelts, SecondaryMuscles = "Upper back, external rotators", Equipment = "Cable, rope attachment", MovementType = "Horizontal pull", Instructions = "Set the cable around face height. Pull the rope toward your face with elbows high, then return while keeping your shoulders controlled." },
             new ExerciseDefinition { Id = -34, Name = "Chin-Ups", PrimaryMuscle = MuscleGroup.Back, SecondaryMuscles = "Biceps, forearms", Equipment = "Pull-up bar", MovementType = "Vertical pull", Instructions = "Use an underhand grip. Pull until your chin clears the bar, then lower to a controlled hang." },
             new ExerciseDefinition { Id = -35, Name = "Ab Wheel", PrimaryMuscle = MuscleGroup.Core, SecondaryMuscles = "Shoulders, lats", Equipment = "Ab wheel", MovementType = "Anti-extension", Instructions = "Kneel with the wheel under your shoulders. Brace your trunk and roll forward only as far as you can control, then return without arching your back." },
             new ExerciseDefinition { Id = -36, Name = "Hanging Leg Raise", PrimaryMuscle = MuscleGroup.Core, SecondaryMuscles = "Hip flexors, lats", Equipment = "Pull-up bar", MovementType = "Hip flexion", Instructions = "Hang from a stable bar and brace. Raise your knees or straight legs without swinging, then lower slowly." },
             new ExerciseDefinition { Id = -37, Name = "DB Shoulder Press", PrimaryMuscle = MuscleGroup.Shoulders, SecondaryMuscles = "Triceps, upper chest", Equipment = "Dumbbell, bench", MovementType = "Vertical push", Instructions = "Start with dumbbells at shoulder height. Brace and press overhead, then lower them under control." },
             new ExerciseDefinition { Id = -38, Name = "Barbell Curl", PrimaryMuscle = MuscleGroup.Biceps, SecondaryMuscles = "Forearms", Equipment = "Barbell", MovementType = "Elbow flexion", Instructions = "Stand tall with the bar at arm's length. Curl toward your shoulders without swinging, then lower under control." },
             new ExerciseDefinition { Id = -39, Name = "Dumbbell Bench Press", PrimaryMuscle = MuscleGroup.Chest, SecondaryMuscles = "Triceps, shoulders", Equipment = "Dumbbell, flat bench", MovementType = "Horizontal push", Instructions = "Lie on a flat bench with dumbbells over your chest. Lower them beside your chest, then press up smoothly." },
-            new ExerciseDefinition { Id = -40, Name = "Flat Dumbbell Press", PrimaryMuscle = MuscleGroup.Chest, SecondaryMuscles = "Triceps, shoulders", Equipment = "Dumbbell, flat bench", MovementType = "Horizontal push", Instructions = "Lie on a flat bench with dumbbells over your chest. Lower them beside your chest, then press up smoothly." },
             new ExerciseDefinition { Id = -41, Name = "Close-Grip Bench Press", PrimaryMuscle = MuscleGroup.Triceps, SecondaryMuscles = "Chest, shoulders", Equipment = "Barbell, bench", MovementType = "Horizontal push", Instructions = "Use a comfortable grip narrower than your regular bench press. Lower the bar under control and press while keeping wrists stacked over elbows." },
             new ExerciseDefinition { Id = -42, Name = "Push-Up", PrimaryMuscle = MuscleGroup.Chest, SecondaryMuscles = "Triceps, shoulders, core", Equipment = "Bodyweight", MovementType = "Horizontal push", Instructions = "Keep your body in a straight line. Lower your chest toward the floor with elbows controlled, then press back to the starting position." },
             new ExerciseDefinition { Id = -43, Name = "Machine Chest Press", PrimaryMuscle = MuscleGroup.Chest, SecondaryMuscles = "Triceps, shoulders", Equipment = "Chest press machine", MovementType = "Horizontal push", Instructions = "Adjust the seat so the handles are near chest level. Press forward without locking your elbows, then return slowly." },
@@ -434,12 +436,10 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
             new ExerciseDefinition { Id = -47, Name = "Reverse Pec Deck", PrimaryMuscle = MuscleGroup.RearDelts, SecondaryMuscles = "Upper back", Equipment = "Pec deck machine", MovementType = "Shoulder horizontal abduction", Instructions = "Face the machine pads and hold the handles. Move your arms outward with control, then return without letting the weights drop." },
             new ExerciseDefinition { Id = -48, Name = "Cable Lateral Raise", PrimaryMuscle = MuscleGroup.Shoulders, SecondaryMuscles = "Traps", Equipment = "Cable", MovementType = "Shoulder isolation", Instructions = "Stand beside a low cable with the handle in your outside hand. Raise your arm out to shoulder height, then lower slowly." },
             new ExerciseDefinition { Id = -49, Name = "Front Raise", PrimaryMuscle = MuscleGroup.Shoulders, SecondaryMuscles = "Upper chest", Equipment = "Dumbbell", MovementType = "Shoulder flexion", Instructions = "Raise the weights in front of you to about shoulder height with elbows slightly bent, then lower under control." },
-            new ExerciseDefinition { Id = -50, Name = "Dumbbell Shoulder Press", PrimaryMuscle = MuscleGroup.Shoulders, SecondaryMuscles = "Triceps, upper chest", Equipment = "Dumbbell, bench", MovementType = "Vertical push", Instructions = "Start with dumbbells at shoulder height. Brace and press overhead, then lower them under control." },
             new ExerciseDefinition { Id = -51, Name = "Upright Row", PrimaryMuscle = MuscleGroup.Shoulders, SecondaryMuscles = "Traps, biceps", Equipment = "Barbell", MovementType = "Shoulder abduction", Instructions = "Use a comfortable grip and raise the bar in front of your torso only as high as your shoulders tolerate. Lower with control." },
             new ExerciseDefinition { Id = -52, Name = "Dumbbell Shrug", PrimaryMuscle = MuscleGroup.Back, SecondaryMuscles = "Traps, forearms", Equipment = "Dumbbell", MovementType = "Scapular elevation", Instructions = "Stand tall holding dumbbells at your sides. Raise your shoulders toward your ears without rolling them, then lower slowly." },
             new ExerciseDefinition { Id = -53, Name = "Pull-Up", PrimaryMuscle = MuscleGroup.Back, SecondaryMuscles = "Biceps, forearms", Equipment = "Pull-up bar", MovementType = "Vertical pull", Instructions = "Use an overhand grip. Pull until your chin clears the bar, then lower to a controlled hang." },
             new ExerciseDefinition { Id = -54, Name = "Chest-Supported Row", PrimaryMuscle = MuscleGroup.Back, SecondaryMuscles = "Biceps, rear delts", Equipment = "Dumbbell, incline bench", MovementType = "Horizontal pull", Instructions = "Lie chest-down on an incline bench. Row the weights toward your torso without lifting your chest, then lower slowly." },
-            new ExerciseDefinition { Id = -55, Name = "Seated Cable Row", PrimaryMuscle = MuscleGroup.Back, SecondaryMuscles = "Biceps, rear delts", Equipment = "Cable", MovementType = "Horizontal pull", Instructions = "Sit tall and brace. Pull the handle toward your torso by driving your elbows back, then extend your arms without rounding your back." },
             new ExerciseDefinition { Id = -56, Name = "Single-Arm Cable Row", PrimaryMuscle = MuscleGroup.Back, SecondaryMuscles = "Biceps, rear delts", Equipment = "Cable", MovementType = "Horizontal pull", Instructions = "Face a cable handle and brace your torso. Pull one elbow back toward your side, then return with control." },
             new ExerciseDefinition { Id = -57, Name = "Close-Grip Lat Pulldown", PrimaryMuscle = MuscleGroup.Back, SecondaryMuscles = "Biceps, rear delts", Equipment = "Cable, close-grip handle", MovementType = "Vertical pull", Instructions = "Sit with thighs secured and hold a close-grip handle. Pull toward your upper chest while keeping your torso steady, then return slowly." },
             new ExerciseDefinition { Id = -58, Name = "Straight-Arm Pulldown", PrimaryMuscle = MuscleGroup.Back, SecondaryMuscles = "Triceps, core", Equipment = "Cable", MovementType = "Shoulder extension", Instructions = "Stand facing a high cable with arms nearly straight. Pull the handle toward your thighs while keeping your torso still, then return slowly." },

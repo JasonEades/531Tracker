@@ -186,4 +186,84 @@ public sealed class AccessoryTests
         public Task<string> GetUserIdAsync() => Task.FromResult(userId);
         public Task<string?> GetUserIdOrNullAsync() => Task.FromResult<string?>(userId);
     }
+
+    [Fact]
+    public async Task ExerciseOptionsListEachLibraryExerciseOnceAndHideOtherUsersExercises()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        context.Users.AddRange(
+            new ApplicationUser { Id = "test-user", UserName = "test-user" },
+            new ApplicationUser { Id = "other-user", UserName = "other-user" });
+        context.Accessories.AddRange(
+            new Accessory { UserId = "test-user", Name = "Sled Push" },
+            new Accessory { UserId = "test-user", Name = "My Face Pulls", ExerciseDefinitionId = -13 },
+            new Accessory { UserId = "other-user", Name = "Their Lift" });
+        context.ExerciseDefinitions.Add(new ExerciseDefinition
+        {
+            UserId = "other-user", Name = "Their Custom", Instructions = "x"
+        });
+        await context.SaveChangesAsync();
+
+        var service = new AccessoryService(context, new TestCurrentUserService());
+        var exerciseOptions = await service.GetExerciseOptionsAsync();
+
+        var facePulls = Assert.Single(exerciseOptions, o => o.Name.Contains("Face Pull", StringComparison.OrdinalIgnoreCase));
+        Assert.Equal("a:4", facePulls.Key);
+        Assert.Equal("d:-10", Assert.Single(exerciseOptions, o => o.Name == "Cable Row").Key);
+        Assert.Contains(exerciseOptions, o => o.Name == "Sled Push" && o.Key.StartsWith("a:"));
+        Assert.Contains(exerciseOptions, o => o.Name == "Rowing" && o.IsCardio);
+        Assert.DoesNotContain(exerciseOptions, o => o.Name is "Their Lift" or "Their Custom");
+        Assert.Equal(exerciseOptions.Count, exerciseOptions.Select(o => o.Name.ToLowerInvariant()).Distinct().Count());
+    }
+
+    [Fact]
+    public async Task ResolvingALibraryExerciseCreatesOneUserScopedAccessoryAndMergesItsHistory()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        context.Users.AddRange(
+            new ApplicationUser { Id = "test-user", UserName = "test-user" },
+            new ApplicationUser { Id = "other-user", UserName = "other-user" });
+        var theirs = new Accessory { UserId = "other-user", Name = "Cable Row", ExerciseDefinitionId = -10 };
+        var otherDefinition = new ExerciseDefinition { UserId = "other-user", Name = "Their Custom", Instructions = "x" };
+        context.Accessories.Add(theirs);
+        context.ExerciseDefinitions.Add(otherDefinition);
+        await context.SaveChangesAsync();
+
+        var service = new AccessoryService(context, new TestCurrentUserService());
+        var accessoryId = await service.ResolveAccessoryIdAsync("d:-10");
+
+        Assert.NotEqual(theirs.Id, accessoryId);
+        var created = await context.Accessories.AsNoTracking().SingleAsync(a => a.Id == accessoryId);
+        Assert.Equal("test-user", created.UserId);
+        Assert.Equal(-10, created.ExerciseDefinitionId);
+        Assert.Equal("Cable Row", created.Name);
+        Assert.Equal(accessoryId, await service.ResolveAccessoryIdAsync("d:-10"));
+        Assert.Equal($"a:{accessoryId}", (await service.GetExerciseOptionsAsync()).Single(o => o.Name == "Cable Row").Key);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ResolveAccessoryIdAsync($"d:{otherDefinition.Id}"));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.ResolveAccessoryIdAsync($"a:{theirs.Id}"));
+
+        // An older, separately named accessory linked to the same exercise shares its last-used weight.
+        var legacy = new Accessory { UserId = "test-user", Name = "Seated Cable Row" };
+        var cycle = new Cycle { UserId = "test-user", Name = "Cycle" };
+        var workout = new Workout { Week = new Week { Cycle = cycle, WeekNumber = WeekNumber.Week1 }, MainLiftType = LiftType.Deadlift };
+        workout.WorkoutAccessories.Add(new WorkoutAccessory { Accessory = legacy, Weight = 140, Reps = 10, Sets = 3 });
+        context.Workouts.Add(workout);
+        await context.SaveChangesAsync();
+        Assert.Null(await service.GetSuggestedUsageAsync(accessoryId));
+
+        await service.LinkAccessoryAsync(legacy.Id, -10);
+        Assert.Equal(140, (await service.GetSuggestedUsageAsync(accessoryId))!.Weight);
+        Assert.Single(await service.GetLatestWeightsAsync(), w => w.Name == "Cable Row");
+        await Assert.ThrowsAsync<InvalidOperationException>(() => service.LinkAccessoryAsync(theirs.Id, -13));
+    }
 }

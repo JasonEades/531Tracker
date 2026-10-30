@@ -228,7 +228,7 @@ else
                         }
                         else
                         {
-                            <span class="badge badge-muted">Inactive</span>
+                            <span class="badge badge-muted">@prog.StatusLabel</span>
                         }
                         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-text-muted)"><polyline points="9 18 15 12 9 6"/></svg>
                     </div>
@@ -241,7 +241,12 @@ else
                     <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo($"/ppl/{prog.Id}/workouts")'>Configure Workouts</button>
                     @if (!prog.IsActive)
                     {
-                        <button class="btn btn-ghost btn-sm" @onclick="() => SetActivePplProgram(prog.Id)">Set Active</button>
+                        <button class="btn btn-ghost btn-sm" @onclick="() => SetActivePplProgram(prog.Id)">@(prog.IsEnded ? "Restart" : "Resume")</button>
+                    }
+                    else
+                    {
+                        <button class="btn btn-ghost btn-sm" @onclick="() => PausePplProgram(prog.Id)">Pause</button>
+                        <button class="btn btn-ghost btn-sm" @onclick="() => EndPplProgram(prog.Id)">End</button>
                     }
                     <button class="btn btn-sm" style="color:var(--color-danger);background:var(--color-danger-dim);"
                             @onclick="() => DeletePplProgram(prog.Id)">Delete</button>
@@ -318,6 +323,21 @@ else
     private async Task SetActivePplProgram(int id)
     {
         await PplService.SetActiveProgramAsync(id);
+        pplPrograms = await PplService.GetAllProgramsAsync();
+    }
+
+    private async Task PausePplProgram(int id)
+    {
+        await PplService.PauseProgramAsync(id);
+        pplPrograms = await PplService.GetAllProgramsAsync();
+    }
+
+    private async Task EndPplProgram(int id)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "End this PPL program? Logged sessions stay in your history; unstarted sessions are removed."))
+            return;
+
+        await PplService.EndProgramAsync(id);
         pplPrograms = await PplService.GetAllProgramsAsync();
     }
 

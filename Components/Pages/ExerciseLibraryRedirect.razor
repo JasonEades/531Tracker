@@ -1,0 +1,9 @@
+@page "/exercise-library"
+@attribute [Authorize]
+@inject NavigationManager Nav
+
+@* Merged into the Exercises hub; kept so old links and bookmarks still work. *@
+
+@code {
+    protected override void OnInitialized() => Nav.NavigateTo("/exercises?tab=library", replace: true);
+}

@@ -39,14 +39,21 @@ else
                 <h1>@program.Name</h1>
                 <div class="workout-meta-line">
                     @program.DaysPerWeek-day split · Created @program.CreatedAt.ToLocalTime().ToString("MMM d, yyyy")
-                    <span class="badge @(program.IsActive ? "badge-warning" : "badge-muted") ml-1">@(program.IsActive ? "Active" : "Inactive")</span>
+                    <span class="badge @(program.IsActive ? "badge-warning" : "badge-muted") ml-1">@program.StatusLabel</span>
                 </div>
             </div>
             <div class="workout-actions">
                 <ExportButtons Scope="WorkoutExportScope.PplProgram" Id="ProgramId" Label="program" OnError="SetError" />
                 @if (!program.IsActive)
                 {
-                    <button class="btn btn-primary btn-sm" @onclick="SetActive" disabled="@busy">Set Active</button>
+                    <button class="btn btn-primary btn-sm" @onclick="SetActive" disabled="@busy">@(program.IsEnded ? "Restart" : "Resume")</button>
+                }
+                else
+                {
+                    <button class="btn btn-outline btn-sm" @onclick="() => ChangeStatus(PplService.PauseProgramAsync)" disabled="@busy"
+                            title="Stop scheduling this program; resume any time">Pause</button>
+                    <button class="btn btn-outline btn-sm" @onclick="EndProgram" disabled="@busy"
+                            title="Finish this program; logged sessions and history are kept">End Program</button>
                 }
                 <button class="btn btn-outline btn-sm" @onclick="() => Configure(plan.WeekNumber)">Configure Workouts</button>
                 <button class="btn btn-sm" style="color:var(--color-danger);background:var(--color-danger-dim);"
@@ -301,6 +308,27 @@ else
         catch (InvalidOperationException ex)
         {
             error = ex.Message;
+            await LoadAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task EndProgram()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "End this PPL program? Logged sessions stay in your history; unstarted sessions are removed."))
+            return;
+        await ChangeStatus(PplService.EndProgramAsync);
+    }
+
+    private async Task ChangeStatus(Func<int, Task> change)
+    {
+        busy = true;
+        try
+        {
+            await change(ProgramId);
             await LoadAsync();
         }
         finally

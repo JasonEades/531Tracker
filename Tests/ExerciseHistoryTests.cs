@@ -128,6 +128,42 @@ public sealed class ExerciseHistoryTests
     }
 
     [Fact]
+    public async Task AccessoryLogsAppearUnderTheirLibraryNameForTheOwnerOnly()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var day = DateTime.UtcNow.Date.AddDays(-2);
+        var legacyRow = new Accessory { UserId = "test-user", Name = "Seated Cable Row", ExerciseDefinitionId = -10 };
+        var myWorkout = new Workout
+        {
+            Week = new Week { Cycle = new Cycle { UserId = "test-user", Name = "Mine" }, WeekNumber = WeekNumber.Week1 },
+            MainLiftType = LiftType.Deadlift,
+            OccurredOn = day
+        };
+        myWorkout.WorkoutAccessories.Add(new WorkoutAccessory { Accessory = legacyRow, Weight = 120, Reps = 10, Sets = 3, IsCompleted = true });
+        myWorkout.WorkoutAccessories.Add(new WorkoutAccessory { AccessoryId = 5, Weight = 25, Reps = 8, Sets = 2, IsCompleted = false });
+        var theirWorkout = new Workout
+        {
+            Week = new Week { Cycle = new Cycle { UserId = "other-user", Name = "Theirs" }, WeekNumber = WeekNumber.Week1 },
+            MainLiftType = LiftType.Deadlift,
+            OccurredOn = day
+        };
+        theirWorkout.WorkoutAccessories.Add(new WorkoutAccessory { AccessoryId = 1, Weight = 300, Reps = 5, Sets = 5, IsCompleted = true });
+        context.Workouts.AddRange(myWorkout, theirWorkout);
+        await context.SaveChangesAsync();
+
+        var service = new ExerciseHistoryService(context, new TestCurrentUserService(), new WeightCalculator());
+        var summary = Assert.Single(await service.GetExerciseSummariesAsync());
+
+        Assert.Equal("Cable Row", summary.Name);
+        Assert.Equal(day, summary.LastPerformed);
+        Assert.True(summary.Best1Rm > 120);
+    }
+    [Fact]
     public async Task UnknownExerciseKeyReturnsNull()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

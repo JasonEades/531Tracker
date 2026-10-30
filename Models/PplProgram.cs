@@ -20,6 +20,13 @@ public class PplProgram
 
     public bool IsActive { get; set; }
 
+    /// <summary>Set when the user ends the program; inactive programs without it are paused and can be resumed.</summary>
+    public DateTime? EndedAt { get; set; }
+
+    public bool IsEnded => EndedAt.HasValue;
+
+    public string StatusLabel => IsActive ? "Active" : IsEnded ? "Ended" : "Paused";
+
     [StringLength(500)]
     public string? Notes { get; set; }
 

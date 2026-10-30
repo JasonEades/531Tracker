@@ -1,15 +1,7 @@
-@page "/lifts"
-@attribute [Authorize]
-@rendermode InteractiveServer
 @inject ILiftService LiftService
 @inject IBbbMappingService BbbMapping
 
-<PageTitle>Lifts — Jason's Garage Lab</PageTitle>
-
-<div class="page-header">
-    <h1>Lifts</h1>
-    <p class="page-subtitle">Training maxes and BBB configuration</p>
-</div>
+@* 5/3/1 main lifts: training maxes and BBB configuration. Hosted on the Exercises hub. *@
 
 @if (loading)
 {

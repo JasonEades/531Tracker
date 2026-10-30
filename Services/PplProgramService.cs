@@ -14,6 +14,8 @@ public interface IPplProgramService
     Task<PplProgram> CreateProgramAsync(string name, int daysPerWeek, string? notes = null);
     Task ConfigureStartingWeightsAsync(int programId, IReadOnlyDictionary<int, double?> weights);
     Task SetActiveProgramAsync(int programId);
+    Task PauseProgramAsync(int programId);
+    Task EndProgramAsync(int programId);
     Task DeleteProgramAsync(int programId);
     Task<PplSession> GetOrCreateNextSessionAsync(int programId);
     Task<PplWeekPlan> GetWeekPlanAsync(int programId);
@@ -277,6 +279,35 @@ public class PplProgramService(
 
         await db.PplPrograms.Where(p => p.UserId == userId).ExecuteUpdateAsync(s => s.SetProperty(p => p.IsActive, false));
         program.IsActive = true;
+        program.EndedAt = null;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Deactivates the program but keeps it resumable; sessions and history are untouched.</summary>
+    public async Task PauseProgramAsync(int programId)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var program = await db.PplPrograms.FirstOrDefaultAsync(p => p.Id == programId && p.UserId == userId);
+        if (program is null) return;
+
+        program.IsActive = false;
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>Finishes the program: deactivates it and drops untouched upcoming sessions. Logged sessions are kept.</summary>
+    public async Task EndProgramAsync(int programId)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var program = await db.PplPrograms.FirstOrDefaultAsync(p => p.Id == programId && p.UserId == userId);
+        if (program is null) return;
+
+        var untouched = await db.PplSessions
+            .Where(s => s.PplProgramId == programId && s.Status == WorkoutStatus.NotStarted
+                && !s.Exercises.Any(e => e.Sets.Any(set => set.IsCompleted || set.ActualReps != null)))
+            .ToListAsync();
+        db.PplSessions.RemoveRange(untouched);
+        program.IsActive = false;
+        program.EndedAt ??= DateTime.UtcNow;
         await db.SaveChangesAsync();
     }
 

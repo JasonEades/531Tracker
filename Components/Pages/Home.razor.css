@@ -286,3 +286,111 @@
     color: var(--color-text-muted);
     line-height: 1.4;
 }
+
+.compound-progress-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+    gap: 0.75rem;
+    margin-bottom: 1rem;
+}
+
+.compound-progress-tile {
+    border: 1px solid var(--color-border);
+    border-left: 3px solid var(--lift-color);
+    border-radius: 10px;
+    padding: 0.75rem;
+    background: var(--color-surface);
+}
+
+.compound-progress-name {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+}
+
+.compound-progress-swatch {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: var(--lift-color);
+}
+
+.compound-progress-values {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.5rem;
+}
+
+.compound-progress-values > div:not(.compound-progress-arrow) {
+    display: flex;
+    flex-direction: column;
+}
+
+.compound-progress-values span,
+.compound-progress-values small {
+    color: var(--color-text-muted);
+    font-size: 0.75rem;
+}
+
+.compound-progress-values strong { font-size: 1.15rem; }
+
+.compound-progress-arrow { color: var(--color-text-muted); }
+
+.compound-progress-change {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+
+.compound-progress-change.positive { color: var(--color-success); }
+.compound-progress-change.negative { color: var(--color-danger); }
+
+.compound-progress-chart {
+    width: 100%;
+    height: auto;
+    display: block;
+}
+
+.compound-progress-chart .chart-grid {
+    stroke: var(--color-border);
+    stroke-width: 1;
+}
+
+.compound-progress-chart .chart-label {
+    fill: var(--color-text-muted);
+    font-size: 11px;
+}
+
+.compound-progress-chart .chart-line {
+    fill: none;
+    stroke: var(--lift-color);
+    stroke-width: 2.5;
+    stroke-linejoin: round;
+    stroke-linecap: round;
+}
+
+.compound-progress-chart .chart-point {
+    fill: var(--lift-color);
+    stroke: var(--color-surface);
+    stroke-width: 1.5;
+}
+
+.compound-progress-legend {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1rem;
+    justify-content: center;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: var(--color-text-muted);
+}
+
+.compound-progress-legend > span {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.35rem;
+}

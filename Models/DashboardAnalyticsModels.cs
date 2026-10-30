@@ -7,6 +7,7 @@ public sealed class DashboardAnalytics
     public YearlyAnalytics YearToDate { get; init; } = new();
     public IReadOnlyList<MonthlyTrainingPoint> MonthlyTraining { get; init; } = [];
     public IReadOnlyList<StrengthAnalytics> StrengthProgress { get; init; } = [];
+    public IReadOnlyList<CompoundLiftProgress> CompoundProgress { get; init; } = [];
     public IReadOnlyList<PerformanceRecord> RecentRecords { get; init; } = [];
     public IReadOnlyList<PersonalRecord> PersonalRecords { get; init; } = [];
     public StepAnalytics Steps { get; init; } = new();
@@ -96,6 +97,19 @@ public sealed class StrengthAnalytics
         : $"{Current.Value - SixMonthsAgo.Value:+#;-#;0} lb vs 6 months ago";
 }
 
+/// <summary>All-time estimated 1RM progression for a main compound lift, from the first logged session to the latest.</summary>
+public sealed class CompoundLiftProgress
+{
+    public LiftType LiftType { get; init; }
+    public string LiftName { get; init; } = string.Empty;
+    public StrengthPoint First { get; init; } = new();
+    public StrengthPoint Current { get; init; } = new();
+    public double Best { get; init; }
+    public IReadOnlyList<StrengthPoint> History { get; init; } = [];
+    public double Change => Current.Value - First.Value;
+    public double? ChangePercent => First.Value > 0 ? Change * 100 / First.Value : null;
+}
+
 public sealed class StrengthPoint
 {
     public DateTime Date { get; init; }
@@ -126,6 +140,7 @@ public static class DashboardMetricDefinitions
     public const string CycleCompletion = "Completed programmed workouts / total programmed workouts. Additional sessions are excluded.";
     public const string StrengthVolume = "Sum of actual weight × actual reps for completed strength sets. Planned values are excluded.";
     public const string Estimated1Rm = "The existing rounded Epley formula: weight × (1 + reps / 30), rounded to the nearest 5.";
+    public const string CompoundProgression = "Best estimated 1RM per session for Squat, Bench Press, Deadlift and Overhead Press across your 5/3/1 main work (deload weeks excluded) and PPL sessions, from your first logged session to your most recent. Variations like Front Squat, RDL, Incline, Dumbbell, or Trap Bar lifts are not included.";
     public const string HistoricalLookup = "The most recent valid observation at or before the comparison date; missing history remains unavailable.";
     public const string YearlyWorkouts = "Completed programmed 5/3/1 workouts and completed PPL sessions whose OccurredOn date is in the calendar year.";
 }

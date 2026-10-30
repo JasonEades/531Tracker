@@ -174,6 +174,7 @@ public sealed class DashboardAnalyticsService(
             YearToDate = BuildYear(yearStart.Year, yearWorkouts, yearPpl, yearAdditional),
             MonthlyTraining = BuildMonthly(yearStart.Year, yearWorkouts, yearPpl, yearAdditional),
             StrengthProgress = BuildStrengthProgress(workouts, pplSessions, today, currentCycle?.Id),
+            CompoundProgress = await BuildCompoundProgressAsync(userId),
             RecentRecords = BuildRecords(workouts, pplSessions),
             PersonalRecords = BuildPersonalRecords(workouts, pplSessions, additional),
             Steps = BuildSteps(stepRecords, today, weekStart, yearStart, hasGoogleHealth)
@@ -289,6 +290,94 @@ public sealed class DashboardAnalyticsService(
             };
         }).OrderBy(x => x.ExerciseName).ToList();
     }
+
+    /// <summary>All-time (not windowed) per-session best e1RM for the four main compounds.</summary>
+    private async Task<List<CompoundLiftProgress>> BuildCompoundProgressAsync(string userId)
+    {
+        var mainSets = await db.WorkoutSets.AsNoTracking()
+            .Where(s => s.Workout.Week.Cycle.UserId == userId
+                && s.Workout.Status == WorkoutStatus.Completed
+                && s.Workout.Week.WeekNumber != WeekNumber.Week4
+                && s.SetType == SetType.Main
+                && s.IsCompleted && s.ActualWeight > 0 && s.ActualReps > 0)
+            .Select(s => new { s.Workout.MainLiftType, s.Workout.OccurredOn, Weight = s.ActualWeight!.Value, Reps = s.ActualReps!.Value })
+            .ToListAsync();
+
+        var pplSets = await db.PplSessionSets.AsNoTracking()
+            .Where(s => s.SessionExercise.Session.Program.UserId == userId
+                && s.SessionExercise.Session.Status == WorkoutStatus.Completed
+                && s.IsCompleted && s.ActualWeight > 0 && s.ActualReps > 0)
+            .Select(s => new
+            {
+                s.SessionExercise.ExerciseName,
+                // A slot linked to a 5/3/1 lift only identifies the movement when it wasn't swapped for this session.
+                LinkedLift = s.SessionExercise.ExerciseSlot.LiftId != null && s.SessionExercise.ExerciseSlot.ExerciseName == s.SessionExercise.ExerciseName
+                    ? (LiftType?)s.SessionExercise.ExerciseSlot.Lift!.LiftType
+                    : null,
+                s.SessionExercise.Session.OccurredOn,
+                Weight = s.ActualWeight!.Value,
+                Reps = s.ActualReps!.Value
+            })
+            .ToListAsync();
+
+        var observations = mainSets
+            .Select(s => (Lift: (LiftType?)s.MainLiftType, s.OccurredOn, Value: weightCalculator.CalculateEstimated1RM(s.Weight, s.Reps)))
+            .Concat(pplSets.Select(s => (Lift: s.LinkedLift ?? ResolveCompoundLift(s.ExerciseName), s.OccurredOn, Value: weightCalculator.CalculateEstimated1RM(s.Weight, s.Reps))))
+            .Where(o => o.Lift is not null && o.Value > 0);
+
+        return observations
+            .GroupBy(o => o.Lift!.Value)
+            .Select(lift =>
+            {
+                var history = lift
+                    .GroupBy(o => o.OccurredOn.Date)
+                    .Select(day => new StrengthPoint { Date = day.Key, Value = day.Max(o => o.Value) })
+                    .OrderBy(p => p.Date)
+                    .ToList();
+                return new CompoundLiftProgress
+                {
+                    LiftType = lift.Key,
+                    LiftName = CompoundLiftName(lift.Key),
+                    First = history[0],
+                    Current = history[^1],
+                    Best = history.Max(p => p.Value),
+                    History = history
+                };
+            })
+            .OrderBy(p => p.LiftType)
+            .ToList();
+    }
+
+    private static readonly (LiftType Lift, string Name)[] CompoundCanonicalNames =
+    [
+        (LiftType.Squat, "Squat"), (LiftType.Squat, "Back Squat"),
+        (LiftType.BenchPress, "Bench Press"), (LiftType.BenchPress, "Barbell Bench Press"),
+        (LiftType.Deadlift, "Deadlift"), (LiftType.Deadlift, "Conventional Deadlift"),
+        (LiftType.OverheadPress, "Overhead Press"), (LiftType.OverheadPress, "Standing Press"), (LiftType.OverheadPress, "Military Press")
+    ];
+
+    // Non-barbell implements make it a different movement (e.g. Dumbbell Bench, Trap Bar Deadlift, Smith Squat).
+    private static readonly HashSet<string> NonBarbellEquipment = new(StringComparer.Ordinal)
+        { "dumbbell", "cable", "machine", "kettlebell", "smith", "ezbar", "band", "trapbar" };
+
+    /// <summary>Maps a free-text PPL exercise name to a main compound, tolerating names like "Barbell Squat" or "BB Bench" but not variations.</summary>
+    public static LiftType? ResolveCompoundLift(string exerciseName)
+    {
+        if (EstimatedStrengthProfile.MainLiftNameType(exerciseName) is { } exact) return exact;
+        if (ExerciseNameMatcher.Tokenize(exerciseName).Any(NonBarbellEquipment.Contains)) return null;
+
+        var best = CompoundCanonicalNames
+            .Select(c => (c.Lift, Score: ExerciseNameMatcher.Score(exerciseName, c.Name)))
+            .MaxBy(c => c.Score);
+        return best.Score >= ExerciseNameMatcher.AutoMatchThreshold ? best.Lift : null;
+    }
+
+    private static string CompoundLiftName(LiftType liftType) => liftType switch
+    {
+        LiftType.BenchPress => "Bench Press",
+        LiftType.OverheadPress => "Overhead Press",
+        _ => liftType.ToString()
+    };
 
     private static List<PerformanceRecord> BuildRecords(List<WorkoutRow> workouts, List<PplSessionRow> ppl)
         => workouts.SelectMany(w => w.Sets.Select(s => new PerformanceRecord { ExerciseName = s.LiftName, Date = w.Date, Weight = s.Weight, Reps = s.Reps }))

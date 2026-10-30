@@ -406,6 +406,61 @@ else
         <p class="analytics-summary">@GetActivitySummary()</p>
     </div>
 
+    @if (analytics.CompoundProgress.Count > 0)
+    {
+        var chart = BuildProgressChart(analytics.CompoundProgress);
+        <div class="card analytics-card analytics-chart-card compound-progress-card">
+            <div class="card-header">Progress Since Day One</div>
+            <p class="analytics-description">@DashboardMetricDefinitions.CompoundProgression</p>
+            <div class="compound-progress-grid">
+                @foreach (var lift in analytics.CompoundProgress)
+                {
+                    <div class="compound-progress-tile" style="--lift-color:@LiftColor(lift.LiftType)">
+                        <div class="compound-progress-name"><span class="compound-progress-swatch"></span>@lift.LiftName</div>
+                        <div class="compound-progress-values">
+                            <div><span>First</span><strong>@FormatWeight(lift.First.Value)</strong><small>@lift.First.Date.ToString("MMM d, yyyy")</small></div>
+                            <div class="compound-progress-arrow" aria-hidden="true">→</div>
+                            <div><span>Current</span><strong>@FormatWeight(lift.Current.Value)</strong><small>@lift.Current.Date.ToString("MMM d, yyyy")</small></div>
+                        </div>
+                        <div class="compound-progress-change @(lift.Change > 0 ? "positive" : lift.Change < 0 ? "negative" : "")">
+                            @FormatChange(lift)
+                        </div>
+                    </div>
+                }
+            </div>
+            @if (chart is not null)
+            {
+                <svg class="compound-progress-chart" viewBox="0 0 @ChartWidth @ChartHeight" role="img" aria-label="Estimated 1RM over time for each compound lift">
+                    @foreach (var tick in chart.YTicks)
+                    {
+                        <g><line class="chart-grid" x1="@ChartLeft" x2="@(ChartWidth - ChartRight)" y1="@F(tick.Y)" y2="@F(tick.Y)" />
+                        <text class="chart-label" x="@(ChartLeft - 6)" y="@F(tick.Y + 4)" text-anchor="end">@tick.Value.ToString("N0")</text></g>
+                    }
+                    @foreach (var tick in chart.XTicks)
+                    {
+                        <g><text class="chart-label" x="@F(tick.X)" y="@(ChartHeight - 6)" text-anchor="middle">@tick.Label</text></g>
+                    }
+                    @foreach (var series in chart.Series)
+                    {
+                        <g style="--lift-color:@LiftColor(series.LiftType)">
+                            <polyline class="chart-line" points="@series.Points" />
+                            @foreach (var point in series.Markers)
+                            {
+                                <circle class="chart-point" cx="@F(point.X)" cy="@F(point.Y)" r="3.5"><title>@series.Name · @point.Date.ToString("MMM d, yyyy") · @point.Value.ToString("N0") lb</title></circle>
+                            }
+                        </g>
+                    }
+                </svg>
+                <div class="compound-progress-legend">
+                    @foreach (var lift in analytics.CompoundProgress)
+                    {
+                        <span style="--lift-color:@LiftColor(lift.LiftType)"><span class="compound-progress-swatch"></span>@lift.LiftName</span>
+                    }
+                </div>
+            }
+        </div>
+    }
+
     @if (analytics.StrengthProgress.Count > 0)
     {
         <div class="card analytics-card">
@@ -558,6 +613,66 @@ else
     }
 
     private static string FormatWeight(double? value) => value is null ? "No data" : $"{value:N0} lb";
+
+    private const int ChartWidth = 640, ChartHeight = 240, ChartLeft = 44, ChartRight = 12, ChartTop = 12, ChartBottom = 26;
+
+    private static string F(double value) => value.ToString("0.#", System.Globalization.CultureInfo.InvariantCulture);
+
+    private static string LiftColor(LiftType liftType) => liftType switch
+    {
+        LiftType.Squat => "var(--color-primary)",
+        LiftType.BenchPress => "var(--color-accent)",
+        LiftType.Deadlift => "var(--color-legs)",
+        _ => "var(--color-success)"
+    };
+
+    private static string FormatChange(CompoundLiftProgress lift)
+    {
+        if (lift.History.Count < 2) return "First session logged — keep training to see progress";
+        var percent = lift.ChangePercent is { } p ? $" ({p:+0.#;-0.#;0}%)" : "";
+        var days = (lift.Current.Date - lift.First.Date).Days;
+        return $"{lift.Change:+#,0;-#,0;0} lb{percent} over {days:N0} days";
+    }
+
+    private sealed record ChartTick(double X, double Y, double Value, string Label);
+    private sealed record ChartMarker(double X, double Y, DateTime Date, double Value);
+    private sealed record ChartSeries(LiftType LiftType, string Name, string Points, List<ChartMarker> Markers);
+    private sealed record ProgressChart(List<ChartSeries> Series, List<ChartTick> XTicks, List<ChartTick> YTicks);
+
+    private static ProgressChart? BuildProgressChart(IReadOnlyList<CompoundLiftProgress> lifts)
+    {
+        var points = lifts.SelectMany(l => l.History).ToList();
+        if (points.Count < 2) return null;
+
+        var minDate = points.Min(p => p.Date);
+        var maxDate = points.Max(p => p.Date);
+        var spanDays = Math.Max(1, (maxDate - minDate).TotalDays);
+        var minValue = Math.Floor(points.Min(p => p.Value) * 0.95 / 10) * 10;
+        var maxValue = Math.Ceiling(points.Max(p => p.Value) * 1.05 / 10) * 10;
+        if (maxValue <= minValue) maxValue = minValue + 10;
+
+        var plotWidth = ChartWidth - ChartLeft - ChartRight;
+        var plotHeight = ChartHeight - ChartTop - ChartBottom;
+        double X(DateTime date) => ChartLeft + (date - minDate).TotalDays / spanDays * plotWidth;
+        double Y(double value) => ChartTop + (1 - (value - minValue) / (maxValue - minValue)) * plotHeight;
+
+        var series = lifts.Select(lift =>
+        {
+            var markers = lift.History.Select(p => new ChartMarker(X(p.Date), Y(p.Value), p.Date, p.Value)).ToList();
+            return new ChartSeries(lift.LiftType, lift.LiftName, string.Join(" ", markers.Select(m => $"{F(m.X)},{F(m.Y)}")), markers);
+        }).ToList();
+
+        var yTicks = Enumerable.Range(0, 5)
+            .Select(i => minValue + (maxValue - minValue) * i / 4)
+            .Select(v => new ChartTick(ChartLeft, Y(v), v, ""))
+            .ToList();
+        var xTicks = Enumerable.Range(0, 4)
+            .Select(i => minDate.AddDays(spanDays * i / 3))
+            .Select(d => new ChartTick(X(d), 0, 0, d.ToString(spanDays > 300 ? "MMM yy" : "MMM d")))
+            .ToList();
+
+        return new ProgressChart(series, xTicks, yTicks);
+    }
     private string GetActivitySummary() => analytics is null ? "" : $"{analytics.YearToDate.TotalSessions} sessions logged this year.";
     private static string FormatPersonalRecord(PersonalRecord record) => record.RecordType switch
     {

@@ -8,7 +8,7 @@
 
 <div>
     <div class="page-header mb-4">
-        <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo("/exercise-library")'>← Exercise Library</button>
+        <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo("/exercises?tab=library")'>← Library</button>
         @if (exercise is not null)
         {
             <h1>@exercise.Name</h1>

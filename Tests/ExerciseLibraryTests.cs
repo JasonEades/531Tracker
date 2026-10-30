@@ -112,10 +112,10 @@ public sealed class ExerciseLibraryTests
         var migrator = context.GetService<IMigrator>();
         await migrator.MigrateAsync("20261011152626_AddPplWeeklyWorkoutTemplates");
 
-        var program = new PplProgram { Name = "Legacy PPL", DaysPerWeek = 3 };
+        await InsertLegacyPplProgramAsync(context);
         var day = new PplDayTemplate
         {
-            Program = program,
+            PplProgramId = LegacyProgramId,
             DayType = PplDayType.Push,
             OrderInWeek = 1,
             Name = "Legacy Push"
@@ -136,7 +136,7 @@ public sealed class ExerciseLibraryTests
 
         await migrator.MigrateAsync();
 
-        Assert.Equal(81, await context.ExerciseDefinitions.CountAsync(exercise => exercise.UserId == null));
+        Assert.Equal(77, await context.ExerciseDefinitions.CountAsync(exercise => exercise.UserId == null));
         var legacySlots = await context.PplExerciseSlots.OrderBy(slot => slot.OrderInDay).ToListAsync();
         Assert.Equal("Barbell Bench Press", legacySlots[0].ExerciseName);
         Assert.Equal(-1, legacySlots[0].ExerciseDefinitionId);
@@ -145,6 +145,70 @@ public sealed class ExerciseLibraryTests
         var migrations = await context.Database.GetAppliedMigrationsAsync();
         Assert.Contains(migrations, migration => migration.EndsWith("_AddExerciseLibrary", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public async Task MergeMigrationRepointsDuplicateSlotsAndLinksAccessoriesWithoutTouchingHistory()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>()
+            .UseSqlite(connection)
+            .ConfigureWarnings(warnings => warnings.Ignore(RelationalEventId.PendingModelChangesWarning))
+            .Options;
+
+        await using var context = new AppDbContext(options);
+        var migrator = context.GetService<IMigrator>();
+        await migrator.MigrateAsync("20261027211549_AddPplExerciseBars");
+
+        context.Users.AddRange(
+            new ApplicationUser { Id = "owner", UserName = "owner" },
+            new ApplicationUser { Id = "other", UserName = "other" });
+        await context.SaveChangesAsync();
+        await context.Database.ExecuteSqlRawAsync("""
+            INSERT INTO "ExerciseDefinitions" ("Id", "Name", "PrimaryMuscle", "SecondaryMuscles", "Equipment", "MovementType", "Instructions", "UserId")
+            VALUES (500, 'Sled Push', 'Quads', '', '', '', 'Push it.', 'owner');
+            INSERT INTO "Accessories" ("Id", "Name", "Category", "IsActive", "UserId")
+            VALUES (100, 'Face Pull', 'Strength', 1, 'owner'),
+                   (101, 'sled push', 'Strength', 1, 'owner'),
+                   (102, 'Sled Push', 'Strength', 1, 'other'),
+                   (103, 'Lat Pulldown', 'Strength', 1, 'owner'),
+                   (104, 'Zercher Carry Thing', 'Strength', 1, 'owner'),
+                   (105, 'Rowing', 'Cardio', 1, 'owner');
+            """);
+        await InsertLegacyPplProgramAsync(context);
+        var day = new PplDayTemplate { PplProgramId = LegacyProgramId, DayType = PplDayType.Pull, OrderInWeek = 1, Name = "Pull" };
+        day.ExerciseSlots.Add(new PplExerciseSlot { OrderInDay = 1, ExerciseName = "Face Pull", ExerciseDefinitionId = -33 });
+        day.ExerciseSlots.Add(new PplExerciseSlot { OrderInDay = 2, ExerciseName = "Seated Cable Row", ExerciseDefinitionId = -55 });
+        context.PplDayTemplates.Add(day);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        await migrator.MigrateAsync();
+
+        var slots = await context.PplExerciseSlots.AsNoTracking().OrderBy(slot => slot.OrderInDay).ToListAsync();
+        Assert.Equal(("Face Pull", (int?)-13), (slots[0].ExerciseName, slots[0].ExerciseDefinitionId));
+        Assert.Equal(("Seated Cable Row", (int?)-10), (slots[1].ExerciseName, slots[1].ExerciseDefinitionId));
+
+        var links = await context.Accessories.AsNoTracking()
+            .Where(accessory => accessory.Id >= 100 || accessory.Id <= 4)
+            .ToDictionaryAsync(accessory => accessory.Id, accessory => accessory.ExerciseDefinitionId);
+        Assert.Equal(-13, links[4]);
+        Assert.Equal(-13, links[100]);
+        Assert.Equal(500, links[101]);
+        Assert.Null(links[102]);
+        Assert.NotNull(links[103]);
+        Assert.Null(links[104]);
+        Assert.Null(links[105]);
+        Assert.Equal("Face Pull", (await context.Accessories.AsNoTracking().SingleAsync(a => a.Id == 100)).Name);
+    }
+    private const int LegacyProgramId = 1;
+
+    // Raw SQL so the insert does not depend on PplProgram columns added by later migrations.
+    private static Task InsertLegacyPplProgramAsync(AppDbContext context) =>
+        context.Database.ExecuteSqlRawAsync("""
+            INSERT INTO "PplPrograms" ("Id", "Name", "CreatedAt", "DaysPerWeek", "IsActive")
+            VALUES (1, 'Legacy PPL', '2026-01-01 00:00:00', 3, 1);
+            """);
 
     private sealed class TestCurrentUserService(string userId) : ICurrentUserService
     {

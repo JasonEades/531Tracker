@@ -454,16 +454,24 @@ else
                 <div class="form-group">
                     <label class="form-label">Accessory Exercise</label>
                     <select class="form-control" @onchange="OnAccessorySelected">
-                        <option value="">Select an accessory…</option>
-                        @foreach (var acc in availableAccessories)
-                        {
-                            <option value="@acc.Id">@acc.Name</option>
-                        }
+                        <option value="">Select an exercise…</option>
+                        <optgroup label="Exercises">
+                            @foreach (var option in exerciseOptions.Where(o => !o.IsCardio))
+                            {
+                                <option value="@option.Key">@option.Name</option>
+                            }
+                        </optgroup>
+                        <optgroup label="Cardio">
+                            @foreach (var option in exerciseOptions.Where(o => o.IsCardio))
+                            {
+                                <option value="@option.Key">@option.Name</option>
+                            }
+                        </optgroup>
                     </select>
                 </div>
                 @if (suggestedUsage is not null)
                 {
-                    <p class="text-muted mb-1" style="font-size:var(--text-sm)">Last used: @suggestedUsage.Weight lbs · @suggestedUsage.Sets × @suggestedUsage.Reps</p>
+                    <p class="text-muted mb-1" style="font-size:var(--text-sm)">Last used@(suggestedUsage.Source is null ? "" : $" in {suggestedUsage.Source}")@(suggestedUsage.LastPerformed is DateTime lastDate ? $" ({lastDate:MMM d})" : ""): @suggestedUsage.Weight lbs · @suggestedUsage.Sets × @suggestedUsage.Reps</p>
                 }
                 <div class="acc-inputs-row">
                     <div class="form-group">
@@ -485,7 +493,7 @@ else
                               placeholder="Optional notes for this accessory"></textarea>
                 </div>
                 <button class="btn btn-primary btn-full" @onclick="AddAccessory"
-                        disabled="@(selectedAccessoryId == 0)">
+                        disabled="@(selectedExerciseKey is null)">
                     Add to Workout
                 </button>
             </div>
@@ -660,9 +668,9 @@ else
     private string CurrentBarName => workout?.Bar?.Name ?? defaultBar?.Name ?? "Bar";
     private double CurrentBarWeight => workout?.Bar?.Weight ?? defaultBar?.Weight ?? 45;
 
-    private List<Accessory> availableAccessories = [];
+    private List<AccessoryExerciseOption> exerciseOptions = [];
     private bool showAddAccessory;
-    private int selectedAccessoryId;
+    private string? selectedExerciseKey;
     private double newAccWeight;
     private int newAccReps = 10;
     private int newAccSets = 3;
@@ -682,7 +690,7 @@ else
         bars = await PlateCalc.GetBarsAsync();
         defaultBar = bars.FirstOrDefault(b => b.IsDefault) ?? bars.FirstOrDefault();
         await LoadWorkout();
-        availableAccessories = await AccessoryService.GetAllAccessoriesAsync();
+        exerciseOptions = await AccessoryService.GetExerciseOptionsAsync();
         loading = false;
     }
 
@@ -929,14 +937,16 @@ else
 
     private async Task OnAccessorySelected(ChangeEventArgs e)
     {
-        if (int.TryParse(e.Value?.ToString(), out var id) && id > 0)
+        var key = e.Value?.ToString();
+        if (!string.IsNullOrEmpty(key))
         {
-            selectedAccessoryId = id;
+            selectedExerciseKey = key;
             newAccWeight = 0;
             newAccReps = 10;
             newAccSets = 3;
             newAccNotes = null;
-            suggestedUsage = await AccessoryService.GetSuggestedUsageAsync(id);
+            suggestedUsage = await AccessoryService.GetSuggestedUsageAsync(key);
+
             if (suggestedUsage is not null)
             {
                 newAccWeight = suggestedUsage.Weight;
@@ -947,18 +957,21 @@ else
         }
         else
         {
-            selectedAccessoryId = 0;
+            selectedExerciseKey = null;
             suggestedUsage = null;
         }
     }
 
     private async Task AddAccessory()
     {
-        if (selectedAccessoryId == 0 || workout is null) return;
+        if (selectedExerciseKey is null || workout is null) return;
+        var accessoryId = await AccessoryService.ResolveAccessoryIdAsync(selectedExerciseKey);
         await AccessoryService.AddAccessoryToWorkoutAsync(
-            workout.Id, selectedAccessoryId, newAccWeight, newAccReps, newAccSets, newAccNotes);
+            workout.Id, accessoryId, newAccWeight, newAccReps, newAccSets, newAccNotes);
         await LoadWorkout();
-        selectedAccessoryId = 0;
+        if (selectedExerciseKey.StartsWith("d:"))
+            exerciseOptions = await AccessoryService.GetExerciseOptionsAsync();
+        selectedExerciseKey = null;
         newAccWeight  = 0;
         newAccReps    = 10;
         newAccSets    = 3;

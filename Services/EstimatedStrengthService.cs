@@ -36,7 +36,12 @@ public sealed class EstimatedStrengthProfile(
             && mainLiftOneRepMaxes.TryGetValue(liftType, out var mainLiftEstimate))
             return mainLiftEstimate;
 
-        return exerciseOneRepMaxes.TryGetValue(exerciseName, out var exerciseEstimate) ? exerciseEstimate : null;
+        if (exerciseOneRepMaxes.TryGetValue(exerciseName, out var exerciseEstimate))
+            return exerciseEstimate;
+
+        // Same exercise logged under a slightly different name (e.g. "Face Pull" vs "Face Pulls", "DB" vs "Dumbbell").
+        var match = ExerciseObservations.MatchName(exerciseOneRepMaxes.Keys, exerciseName);
+        return match is null ? null : exerciseOneRepMaxes[match];
     }
 
     public IReadOnlyDictionary<LiftType, double> MainLiftOneRepMaxes => mainLiftOneRepMaxes;
@@ -68,31 +73,19 @@ public sealed class EstimatedStrengthService(AppDbContext db, IWeightCalculator 
             })
             .ToListAsync();
 
-        var pplSets = await db.PplSessionSets.AsNoTracking()
-            .Where(set => set.SessionExercise.Session.Status == WorkoutStatus.Completed
-                && set.SessionExercise.Session.Program.UserId == userId
-                && set.IsCompleted
-                && set.ActualWeight > 0
-                && set.ActualReps > 0)
-            .Select(set => new
-            {
-                set.SessionExercise.Session.PplProgramId,
-                set.SessionExercise.ExerciseName,
-                set.SessionExercise.Session.OccurredOn,
-                Weight = set.ActualWeight!.Value,
-                Reps = set.ActualReps!.Value
-            })
-            .ToListAsync();
+        // Everything except 5/3/1 main-lift sets (handled above): PPL, 5/3/1 accessories, and additional sessions.
+        var exerciseSets = (await ExerciseObservations.LoadAsync(db, userId, weightCalculator))
+            .Where(o => o.Kind != ExerciseObservationKind.FiveThreeOneLift)
+            .ToList();
 
         var observations = mainLiftSets
             .Select(set => new Observation($"531:{set.CycleId}", set.MainLiftType, null, set.OccurredOn,
                 weightCalculator.CalculateEstimated1RM(set.Weight, set.Reps)))
-            .Concat(pplSets.Select(set => new Observation($"ppl:{set.PplProgramId}",
-                EstimatedStrengthProfile.MainLiftNameType(set.ExerciseName), set.ExerciseName, set.OccurredOn,
-                weightCalculator.CalculateEstimated1RM(set.Weight, set.Reps))))
+            .Concat(exerciseSets.Select(set => new Observation(set.ProgramKey,
+                set.Kind == ExerciseObservationKind.Ppl ? EstimatedStrengthProfile.MainLiftNameType(set.Name) : null,
+                set.Name, set.Date, set.Estimated1Rm)))
             .Where(o => o.Estimate > 0)
             .ToList();
-
         var sourceRecency = observations
             .GroupBy(o => o.Source)
             .ToDictionary(g => g.Key, g => g.Max(o => o.OccurredOn));

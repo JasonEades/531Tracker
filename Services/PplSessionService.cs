@@ -298,9 +298,29 @@ public class PplSessionService(AppDbContext db, ICurrentUserService userContext)
                         });
                 });
 
-        return current.Exercises
+        var result = current.Exercises
             .Where(e => latestByName.ContainsKey(e.ExerciseName.ToLowerInvariant()))
             .ToDictionary(e => e.Id, e => latestByName[e.ExerciseName.ToLowerInvariant()]);
+
+        // Never trained in PPL: fall back to the latest earlier session from any program (5/3/1 accessories,
+        // main lifts, additional work), matching close names too.
+        var missing = current.Exercises.Where(e => !result.ContainsKey(e.Id)).ToList();
+        if (missing.Count == 0) return result;
+
+        var currentKey = $"ppl:s{current.Id}";
+        var observations = (await ExerciseObservations.LoadAsync(db, userId, new WeightCalculator()))
+            .Where(o => o.SessionKey != currentKey && o.Date <= current.OccurredOn)
+            .ToList();
+        foreach (var exercise in missing)
+        {
+            var latest = ExerciseObservations.Latest(observations, exercise.ExerciseName);
+            if (latest is null) continue;
+            result[exercise.Id] = latest.Sets
+                .Select((set, index) => new PplPreviousSet(index + 1, set.Reps, set.Weight, set.Date, latest.Source))
+                .ToDictionary(set => set.SetNumber);
+        }
+
+        return result;
     }
 
     /// <summary>

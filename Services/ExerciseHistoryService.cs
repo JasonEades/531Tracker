@@ -16,10 +16,6 @@ public sealed class ExerciseHistoryService(
     ICurrentUserService userContext,
     IWeightCalculator weightCalculator) : IExerciseHistoryService
 {
-    private const string FiveThreeOneSource = "5/3/1";
-    private const string PplSource = "PPL";
-    private const string AdditionalSource = "Additional";
-
     public async Task<List<ExerciseSummary>> GetExerciseSummariesAsync()
     {
         var observations = await LoadObservationsAsync();
@@ -113,106 +109,8 @@ public sealed class ExerciseHistoryService(
         };
     }
 
-    private async Task<List<Observation>> LoadObservationsAsync()
-    {
-        var userId = await userContext.GetUserIdAsync();
-
-        var programmed = await db.WorkoutSets.AsNoTracking()
-            .Where(s => s.Workout.Week.Cycle.UserId == userId
-                && s.IsCompleted
-                && s.SetType != SetType.Warmup
-                && s.ActualWeight.HasValue && s.ActualReps.HasValue
-                && s.ActualReps!.Value > 0)
-            .Select(s => new
-            {
-                Name = s.Lift.Name,
-                Date = s.Workout.OccurredOn,
-                Weight = s.ActualWeight!.Value,
-                Reps = s.ActualReps!.Value,
-                s.SetType,
-                s.IsAdditional,
-                s.AdditionalSetType,
-                Order = s.SetNumber
-            })
-            .ToListAsync();
-
-        var ppl = await db.PplSessionSets.AsNoTracking()
-            .Where(x => x.SessionExercise.Session.Program.UserId == userId
-                && x.IsCompleted
-                && x.ActualWeight.HasValue && x.ActualReps.HasValue
-                && x.ActualReps!.Value > 0)
-            .Select(x => new
-            {
-                Name = x.SessionExercise.ExerciseName,
-                Date = x.SessionExercise.Session.OccurredOn,
-                Weight = x.ActualWeight!.Value,
-                Reps = x.ActualReps!.Value,
-                Order = x.SetNumber
-            })
-            .ToListAsync();
-
-        var additional = await db.AdditionalStrengthSets.AsNoTracking()
-            .Where(x => x.Weight.HasValue && x.Reps.HasValue && x.Reps!.Value > 0
-                && ((x.Exercise.Session.WeekId != null && x.Exercise.Session.Week!.Cycle.UserId == userId)
-                    || (x.Exercise.Session.CycleId != null && x.Exercise.Session.Cycle!.UserId == userId)
-                    || (x.Exercise.Session.PplWeekId != null && x.Exercise.Session.PplWeek!.Program.UserId == userId)))
-            .Select(x => new
-            {
-                Name = x.Exercise.ExerciseName,
-                Date = x.Exercise.Session.OccurredOn,
-                Weight = x.Weight!.Value,
-                Reps = x.Reps!.Value,
-                Order = x.SetNumber
-            })
-            .ToListAsync();
-
-        var results = new List<Observation>(programmed.Count + ppl.Count + additional.Count);
-
-        results.AddRange(programmed
-            .Where(x => !string.IsNullOrWhiteSpace(x.Name) && x.Weight > 0)
-            .Select(x => new Observation(
-                x.Name.Trim(),
-                x.Date,
-                x.Weight,
-                x.Reps,
-                weightCalculator.CalculateEstimated1RM(x.Weight, x.Reps),
-                FiveThreeOneSource,
-                x.IsAdditional ? x.AdditionalSetType.ToString() : DescribeSetType(x.SetType),
-                x.Order)));
-
-        results.AddRange(ppl
-            .Where(x => !string.IsNullOrWhiteSpace(x.Name) && x.Weight > 0)
-            .Select(x => new Observation(
-                x.Name.Trim(),
-                x.Date,
-                x.Weight,
-                x.Reps,
-                weightCalculator.CalculateEstimated1RM(x.Weight, x.Reps),
-                PplSource,
-                null,
-                x.Order)));
-
-        results.AddRange(additional
-            .Where(x => !string.IsNullOrWhiteSpace(x.Name) && x.Weight > 0)
-            .Select(x => new Observation(
-                x.Name.Trim(),
-                x.Date,
-                x.Weight,
-                x.Reps,
-                weightCalculator.CalculateEstimated1RM(x.Weight, x.Reps),
-                AdditionalSource,
-                null,
-                x.Order)));
-
-        return results;
-    }
-
-    private static string DescribeSetType(SetType setType) => setType switch
-    {
-        SetType.Bbb => "BBB",
-        SetType.Fsl => "FSL",
-        _ => setType.ToString()
-    };
+    private async Task<List<ExerciseObservation>> LoadObservationsAsync() =>
+        await ExerciseObservations.LoadAsync(db, await userContext.GetUserIdAsync(), weightCalculator);
 
     /// <summary>URL-safe, stable identifier derived from the exercise name.</summary>
     public static string BuildKey(string name)
@@ -235,14 +133,4 @@ public sealed class ExerciseHistoryService(
 
         return builder.ToString().Trim('-');
     }
-
-    private sealed record Observation(
-        string Name,
-        DateTime Date,
-        double Weight,
-        int Reps,
-        double Estimated1Rm,
-        string Source,
-        string? SetLabel,
-        int Order);
 }

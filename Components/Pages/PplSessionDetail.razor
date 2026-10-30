@@ -227,8 +227,8 @@ else
                         <div class="set-reps-label">× @set.TargetReps reps target</div>
                         @if (previousSets.TryGetValue(exercise.Id, out var lastSets) && lastSets.TryGetValue(set.SetNumber, out var last))
                         {
-                            <div class="set-last-label" title="@($"Last session: {last.OccurredOn:MMM d}")">
-                                Last: <strong>@last.Reps</strong> reps@(exercise.ExerciseSlot.IsBodyweight || last.Weight is null ? "" : $" @ {DisplayWeight(last.Weight)} lbs")
+                            <div class="set-last-label" title="@($"Last session: {last.OccurredOn:MMM d}{(last.Source is null ? "" : $" ({last.Source})")}")">
+                                Last@(last.Source is null ? "" : $" ({last.Source})"): <strong>@last.Reps</strong> reps@(exercise.ExerciseSlot.IsBodyweight || last.Weight is null ? "" : $" @ {DisplayWeight(last.Weight)} lbs")
                             </div>
                         }
                         @if (!exercise.ExerciseSlot.IsBodyweight &&

@@ -38,6 +38,9 @@ namespace FiveThreeOneTracker.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("character varying(200)");
 
+                    b.Property<int?>("ExerciseDefinitionId")
+                        .HasColumnType("integer");
+
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
 
@@ -51,6 +54,8 @@ namespace FiveThreeOneTracker.Migrations
 
                     b.HasKey("Id");
 
+                    b.HasIndex("ExerciseDefinitionId");
+
                     b.ToTable("Accessories");
 
                     b.HasData(
@@ -59,6 +64,7 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 1,
                             Category = "Strength",
                             Description = "Bent-over barbell row",
+                            ExerciseDefinitionId = -9,
                             IsActive = true,
                             Name = "Barbell Row"
                         },
@@ -67,6 +73,7 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 2,
                             Category = "Other",
                             Description = "Single-arm dumbbell row",
+                            ExerciseDefinitionId = -32,
                             IsActive = true,
                             Name = "Dumbbell Row"
                         },
@@ -75,6 +82,7 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 3,
                             Category = "Other",
                             Description = "Cable lat pulldown",
+                            ExerciseDefinitionId = -8,
                             IsActive = true,
                             Name = "Lat Pulldown"
                         },
@@ -83,14 +91,16 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 4,
                             Category = "Other",
                             Description = "Cable face pull",
+                            ExerciseDefinitionId = -13,
                             IsActive = true,
-                            Name = "Face Pull"
+                            Name = "Face Pulls"
                         },
                         new
                         {
                             Id = 5,
                             Category = "Other",
                             Description = "Parallel bar dips",
+                            ExerciseDefinitionId = -27,
                             IsActive = true,
                             Name = "Dips"
                         },
@@ -99,6 +109,7 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 6,
                             Category = "Other",
                             Description = "Chin-ups / pull-ups",
+                            ExerciseDefinitionId = -34,
                             IsActive = true,
                             Name = "Chin-Ups"
                         },
@@ -107,6 +118,7 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 7,
                             Category = "Other",
                             Description = "Lying or seated leg curl",
+                            ExerciseDefinitionId = -19,
                             IsActive = true,
                             Name = "Leg Curl"
                         },
@@ -115,6 +127,7 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 8,
                             Category = "Other",
                             Description = "Machine leg press",
+                            ExerciseDefinitionId = -18,
                             IsActive = true,
                             Name = "Leg Press"
                         },
@@ -123,6 +136,7 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 9,
                             Category = "Other",
                             Description = "Ab wheel rollout",
+                            ExerciseDefinitionId = -35,
                             IsActive = true,
                             Name = "Ab Wheel"
                         },
@@ -131,6 +145,7 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 10,
                             Category = "Other",
                             Description = "Hanging leg raise",
+                            ExerciseDefinitionId = -36,
                             IsActive = true,
                             Name = "Hanging Leg Raise"
                         },
@@ -139,6 +154,7 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 11,
                             Category = "Other",
                             Description = "Standing dumbbell curl",
+                            ExerciseDefinitionId = -11,
                             IsActive = true,
                             Name = "Dumbbell Curl"
                         },
@@ -147,6 +163,7 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 12,
                             Category = "Other",
                             Description = "Cable tricep pushdown",
+                            ExerciseDefinitionId = -5,
                             IsActive = true,
                             Name = "Tricep Pushdown"
                         },
@@ -155,6 +172,7 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 13,
                             Category = "Other",
                             Description = "Dumbbell lateral raise",
+                            ExerciseDefinitionId = -4,
                             IsActive = true,
                             Name = "Lateral Raise"
                         },
@@ -163,6 +181,7 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 14,
                             Category = "Other",
                             Description = "Romanian deadlift",
+                            ExerciseDefinitionId = -17,
                             IsActive = true,
                             Name = "Romanian Deadlift"
                         },
@@ -171,6 +190,7 @@ namespace FiveThreeOneTracker.Migrations
                             Id = 15,
                             Category = "Strength",
                             Description = "Rear foot elevated split squat",
+                            ExerciseDefinitionId = -22,
                             IsActive = true,
                             Name = "Bulgarian Split Squat"
                         },
@@ -1058,16 +1078,6 @@ namespace FiveThreeOneTracker.Migrations
                         },
                         new
                         {
-                            Id = -33,
-                            Equipment = "Cable, rope attachment",
-                            Instructions = "Set the cable around face height. Pull the rope toward your face with elbows high, then return while keeping your shoulders controlled.",
-                            MovementType = "Horizontal pull",
-                            Name = "Face Pull",
-                            PrimaryMuscle = "RearDelts",
-                            SecondaryMuscles = "Upper back, external rotators"
-                        },
-                        new
-                        {
                             Id = -34,
                             Equipment = "Pull-up bar",
                             Instructions = "Use an underhand grip. Pull until your chin clears the bar, then lower to a controlled hang.",
@@ -1123,16 +1133,6 @@ namespace FiveThreeOneTracker.Migrations
                             Instructions = "Lie on a flat bench with dumbbells over your chest. Lower them beside your chest, then press up smoothly.",
                             MovementType = "Horizontal push",
                             Name = "Dumbbell Bench Press",
-                            PrimaryMuscle = "Chest",
-                            SecondaryMuscles = "Triceps, shoulders"
-                        },
-                        new
-                        {
-                            Id = -40,
-                            Equipment = "Dumbbell, flat bench",
-                            Instructions = "Lie on a flat bench with dumbbells over your chest. Lower them beside your chest, then press up smoothly.",
-                            MovementType = "Horizontal push",
-                            Name = "Flat Dumbbell Press",
                             PrimaryMuscle = "Chest",
                             SecondaryMuscles = "Triceps, shoulders"
                         },
@@ -1228,16 +1228,6 @@ namespace FiveThreeOneTracker.Migrations
                         },
                         new
                         {
-                            Id = -50,
-                            Equipment = "Dumbbell, bench",
-                            Instructions = "Start with dumbbells at shoulder height. Brace and press overhead, then lower them under control.",
-                            MovementType = "Vertical push",
-                            Name = "Dumbbell Shoulder Press",
-                            PrimaryMuscle = "Shoulders",
-                            SecondaryMuscles = "Triceps, upper chest"
-                        },
-                        new
-                        {
                             Id = -51,
                             Equipment = "Barbell",
                             Instructions = "Use a comfortable grip and raise the bar in front of your torso only as high as your shoulders tolerate. Lower with control.",
@@ -1273,16 +1263,6 @@ namespace FiveThreeOneTracker.Migrations
                             Instructions = "Lie chest-down on an incline bench. Row the weights toward your torso without lifting your chest, then lower slowly.",
                             MovementType = "Horizontal pull",
                             Name = "Chest-Supported Row",
-                            PrimaryMuscle = "Back",
-                            SecondaryMuscles = "Biceps, rear delts"
-                        },
-                        new
-                        {
-                            Id = -55,
-                            Equipment = "Cable",
-                            Instructions = "Sit tall and brace. Pull the handle toward your torso by driving your elbows back, then extend your arms without rounding your back.",
-                            MovementType = "Horizontal pull",
-                            Name = "Seated Cable Row",
                             PrimaryMuscle = "Back",
                             SecondaryMuscles = "Biceps, rear delts"
                         },
@@ -1797,6 +1777,9 @@ namespace FiveThreeOneTracker.Migrations
 
                     b.Property<int>("DaysPerWeek")
                         .HasColumnType("integer");
+
+                    b.Property<DateTime?>("EndedAt")
+                        .HasColumnType("timestamp with time zone");
 
                     b.Property<bool>("IsActive")
                         .HasColumnType("boolean");
@@ -2503,6 +2486,16 @@ namespace FiveThreeOneTracker.Migrations
                     b.HasKey("UserId", "LoginProvider", "Name");
 
                     b.ToTable("AspNetUserTokens", (string)null);
+                });
+
+            modelBuilder.Entity("FiveThreeOneTracker.Models.Accessory", b =>
+                {
+                    b.HasOne("FiveThreeOneTracker.Models.ExerciseDefinition", "ExerciseDefinition")
+                        .WithMany()
+                        .HasForeignKey("ExerciseDefinitionId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.Navigation("ExerciseDefinition");
                 });
 
             modelBuilder.Entity("FiveThreeOneTracker.Models.AccessoryHistory", b =>
