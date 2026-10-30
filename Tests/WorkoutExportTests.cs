@@ -1009,6 +1009,66 @@ public sealed class WorkoutExportTests
     }
 
     [Fact]
+    public async Task PplSessionWeekAndProgramExportForOwnerOnly()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new TestCurrentUserService("owner");
+        var programService = CreatePplProgramService(context, user);
+        var sessionService = new PplSessionService(context, user);
+        var program = await programService.CreateProgramAsync("Garage PPL", 3);
+        var session = await programService.GetOrCreateNextSessionAsync(program.Id);
+        var details = await sessionService.GetSessionWithDetailsAsync(session.Id);
+        var exercise = details!.Exercises.OrderBy(e => e.OrderInSession).First();
+        await sessionService.UpdateSetAsync(exercise.Sets.First().Id, 185, 7, true);
+        await sessionService.CompleteSessionAsync(session.Id);
+        context.ChangeTracker.Clear();
+        var weekId = (await context.PplWeeks.SingleAsync()).Id;
+
+        var renderers = new IWorkoutExportRenderer[] { new MarkdownWorkoutExporter(), new PdfWorkoutExporter() };
+        var exporter = new WorkoutExportService(context, user, renderers,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<WorkoutExportService>.Instance);
+
+        async Task<string> Markdown(WorkoutExportScope scope, int id) => System.Text.Encoding.UTF8.GetString(
+            (await exporter.ExportAsync(new WorkoutExportRequest { Scope = scope, Format = WorkoutExportFormat.Markdown, Id = id })).Content);
+
+        var sessionMd = await Markdown(WorkoutExportScope.PplSession, session.Id);
+        Assert.Contains("**Program:** Push/Pull/Legs", sessionMd);
+        Assert.Contains("**Plan:** Garage PPL", sessionMd);
+        Assert.Contains($"Workout — {details.DayTemplate.Name}", sessionMd);
+        Assert.Contains(exercise.ExerciseName, sessionMd);
+        Assert.Contains("| 185 |", sessionMd);
+        Assert.DoesNotContain("Cycle", sessionMd);
+
+        var weekMd = await Markdown(WorkoutExportScope.PplWeek, weekId);
+        Assert.Contains("Training Week — Week 1", weekMd);
+        Assert.Contains("**Program:** Garage PPL", weekMd);
+        Assert.DoesNotContain("Cycle", weekMd);
+
+        var programMd = await Markdown(WorkoutExportScope.PplProgram, program.Id);
+        Assert.Contains("# Training Program — Garage PPL", programMd);
+        Assert.Contains("**Plan:** 3-day Push/Pull/Legs split", programMd);
+        Assert.Contains("- Workouts: 1/1 completed", programMd);
+        Assert.DoesNotContain("Cycle", programMd);
+
+        var pdf = await exporter.ExportAsync(new WorkoutExportRequest { Scope = WorkoutExportScope.PplProgram, Format = WorkoutExportFormat.Pdf, Id = program.Id });
+        Assert.Equal("application/pdf", pdf.ContentType);
+        Assert.Equal("PPL_Program_Garage PPL.pdf", pdf.FileName);
+        Assert.True(pdf.Content.Length > 0);
+
+        var otherExporter = new WorkoutExportService(context, new TestCurrentUserService("other"), renderers,
+            Microsoft.Extensions.Logging.Abstractions.NullLogger<WorkoutExportService>.Instance);
+        foreach (var (scope, id) in new[] { (WorkoutExportScope.PplSession, session.Id), (WorkoutExportScope.PplWeek, weekId), (WorkoutExportScope.PplProgram, program.Id) })
+            await Assert.ThrowsAsync<WorkoutExportException>(() =>
+                otherExporter.ExportAsync(new WorkoutExportRequest { Scope = scope, Format = WorkoutExportFormat.Markdown, Id = id }));
+    }
+
+    [Fact]
     public async Task PplSwapOffersSameMuscleOptionsAndSupportsOneOffAndPermanentSwaps()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");

@@ -43,6 +43,7 @@ else
                 </div>
             </div>
             <div class="workout-actions">
+                <ExportButtons Scope="WorkoutExportScope.PplProgram" Id="ProgramId" Label="program" OnError="SetError" />
                 @if (!program.IsActive)
                 {
                     <button class="btn btn-primary btn-sm" @onclick="SetActive" disabled="@busy">Set Active</button>
@@ -95,6 +96,7 @@ else
                 <div class="flex gap-1">
                     @if (currentWeekRecord is not null)
                     {
+                        <ExportButtons Scope="WorkoutExportScope.PplWeek" Id="currentWeekRecord.Id" Label="week" OnError="SetError" />
                         <button class="btn btn-outline btn-sm" @onclick="() => AddSession(currentWeekRecord.Id)">+ Add Session</button>
                     }
                 </div>
@@ -217,6 +219,7 @@ else
                         </div>
                         <div class="flex items-center gap-1">
                             <span class="badge badge-muted">@weekSessions.Count(s => s.Status == WorkoutStatus.Completed) done</span>
+                            <ExportButtons Scope="WorkoutExportScope.PplWeek" Id="week.Id" Label="week" OnError="SetError" />
                             <button class="btn btn-ghost btn-sm" @onclick="() => AddSession(week.Id)">+ Add Session</button>
                         </div>
                     </div>
@@ -336,6 +339,8 @@ else
         await AdditionalSessions.DeleteAsync(id);
         await LoadAsync();
     }
+
+    private void SetError(string? message) => error = message;
 
     private void GoToSession(int id) => Nav.NavigateTo($"/ppl/session/{id}?returnProgramId={ProgramId}");
     private void Configure(int week) => Nav.NavigateTo($"/ppl/{ProgramId}/workouts?week={week}");

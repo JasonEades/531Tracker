@@ -143,6 +143,7 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 - Workout day notes and exercise/set notes
 - Persistent user-owned workout history
 - Markdown and PDF exports for a single day, full week, or complete cycle
+- PPL Markdown and PDF exports for a single session, a PPL week, or a whole program (from the program page and session page)
 - Exported exercise sections clearly separate programmed sets from additional sets
 - Export data includes actual weight, reps, types, RPE/RIR where available, notes, volume, and rep totals
 
@@ -393,6 +394,7 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - Markdown separation and formatting
 - PDF generation with additional-set data
 - Workout note persistence and export behavior
+- PPL session/week/program Markdown and PDF exports with cross-user isolation
 - PPL weekly templates, accessory persistence, and estimated-1RM weight derivation
 - PPL program deletion with existing sessions and cross-user delete isolation
 - First-cycle/program weight seeding from the most recent previous 5/3/1 cycle or PPL program

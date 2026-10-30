@@ -23,6 +23,8 @@ public sealed class WorkoutExportDocument
     public CycleExportModel? Cycle { get; init; }
     public WeekExportModel? Week { get; init; }
     public WorkoutExportModel? Workout { get; init; }
+    /// <summary>Optional file name (without extension); defaults to the 5/3/1 cycle/week/workout name.</summary>
+    public string? FileStem { get; init; }
 }
 
 public sealed class CycleExportModel
@@ -30,8 +32,16 @@ public sealed class CycleExportModel
     public int Id { get; init; }
     public int CycleNumber { get; init; }
     public string Name { get; init; } = string.Empty;
+    /// <summary>Program unit used in headings, e.g. "Cycle" or "Program".</summary>
+    public string Noun { get; init; } = "Cycle";
+    /// <summary>Overrides the "Cycle N" label (e.g. a PPL split description).</summary>
+    public string? ContextValue { get; init; }
+    /// <summary>Overrides the Completed / In progress status text.</summary>
+    public string? StatusLabel { get; init; }
     public DateTime CreatedAt { get; init; }
     public bool IsCompleted { get; init; }
+    public string ContextDisplay => ContextValue ?? $"Cycle {CycleNumber}";
+    public string StatusDisplay => StatusLabel ?? (IsCompleted ? "Completed" : "In progress");
     public string? Notes { get; init; }
     public List<AdditionalSessionExportModel> AdditionalSessions { get; init; } = [];
     public List<DailyStepExportModel> DailySteps { get; init; } = [];
@@ -44,6 +54,9 @@ public sealed class WeekExportModel
     public int Id { get; init; }
     public int WeekNumber { get; init; }
     public int CycleNumber { get; init; }
+    /// <summary>Overrides the "Cycle N" label (e.g. the PPL program name).</summary>
+    public string? ContextValue { get; init; }
+    public string ContextDisplay => ContextValue ?? $"Cycle {CycleNumber}";
     public string? Notes { get; init; }
     public List<WorkoutExportModel> Workouts { get; init; } = [];
     public List<AdditionalSessionExportModel> AdditionalSessions { get; init; } = [];
@@ -89,6 +102,12 @@ public sealed class WorkoutExportModel
     public int Id { get; init; }
     public int CycleNumber { get; init; }
     public int WeekNumber { get; init; }
+    public string ProgramName { get; init; } = "5/3/1";
+    /// <summary>Label for the containing plan, e.g. "Cycle" or "Plan".</summary>
+    public string ContextLabel { get; init; } = "Cycle";
+    /// <summary>Overrides the "Cycle N" value (e.g. the PPL program name).</summary>
+    public string? ContextValue { get; init; }
+    public string ContextDisplay => ContextValue ?? $"Cycle {CycleNumber}";
     public string WorkoutName { get; init; } = string.Empty;
     public string WorkoutType { get; init; } = string.Empty;
     public DateTime? WorkoutDate { get; init; }

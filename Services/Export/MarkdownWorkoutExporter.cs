@@ -37,13 +37,16 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
 
     private static void RenderCycle(StringBuilder builder, CycleExportModel cycle)
     {
-        builder.AppendLine($"# Training Cycle — {cycle.Name}");
+        builder.AppendLine($"# Training {cycle.Noun} — {cycle.Name}");
         builder.AppendLine();
-        builder.AppendLine($"**Cycle Number:** {cycle.CycleNumber}");
+        if (cycle.ContextValue is null)
+            builder.AppendLine($"**Cycle Number:** {cycle.CycleNumber}");
+        else
+            builder.AppendLine($"**Plan:** {Inline(cycle.ContextValue)}");
         builder.AppendLine($"**Created:** {cycle.CreatedAt:yyyy-MM-dd}");
-        builder.AppendLine($"**Status:** {(cycle.IsCompleted ? "Completed" : "In progress")}");
-        RenderNote(builder, "Cycle Notes", cycle.Notes);
-        RenderSummary(builder, "Cycle Summary", cycle.Summary);
+        builder.AppendLine($"**Status:** {cycle.StatusDisplay}");
+        RenderNote(builder, $"{cycle.Noun} Notes", cycle.Notes);
+        RenderSummary(builder, $"{cycle.Noun} Summary", cycle.Summary);
         RenderDailySteps(builder, cycle.DailySteps);
 
         foreach (var session in cycle.AdditionalSessions)
@@ -66,7 +69,7 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
         var heading = new string('#', headingLevel + 1);
         builder.AppendLine($"{heading} Training Week — Week {week.WeekNumber}");
         builder.AppendLine();
-        builder.AppendLine($"**Cycle:** Cycle {week.CycleNumber}");
+        builder.AppendLine(week.ContextValue is null ? $"**Cycle:** Cycle {week.CycleNumber}" : $"**Program:** {Inline(week.ContextValue)}");
         RenderNote(builder, "Week Notes", week.Notes);
         RenderSummary(builder, "Weekly Summary", week.Summary);
         RenderDailySteps(builder, week.DailySteps);
@@ -115,8 +118,8 @@ public sealed class MarkdownWorkoutExporter : IWorkoutExportRenderer
         builder.AppendLine($"{heading} Workout — {workout.WorkoutName}");
         builder.AppendLine();
         builder.AppendLine($"**Date:** {(workout.WorkoutDate.HasValue ? workout.WorkoutDate.Value.ToString("yyyy-MM-dd") : "—")}");
-        builder.AppendLine($"**Program:** 5/3/1");
-        builder.AppendLine($"**Cycle:** Cycle {workout.CycleNumber}");
+        builder.AppendLine($"**Program:** {workout.ProgramName}");
+        builder.AppendLine($"**{workout.ContextLabel}:** {Inline(workout.ContextDisplay)}");
         builder.AppendLine($"**Week:** {workout.WeekNumber}");
         builder.AppendLine($"**Workout Type:** {workout.WorkoutType}");
         builder.AppendLine($"**Status:** {workout.Status}");

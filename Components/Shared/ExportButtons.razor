@@ -1,0 +1,40 @@
+@inject IWorkoutExportService ExportService
+@inject IJSRuntime JS
+
+<button class="btn btn-outline btn-sm export-icon-button" title="@($"Export {Label} as Markdown")" aria-label="@($"Export {Label} as Markdown")"
+        @onclick="() => Export(WorkoutExportFormat.Markdown)" disabled="@exporting">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="14" y2="17"/></svg>
+</button>
+<button class="btn btn-outline btn-sm export-icon-button" title="@($"Export {Label} as PDF")" aria-label="@($"Export {Label} as PDF")"
+        @onclick="() => Export(WorkoutExportFormat.Pdf)" disabled="@exporting">
+    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><path d="M8 15h2a1.5 1.5 0 0 0 0-3H8v5m5-5h1a2 2 0 0 1 0 4h-1v-4m4 0h3m-3 0v5"/></svg>
+</button>
+
+@code {
+    [Parameter, EditorRequired] public WorkoutExportScope Scope { get; set; }
+    [Parameter, EditorRequired] public int Id { get; set; }
+    [Parameter] public string Label { get; set; } = "workout";
+    /// <summary>Raised with an error message when an export fails, or null when a new export starts.</summary>
+    [Parameter] public EventCallback<string?> OnError { get; set; }
+
+    private bool exporting;
+
+    private async Task Export(WorkoutExportFormat format)
+    {
+        exporting = true;
+        await OnError.InvokeAsync(null);
+        try
+        {
+            var result = await ExportService.ExportAsync(new WorkoutExportRequest { Scope = Scope, Format = format, Id = Id });
+            await JS.InvokeVoidAsync("workoutExport.download", result.FileName, result.ContentType, Convert.ToBase64String(result.Content));
+        }
+        catch (WorkoutExportException ex)
+        {
+            await OnError.InvokeAsync(ex.Message);
+        }
+        finally
+        {
+            exporting = false;
+        }
+    }
+}

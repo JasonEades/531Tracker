@@ -26,6 +26,9 @@ public sealed class WorkoutExportService(
                 WorkoutExportScope.Day => await BuildDayDocumentAsync(request.Id, cancellationToken),
                 WorkoutExportScope.Week => await BuildWeekDocumentAsync(request.Id, cancellationToken),
                 WorkoutExportScope.Cycle => await BuildCycleDocumentAsync(request.Id, cancellationToken),
+                WorkoutExportScope.PplSession => await BuildPplSessionDocumentAsync(request.Id, cancellationToken),
+                WorkoutExportScope.PplWeek => await BuildPplWeekDocumentAsync(request.Id, cancellationToken),
+                WorkoutExportScope.PplProgram => await BuildPplProgramDocumentAsync(request.Id, cancellationToken),
                 _ => throw new WorkoutExportException("The requested export scope is not supported.")
             };
 
@@ -100,6 +103,163 @@ public sealed class WorkoutExportService(
         {
             Scope = WorkoutExportScope.Cycle,
             Cycle = MapCycle(cycle, dailySteps)
+        };
+    }
+
+    private const string PplProgramName = "Push/Pull/Legs";
+
+    private async Task<WorkoutExportDocument> BuildPplSessionDocumentAsync(int sessionId, CancellationToken cancellationToken)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var session = await PplSessionQuery()
+            .Include(s => s.Program)
+            .Include(s => s.Week)
+            .Where(s => s.Id == sessionId && s.Program.UserId == userId)
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new WorkoutExportException("The PPL session could not be found.");
+
+        var sessionDate = session.OccurredOn.Date;
+        var dailySteps = await GetDailyStepsAsync(userId, sessionDate, sessionDate.AddDays(1), cancellationToken);
+        var workout = MapPplSession(session, session.Program.Name, session.Week?.WeekNumber ?? 0, dailySteps);
+        return new WorkoutExportDocument
+        {
+            ProgramName = PplProgramName,
+            Scope = WorkoutExportScope.Day,
+            Workout = workout,
+            FileStem = $"PPL_Workout_{sessionDate:yyyy-MM-dd}_{workout.WorkoutName}"
+        };
+    }
+
+    private async Task<WorkoutExportDocument> BuildPplWeekDocumentAsync(int pplWeekId, CancellationToken cancellationToken)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var week = await PplWeekQuery()
+            .Include(w => w.Program)
+            .Where(w => w.Id == pplWeekId && w.Program.UserId == userId)
+            .SingleOrDefaultAsync(cancellationToken)
+            ?? throw new WorkoutExportException("The PPL training week could not be found.");
+
+        var weekStart = week.StartDate.Date;
+        var dailySteps = await GetDailyStepsAsync(userId, weekStart, weekStart.AddDays(7), cancellationToken);
+        return new WorkoutExportDocument
+        {
+            ProgramName = PplProgramName,
+            Scope = WorkoutExportScope.Week,
+            Week = MapPplWeek(week, week.Program.Name, dailySteps),
+            FileStem = $"PPL_Week_{week.WeekNumber:00}_{week.Program.Name}"
+        };
+    }
+
+    private async Task<WorkoutExportDocument> BuildPplProgramDocumentAsync(int programId, CancellationToken cancellationToken)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var program = await db.PplPrograms.AsNoTracking()
+            .SingleOrDefaultAsync(p => p.Id == programId && p.UserId == userId, cancellationToken)
+            ?? throw new WorkoutExportException("The PPL program could not be found.");
+        var weeks = await PplWeekQuery()
+            .Where(w => w.PplProgramId == programId)
+            .OrderBy(w => w.WeekNumber)
+            .ToListAsync(cancellationToken);
+
+        var dailySteps = weeks.Count == 0
+            ? []
+            : await GetDailyStepsAsync(userId, weeks.Min(w => w.StartDate).Date, weeks.Max(w => w.StartDate).Date.AddDays(7), cancellationToken);
+        var weekModels = weeks.Select(w => MapPplWeek(w, program.Name)).ToList();
+        return new WorkoutExportDocument
+        {
+            ProgramName = PplProgramName,
+            Scope = WorkoutExportScope.Cycle,
+            Cycle = new CycleExportModel
+            {
+                Id = program.Id,
+                Name = program.Name,
+                Noun = "Program",
+                ContextValue = $"{program.DaysPerWeek}-day Push/Pull/Legs split",
+                StatusLabel = program.IsActive ? "Active" : "Inactive",
+                CreatedAt = program.CreatedAt,
+                Notes = program.Notes,
+                DailySteps = dailySteps,
+                Weeks = weekModels,
+                Summary = Summarize(weekModels)
+            },
+            FileStem = $"PPL_Program_{program.Name}"
+        };
+    }
+
+    private IQueryable<PplSession> PplSessionQuery() => db.PplSessions
+        .AsNoTracking()
+        .Include(s => s.DayTemplate)
+        .Include(s => s.Exercises).ThenInclude(e => e.ExerciseSlot)
+        .Include(s => s.Exercises).ThenInclude(e => e.Sets)
+        .AsSplitQuery();
+
+    private IQueryable<PplWeek> PplWeekQuery() => db.PplWeeks
+        .AsNoTracking()
+        .Include(w => w.Sessions).ThenInclude(s => s.DayTemplate)
+        .Include(w => w.Sessions).ThenInclude(s => s.Exercises).ThenInclude(e => e.ExerciseSlot)
+        .Include(w => w.Sessions).ThenInclude(s => s.Exercises).ThenInclude(e => e.Sets)
+        .Include(w => w.AdditionalSessions).ThenInclude(s => s.StrengthExercises).ThenInclude(e => e.Sets)
+        .Include(w => w.AdditionalSessions).ThenInclude(s => s.CardioEntries).ThenInclude(e => e.Accessory)
+        .AsSplitQuery();
+
+    private static WeekExportModel MapPplWeek(PplWeek week, string programName, List<DailyStepExportModel>? dailySteps = null)
+    {
+        var workouts = week.Sessions
+            .OrderBy(s => s.OccurredOn).ThenBy(s => s.CreatedAt)
+            .Select(s => MapPplSession(s, programName, week.WeekNumber))
+            .ToList();
+        var additional = week.AdditionalSessions
+            .Where(s => !IsImportedStepSession(s))
+            .OrderBy(s => s.OccurredOn)
+            .ThenBy(s => s.CreatedAt)
+            .Select(MapAdditionalSession)
+            .ToList();
+        return new WeekExportModel
+        {
+            Id = week.Id,
+            WeekNumber = week.WeekNumber,
+            ContextValue = programName,
+            Workouts = workouts,
+            AdditionalSessions = additional,
+            DailySteps = dailySteps ?? [],
+            Summary = Summarize(workouts)
+        };
+    }
+
+    private static WorkoutExportModel MapPplSession(
+        PplSession session, string programName, int weekNumber, List<DailyStepExportModel>? dailySteps = null)
+    {
+        var exercises = session.Exercises.OrderBy(e => e.OrderInSession).Select(e => new ExerciseExportModel
+        {
+            Name = e.ExerciseName,
+            Category = e.ExerciseSlot?.MuscleGroup.ToString() ?? "Working",
+            Sets = e.Sets.OrderBy(s => s.SetNumber).Select(s => new SetExportModel
+            {
+                Number = s.SetNumber,
+                Type = e.RepsMin == e.RepsMax ? $"{e.RepsMax} reps" : $"{e.RepsMin}–{e.RepsMax} reps",
+                TargetReps = s.TargetReps,
+                TargetWeight = e.SuggestedWeight ?? 0,
+                ActualReps = s.ActualReps,
+                ActualWeight = s.ActualWeight,
+                IsCompleted = s.IsCompleted
+            }).ToList()
+        }).ToList();
+
+        return new WorkoutExportModel
+        {
+            Id = session.Id,
+            WeekNumber = weekNumber,
+            ProgramName = PplProgramName,
+            ContextLabel = "Plan",
+            ContextValue = programName,
+            WorkoutName = session.DayTemplate.Name,
+            WorkoutType = session.DayTemplate.DayType.ToString(),
+            WorkoutDate = session.OccurredOn,
+            Status = session.Status.ToString(),
+            Notes = session.Notes,
+            Exercises = exercises,
+            DailySteps = dailySteps ?? [],
+            Summary = Summarize(exercises, [])
         };
     }
 
@@ -303,7 +463,7 @@ public sealed class WorkoutExportService(
 
     private static string BuildFileName(WorkoutExportDocument document, WorkoutExportFormat format)
     {
-        var stem = document.Scope switch
+        var stem = document.FileStem ?? document.Scope switch
         {
             WorkoutExportScope.Day => $"Workout_{document.Workout!.WorkoutDate?.ToString("yyyy-MM-dd") ?? "undated"}_{document.Workout.WorkoutName}",
             WorkoutExportScope.Week => $"Week_{document.Week!.WeekNumber:00}_Cycle_{document.Week.CycleNumber}",

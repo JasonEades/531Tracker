@@ -39,6 +39,7 @@ else
                 </div>
             </div>
             <div class="workout-actions">
+                <ExportButtons Scope="WorkoutExportScope.PplSession" Id="SessionId" Label="workout" OnError="m => exportError = m" />
                 @if (session.Status == WorkoutStatus.NotStarted)
                 {
                     <button class="btn btn-primary" @onclick="StartSession">▶ Start</button>
@@ -49,6 +50,10 @@ else
                 }
             </div>
         </div>
+        @if (!string.IsNullOrWhiteSpace(exportError))
+        {
+            <div class="alert alert-danger mt-2">@exportError</div>
+        }
     </div>
 
     <div class="session-date-row">
@@ -302,6 +307,7 @@ else
     private Dictionary<(double Weight, double BarWeight), List<PlateLoadingResult>> plateMap = [];
     private Dictionary<int, Dictionary<int, PplPreviousSet>> previousSets = [];
     private string? setError;
+    private string? exportError;
     private List<Bar> bars = [];
     private Bar? defaultBar;
     private int? barPickerExerciseId;

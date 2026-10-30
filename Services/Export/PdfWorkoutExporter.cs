@@ -65,10 +65,10 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
     {
         container.Column(column =>
         {
-            SectionTitle(column.Item(), $"Training Cycle — {cycle.Name}", 18);
-            Metadata(column.Item(), $"Cycle {cycle.CycleNumber}  |  Created {cycle.CreatedAt:yyyy-MM-dd}  |  {(cycle.IsCompleted ? "Completed" : "In progress")}");
-            Note(column.Item(), "Cycle Notes", cycle.Notes);
-            Summary(column.Item(), "Cycle Summary", cycle.Summary, cycle.DailySteps);
+            SectionTitle(column.Item(), $"Training {cycle.Noun} — {cycle.Name}", 18);
+            Metadata(column.Item(), $"{cycle.ContextDisplay}  |  Created {cycle.CreatedAt:yyyy-MM-dd}  |  {cycle.StatusDisplay}");
+            Note(column.Item(), $"{cycle.Noun} Notes", cycle.Notes);
+            Summary(column.Item(), $"{cycle.Noun} Summary", cycle.Summary, cycle.DailySteps);
             foreach (var session in cycle.AdditionalSessions)
             {
                 column.Item().PaddingTop(10).LineHorizontal(1).LineColor(Colors.Grey.Lighten2);
@@ -87,7 +87,7 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
         container.Column(column =>
         {
             SectionTitle(column.Item(), $"Training Week — Week {week.WeekNumber}", 16);
-            Metadata(column.Item(), $"Cycle {week.CycleNumber}");
+            Metadata(column.Item(), week.ContextDisplay);
             Note(column.Item(), "Week Notes", week.Notes);
             Summary(column.Item(), "Weekly Summary", week.Summary, week.DailySteps);
             foreach (var workout in week.Workouts)
@@ -150,7 +150,7 @@ public sealed class PdfWorkoutExporter : IWorkoutExportRenderer
         container.Column(column =>
         {
             SectionTitle(column.Item(), $"Workout — {workout.WorkoutName}", 14);
-            Metadata(column.Item(), $"Date: {(workout.WorkoutDate?.ToString("yyyy-MM-dd") ?? "—")}  |  Cycle: {workout.CycleNumber}  |  Week: {workout.WeekNumber}  |  Status: {workout.Status}");
+            Metadata(column.Item(), $"Date: {(workout.WorkoutDate?.ToString("yyyy-MM-dd") ?? "—")}  |  {workout.ContextLabel}: {workout.ContextValue ?? workout.CycleNumber.ToString()}  |  Week: {workout.WeekNumber}  |  Status: {workout.Status}");
             Note(column.Item(), "Workout Notes", workout.Notes);
             foreach (var exercise in workout.Exercises)
             {

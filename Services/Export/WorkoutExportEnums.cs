@@ -4,7 +4,10 @@ public enum WorkoutExportScope
 {
     Day,
     Week,
-    Cycle
+    Cycle,
+    PplSession,
+    PplWeek,
+    PplProgram
 }
 
 public enum WorkoutExportFormat
