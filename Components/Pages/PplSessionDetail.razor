@@ -104,16 +104,13 @@ else
     </div>
 
     @* ── Exercise cards ──────────────────────────────────────── *@
+    @if (setError is not null)
+    {
+        <div class="alert alert-danger">@setError</div>
+    }
     @foreach (var exercise in session.Exercises.OrderBy(e => e.OrderInSession))
     {
         var isOneOffSwap = !string.Equals(exercise.ExerciseName, exercise.ExerciseSlot.ExerciseName, StringComparison.OrdinalIgnoreCase);
-        var alreadyProgressed = !isOneOffSwap && exercise.SuggestedWeight.HasValue && exercise.ExerciseSlot.CurrentWeight != exercise.SuggestedWeight;
-        var shouldProgress = !isOneOffSwap
-            && !exercise.ExerciseSlot.IsBodyweight
-            && exercise.ExerciseSlot.ProgressionIncrement > 0
-            && exercise.SuggestedWeight.HasValue
-            && !alreadyProgressed
-            && Progression.ShouldProgress(exercise.Sets, exercise.RepsMax);
         var e1Rm = exercise.ExerciseSlot.IsBodyweight ? null : Progression.CalculateE1Rm(exercise);
         var canSwap = session.Status != WorkoutStatus.Completed && !exercise.Sets.Any(s => s.IsCompleted);
         var exerciseBar = BarFor(exercise);
@@ -139,16 +136,6 @@ else
                         }
                     </div>
                 </div>
-                @if (shouldProgress && session.Status != WorkoutStatus.Completed)
-                {
-                    <button class="btn btn-success btn-sm" @onclick="() => ApplyProgression(exercise.Id)">
-                        ↑ +@exercise.ExerciseSlot.ProgressionIncrement lbs next session
-                    </button>
-                }
-                else if (alreadyProgressed && exercise.ExerciseSlot.CurrentWeight.HasValue)
-                {
-                    <span class="badge badge-success">↑ @DisplayWeight(exercise.ExerciseSlot.CurrentWeight) lbs next session</span>
-                }
                 @if (canSwap && swapExerciseId != exercise.Id)
                 {
                     <button class="btn btn-outline btn-sm" @onclick="() => OpenSwap(exercise.Id)">⇄ Swap</button>
@@ -273,7 +260,16 @@ else
                             disabled="@(session.Status == WorkoutStatus.Completed)">
                         @(set.IsCompleted ? "✓" : "")
                     </button>
+                    @if (session.Status != WorkoutStatus.Completed && exercise.Sets.Count > 1)
+                    {
+                        <button class="set-remove-btn" title="Remove set @set.SetNumber" aria-label="Remove set @set.SetNumber"
+                                @onclick="() => RemoveSet(set)">✕</button>
+                    }
                 </div>
+            }
+            @if (session.Status != WorkoutStatus.Completed)
+            {
+                <button class="btn btn-ghost btn-sm" @onclick="() => AddSet(exercise)">+ Add set</button>
             }
 
         </div>
@@ -304,6 +300,7 @@ else
     private Timer? restTimer;
     private Dictionary<(double Weight, double BarWeight), List<PlateLoadingResult>> plateMap = [];
     private Dictionary<int, Dictionary<int, PplPreviousSet>> previousSets = [];
+    private string? setError;
     private List<Bar> bars = [];
     private Bar? defaultBar;
     private int? barPickerExerciseId;
@@ -496,7 +493,6 @@ else
     {
         StopRestTimer();
         await SessionService.CompleteSessionAsync(SessionId);
-        await Progression.ApplySessionProgressionAsync(SessionId);
         await LoadSession();
     }
 
@@ -591,10 +587,32 @@ else
         return ValueTask.CompletedTask;
     }
 
-    private async Task ApplyProgression(int sessionExerciseId)
+    private async Task RemoveSet(PplSessionSet set)
     {
-        await Progression.ApplyProgressionAsync(sessionExerciseId);
-        await LoadSession();
+        setError = null;
+        try
+        {
+            if (await SessionService.RemoveSetAsync(set.Id))
+                await LoadSession();
+        }
+        catch (InvalidOperationException ex)
+        {
+            setError = ex.Message;
+        }
+    }
+
+    private async Task AddSet(PplSessionExercise exercise)
+    {
+        setError = null;
+        try
+        {
+            if (await SessionService.AddSetAsync(exercise.Id) is not null)
+                await LoadSession();
+        }
+        catch (InvalidOperationException ex)
+        {
+            setError = ex.Message;
+        }
     }
 
     private async Task AutoStart()

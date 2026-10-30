@@ -942,6 +942,18 @@ select.form-control { appearance: auto; cursor: pointer; }
     border-color: var(--color-success);
     color: #0E1A11;
 }
+.set-remove-btn {
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: var(--radius-md);
+    background: transparent;
+    color: var(--color-text-muted);
+    cursor: pointer;
+    flex-shrink: 0;
+    padding: 0;
+}
+.set-remove-btn:hover, .set-remove-btn:focus-visible { color: var(--color-danger); }
 
 /* Plate chips */
 .plate-chips-inline {

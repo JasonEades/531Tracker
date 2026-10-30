@@ -539,7 +539,7 @@ public sealed class WorkoutExportTests
     }
 
     [Fact]
-    public async Task PplProgressionAppliesOnceWithSmallIncrementsAndRequiresAllSets()
+    public async Task PplWeightsCarryForwardFromManualAdjustmentsWithoutAutomaticIncrease()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -551,36 +551,35 @@ public sealed class WorkoutExportTests
         var user = new TestCurrentUserService("owner");
         var programService = CreatePplProgramService(context, user);
         var sessionService = new PplSessionService(context, user);
-        var progression = new PplProgressionService(context, new WeightCalculator(), user);
-        var otherProgression = new PplProgressionService(context, new WeightCalculator(), new TestCurrentUserService("other"));
+        var otherSessionService = new PplSessionService(context, new TestCurrentUserService("other"));
 
         var program = await programService.CreateProgramAsync("PPL", 3);
         var details = await programService.GetProgramWithDetailsAsync(program.Id);
         var slot = details!.DayTemplates.OrderBy(d => d.OrderInWeek).First().ExerciseSlots.First(s => !s.IsBodyweight);
         await programService.ConfigureStartingWeightsAsync(program.Id, new Dictionary<int, double?> { [slot.Id] = 100 });
-        slot.ProgressionIncrement = 2.5;
-        await context.SaveChangesAsync();
 
-        var session = await programService.GetOrCreateNextSessionAsync(program.Id);
-        var exercise = (await sessionService.GetSessionWithDetailsAsync(session.Id))!.Exercises.Single(e => e.PplExerciseSlotId == slot.Id);
+        var week1 = await programService.GetOrCreateNextSessionAsync(program.Id);
+        var exercise = (await sessionService.GetSessionWithDetailsAsync(week1.Id))!.Exercises.Single(e => e.PplExerciseSlotId == slot.Id);
         var sets = exercise.Sets.OrderBy(s => s.SetNumber).ToList();
 
-        await sessionService.UpdateSetAsync(sets[0].Id, 100, exercise.RepsMax, true);
-        context.ChangeTracker.Clear();
-        Assert.False(await progression.ApplyProgressionAsync(exercise.Id));
-
+        await sessionService.UpdateSetWeightAsync(sets[0].Id, 105);
         foreach (var set in sets)
-            await sessionService.UpdateSetAsync(set.Id, 100, exercise.RepsMax, true);
+            await sessionService.UpdateSetAsync(set.Id, 105, exercise.RepsMax, true);
+        await otherSessionService.UpdateSetAsync(sets[0].Id, 500, exercise.RepsMax, true);
+        await sessionService.CompleteSessionAsync(week1.Id);
         context.ChangeTracker.Clear();
 
-        Assert.False(await otherProgression.ApplyProgressionAsync(exercise.Id));
-        Assert.True(await progression.ApplyProgressionAsync(exercise.Id));
-        Assert.False(await progression.ApplyProgressionAsync(exercise.Id));
+        // Every set hit the top of the rep range, yet the weight is exactly what the user lifted — no auto increase.
+        Assert.Equal(105, (await context.PplExerciseSlots.SingleAsync(s => s.Id == slot.Id)).CurrentWeight);
 
-        await sessionService.CompleteSessionAsync(session.Id);
-        Assert.Equal(0, await progression.ApplySessionProgressionAsync(session.Id));
+        for (var day = 0; day < 2; day++)
+            await sessionService.CompleteSessionAsync((await programService.GetOrCreateNextSessionAsync(program.Id)).Id);
+        var week2 = await programService.GetOrCreateNextSessionAsync(program.Id);
         context.ChangeTracker.Clear();
-        Assert.Equal(102.5, (await context.PplExerciseSlots.SingleAsync(s => s.Id == slot.Id)).CurrentWeight);
+
+        Assert.NotEqual(week1.Id, week2.Id);
+        var next = await context.PplSessionExercises.SingleAsync(e => e.PplSessionId == week2.Id && e.PplExerciseSlotId == slot.Id);
+        Assert.Equal(105, next.SuggestedWeight);
     }
 
     [Fact]
@@ -691,7 +690,7 @@ public sealed class WorkoutExportTests
     }
 
     [Fact]
-    public async Task PplSessionCompletionAutoProgressesEarnedExercises()
+    public async Task PplSetsCanBeRemovedAndAddedOnlyInOpenOwnedSessions()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
         await connection.OpenAsync();
@@ -703,26 +702,39 @@ public sealed class WorkoutExportTests
         var user = new TestCurrentUserService("owner");
         var programService = CreatePplProgramService(context, user);
         var sessionService = new PplSessionService(context, user);
-        var progression = new PplProgressionService(context, new WeightCalculator(), user);
+        var otherSessionService = new PplSessionService(context, new TestCurrentUserService("other"));
 
         var program = await programService.CreateProgramAsync("PPL", 3);
-        var details = await programService.GetProgramWithDetailsAsync(program.Id);
-        var slot = details!.DayTemplates.OrderBy(d => d.OrderInWeek).First().ExerciseSlots.First(s => !s.IsBodyweight);
-        await programService.ConfigureStartingWeightsAsync(program.Id, new Dictionary<int, double?> { [slot.Id] = 135 });
-
         var session = await programService.GetOrCreateNextSessionAsync(program.Id);
-        Assert.Equal(0, await progression.ApplySessionProgressionAsync(session.Id));
-
-        var exercise = (await sessionService.GetSessionWithDetailsAsync(session.Id))!.Exercises.Single(e => e.PplExerciseSlotId == slot.Id);
-        foreach (var set in exercise.Sets)
-            await sessionService.UpdateSetAsync(set.Id, 135, exercise.RepsMax, true);
-        await sessionService.CompleteSessionAsync(session.Id);
+        var exercise = (await sessionService.GetSessionWithDetailsAsync(session.Id))!.Exercises.First(e => e.Sets.Count >= 3);
+        var sets = exercise.Sets.OrderBy(s => s.SetNumber).ToList();
+        var originalCount = sets.Count;
         context.ChangeTracker.Clear();
 
-        Assert.Equal(1, await progression.ApplySessionProgressionAsync(session.Id));
-        Assert.Equal(0, await progression.ApplySessionProgressionAsync(session.Id));
-        var progressed = await context.PplExerciseSlots.SingleAsync(s => s.Id == slot.Id);
-        Assert.Equal(135 + progressed.ProgressionIncrement, progressed.CurrentWeight);
+        Assert.False(await otherSessionService.RemoveSetAsync(sets[0].Id));
+        Assert.Null(await otherSessionService.AddSetAsync(exercise.Id));
+
+        Assert.True(await sessionService.RemoveSetAsync(sets[0].Id));
+        context.ChangeTracker.Clear();
+        var remaining = await context.PplSessionSets.Where(s => s.PplSessionExerciseId == exercise.Id).OrderBy(s => s.SetNumber).ToListAsync();
+        Assert.Equal(originalCount - 1, remaining.Count);
+        Assert.Equal(Enumerable.Range(1, remaining.Count), remaining.Select(s => s.SetNumber));
+        Assert.Equal(sets[1].Id, remaining[0].Id);
+        Assert.Equal(originalCount - 1, (await context.PplSessionExercises.SingleAsync(e => e.Id == exercise.Id)).TargetSets);
+
+        foreach (var set in remaining.Skip(1))
+            await sessionService.RemoveSetAsync(set.Id);
+        context.ChangeTracker.Clear();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sessionService.RemoveSetAsync(remaining[0].Id));
+
+        var added = await sessionService.AddSetAsync(exercise.Id);
+        Assert.Equal(2, added!.SetNumber);
+        context.ChangeTracker.Clear();
+
+        await sessionService.CompleteSessionAsync(session.Id);
+        context.ChangeTracker.Clear();
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sessionService.RemoveSetAsync(added.Id));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => sessionService.AddSetAsync(exercise.Id));
     }
 
     [Fact]
@@ -952,7 +964,6 @@ public sealed class WorkoutExportTests
         var calculator = new WeightCalculator();
         var programService = CreatePplProgramService(context, user);
         var sessionService = new PplSessionService(context, user);
-        var progression = new PplProgressionService(context, calculator, user);
         var swap = new PplExerciseSwapService(context, user, new EstimatedStrengthService(context, calculator), calculator, new AccessoryService(context, user));
         var otherUser = new TestCurrentUserService("other");
         var otherSwap = new PplExerciseSwapService(context, otherUser, new EstimatedStrengthService(context, calculator), calculator, new AccessoryService(context, otherUser));
@@ -973,16 +984,17 @@ public sealed class WorkoutExportTests
         var pushUp = chestOptions.Single(o => o.Name == "Push-Up");
         await Assert.ThrowsAsync<InvalidOperationException>(() => otherSwap.SwapAsync(incline.Id, pushUp.Id, PplSwapScope.ThisWorkout));
 
-        // One-off: session snapshot changes, plan and progression stay on the original exercise.
+        // One-off: session snapshot changes, the plan exercise and its weight stay on the original exercise.
         await swap.SwapAsync(incline.Id, chestOptions.Single(o => o.Name == "Dumbbell Fly").Id, PplSwapScope.ThisWorkout);
         context.ChangeTracker.Clear();
         var oneOff = await context.PplSessionExercises.Include(e => e.ExerciseSlot).Include(e => e.Sets).SingleAsync(e => e.Id == incline.Id);
         Assert.Equal("Dumbbell Fly", oneOff.ExerciseName);
         Assert.Equal("Incline DB Press", oneOff.ExerciseSlot.ExerciseName);
+        var planWeight = oneOff.ExerciseSlot.CurrentWeight;
         foreach (var set in oneOff.Sets)
             await sessionService.UpdateSetAsync(set.Id, 40, oneOff.RepsMax, true);
         context.ChangeTracker.Clear();
-        Assert.False(await progression.ApplyProgressionAsync(incline.Id));
+        Assert.Equal(planWeight, (await context.PplExerciseSlots.SingleAsync(s => s.Id == incline.PplExerciseSlotId)).CurrentWeight);
         await Assert.ThrowsAsync<InvalidOperationException>(() => swap.SwapAsync(incline.Id, pushUp.Id, PplSwapScope.ThisWorkout));
 
         // Permanent: the plan slot is replaced and the next session uses it.
