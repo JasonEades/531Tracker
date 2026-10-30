@@ -14,10 +14,16 @@ public interface IPplSessionService
     Task UpdateRestSecondsAsync(int sessionId, int restSeconds);
     Task UpdateSessionNotesAsync(int sessionId, string? notes);
     Task UpdateSetAsync(int setId, double? actualWeight, int? actualReps, bool isCompleted);
+    Task<IReadOnlyList<int>> UpdateSetWeightAsync(int setId, double weight);
     Task SetStartingWeightAsync(int exerciseSlotId, double weight);
     /// <summary>Sets the bar used for plate loading (null = default bar) and remembers it for the plan exercise.</summary>
     Task SetExerciseBarAsync(int sessionExerciseId, int? barId);
     Task<List<PplSession>> GetSessionHistoryAsync(int programId, int take = 30);
+    /// <summary>
+    /// For each exercise in the session (keyed by session-exercise id), the completed sets (keyed by set number)
+    /// from the most recent earlier PPL session of the user that included an exercise with the same name.
+    /// </summary>
+    Task<Dictionary<int, Dictionary<int, PplPreviousSet>>> GetPreviousSetsAsync(int sessionId);
 }
 
 public class PplSessionService(AppDbContext db, ICurrentUserService userContext) : IPplSessionService
@@ -152,6 +158,89 @@ public class PplSessionService(AppDbContext db, ICurrentUserService userContext)
             set.IsCompleted = isCompleted;
             await db.SaveChangesAsync();
         }
+    }
+
+    /// <summary>
+    /// Sets a set's weight and carries it forward to every later, not-yet-completed set of the same exercise.
+    /// Returns the ids of all sets whose weight was changed.
+    /// </summary>
+    public async Task<Dictionary<int, Dictionary<int, PplPreviousSet>>> GetPreviousSetsAsync(int sessionId)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var current = await db.PplSessions
+            .Where(s => s.Id == sessionId && s.Program.UserId == userId)
+            .Select(s => new
+            {
+                s.Id,
+                s.OccurredOn,
+                Exercises = s.Exercises.Select(e => new { e.Id, e.ExerciseName }).ToList()
+            })
+            .FirstOrDefaultAsync();
+        if (current is null || current.Exercises.Count == 0)
+            return [];
+
+        var names = current.Exercises.Select(e => e.ExerciseName.ToLower()).Distinct().ToList();
+        var rows = await db.PplSessionSets
+            .Where(s => s.IsCompleted && s.ActualReps != null
+                && s.SessionExercise.Session.Program.UserId == userId
+                && s.SessionExercise.PplSessionId != current.Id
+                && (s.SessionExercise.Session.OccurredOn < current.OccurredOn
+                    || (s.SessionExercise.Session.OccurredOn == current.OccurredOn && s.SessionExercise.PplSessionId < current.Id))
+                && names.Contains(s.SessionExercise.ExerciseName.ToLower()))
+            .Select(s => new
+            {
+                Name = s.SessionExercise.ExerciseName,
+                SessionId = s.SessionExercise.PplSessionId,
+                s.SessionExercise.Session.OccurredOn,
+                s.SetNumber,
+                Reps = s.ActualReps!.Value,
+                s.ActualWeight
+            })
+            .ToListAsync();
+
+        var latestByName = rows
+            .GroupBy(r => r.Name.ToLowerInvariant())
+            .ToDictionary(
+                g => g.Key,
+                g =>
+                {
+                    var latest = g.OrderByDescending(r => r.OccurredOn).ThenByDescending(r => r.SessionId).First();
+                    return g.Where(r => r.SessionId == latest.SessionId)
+                        .GroupBy(r => r.SetNumber)
+                        .ToDictionary(sg => sg.Key, sg =>
+                        {
+                            var r = sg.First();
+                            return new PplPreviousSet(r.SetNumber, r.Reps, r.ActualWeight, r.OccurredOn);
+                        });
+                });
+
+        return current.Exercises
+            .Where(e => latestByName.ContainsKey(e.ExerciseName.ToLowerInvariant()))
+            .ToDictionary(e => e.Id, e => latestByName[e.ExerciseName.ToLowerInvariant()]);
+    }
+
+    public async Task<IReadOnlyList<int>> UpdateSetWeightAsync(int setId, double weight)
+    {
+        if (!IsValidWeight(weight))
+            throw new ArgumentOutOfRangeException(nameof(weight), $"Weight must be between 0 and {MaxWeight}.");
+
+        var userId = await userContext.GetUserIdAsync();
+        var set = await db.PplSessionSets
+            .Include(s => s.SessionExercise)
+                .ThenInclude(e => e.Sets)
+            .FirstOrDefaultAsync(s => s.Id == setId && s.SessionExercise.Session.Program.UserId == userId);
+        if (set is null)
+            return [];
+
+        var updated = new List<int>();
+        foreach (var target in set.SessionExercise.Sets
+                     .Where(s => s.Id == set.Id || (s.SetNumber > set.SetNumber && !s.IsCompleted)))
+        {
+            target.ActualWeight = weight;
+            updated.Add(target.Id);
+        }
+        await db.SaveChangesAsync();
+        return updated;
     }
 
     public async Task SetExerciseBarAsync(int sessionExerciseId, int? barId)

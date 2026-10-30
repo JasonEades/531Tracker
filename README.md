@@ -124,6 +124,8 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 - **Add Accessory Exercise** on any PPL day; accessories carry into generated sessions
 - **⇄ Swap** any exercise in an unstarted PPL session for another catalog or custom exercise that trains the same muscle (same movement type listed first). Choose **This workout only** (the plan and its progression stay unchanged) or **All future workouts** (replaces the plan exercise). The swapped exercise's weight is derived from your e1RM history when available, otherwise from a matching logged accessory. You can also swap to any of your generic accessories (cardio excluded); it starts at the last weight you logged for that accessory
 - **Change bar** on any weighted PPL exercise (e.g. EZ curl, trap, or women's bar from Settings): the plate breakdown recalculates for that bar's weight and the choice is remembered for future sessions of that plan exercise (one-off swaps reset to the default bar)
+- Changing a set's weight in a PPL session carries it forward to every later set of that exercise that isn't checked off yet, so you only enter a new weight once (earlier and completed sets are left alone)
+- Each PPL set shows **Last: N reps @ W lbs** from the same set number in your most recent earlier session of that exercise (matched by exercise name across weeks and programs; only checked-off sets count)
 - New programs derive starting weights from your previous training: each exercise uses the best e1RM from the most recent 5/3/1 cycle or PPL program that trained it (not the all-time best), then to your most recently logged weight for a matching accessory, falling back to manual entry when there is no history
 - Accessory matching during PPL setup: names are matched fuzzily (plurals, hyphens, DB/BB/Ext/RDL/OHP abbreviations) while conflicting equipment or movement words are rejected (e.g. Leg Curl ≠ Dumbbell Curl); each exercise has a "Use weight from" picker listing likely matches first, and logged weights outside the PPL rep range are converted via e1RM
 - Exercise slots and session tracking; set weights (0–2000 lbs) and reps (0–100) are validated
@@ -396,6 +398,8 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - PPL week plan: starting days in any order, replacing untouched open sessions, blocking switches after sets are logged, rejecting days already done this week, and cross-user isolation
 - PPL exercise swaps: same-muscle options, one-off vs. permanent scope, no progression of the plan exercise after a one-off swap, rejection after sets are logged, and cross-user isolation
 - PPL generic-accessory swaps (last logged weight, cardio and other users' accessories excluded) and per-exercise bars (user-owned bars only, remembered for future sessions, plate loading per bar, default fallback when a bar is deleted)
+- PPL set-weight carry-forward (later incomplete sets only, completed/earlier sets untouched, cross-user isolation)
+- PPL "last time" reps per set (most recent earlier session by name, completed sets only, cross-user isolation)
 - Exercise-library search/filtering, custom-exercise ownership isolation, and PPL catalog selection
 - Multi-user isolation of settings, bars, programs, accessories, latest accessory weights, and the dashboard's current-cycle lookup
 - Exercise-name matching (equivalent names auto-match, different movements/equipment are rejected) and accessory weight rep-range conversion

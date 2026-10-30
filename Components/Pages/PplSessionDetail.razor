@@ -233,6 +233,12 @@ else
                     @DisplayWeight(set.ActualWeight ?? exercise.SuggestedWeight) <span class="set-unit">lbs</span>
                         </div>
                         <div class="set-reps-label">× @set.TargetReps reps target</div>
+                        @if (previousSets.TryGetValue(exercise.Id, out var lastSets) && lastSets.TryGetValue(set.SetNumber, out var last))
+                        {
+                            <div class="set-last-label" title="@($"Last session: {last.OccurredOn:MMM d}")">
+                                Last: <strong>@last.Reps</strong> reps@(exercise.ExerciseSlot.IsBodyweight || last.Weight is null ? "" : $" @ {DisplayWeight(last.Weight)} lbs")
+                            </div>
+                        }
                         @if (!exercise.ExerciseSlot.IsBodyweight &&
                              (set.ActualWeight ?? exercise.SuggestedWeight) is double setWeight &&
                              plateMap.TryGetValue((setWeight, exerciseBar.Weight), out var plates) &&
@@ -297,6 +303,7 @@ else
     private int restRemaining;
     private Timer? restTimer;
     private Dictionary<(double Weight, double BarWeight), List<PlateLoadingResult>> plateMap = [];
+    private Dictionary<int, Dictionary<int, PplPreviousSet>> previousSets = [];
     private List<Bar> bars = [];
     private Bar? defaultBar;
     private int? barPickerExerciseId;
@@ -396,6 +403,7 @@ else
     private async Task LoadSession()
     {
         session = await SessionService.GetSessionWithDetailsAsync(SessionId);
+        previousSets = session is null ? [] : await SessionService.GetPreviousSetsAsync(SessionId);
         if (session is not null)
         {
             restSeconds = Math.Clamp(session.RestSeconds, 0, 600);
@@ -503,8 +511,9 @@ else
     {
         if (double.TryParse(e.Value?.ToString(), out var w) && PplSessionService.IsValidWeight(w))
         {
-            set.ActualWeight = w;
-            await SessionService.UpdateSetAsync(set.Id, set.ActualWeight, set.ActualReps, set.IsCompleted);
+            var updatedIds = (await SessionService.UpdateSetWeightAsync(set.Id, w)).ToHashSet();
+            foreach (var s in exercise.Sets.Where(s => updatedIds.Contains(s.Id)))
+                s.ActualWeight = w;
             if (!exercise.SuggestedWeight.HasValue && !exercise.ExerciseSlot.IsBodyweight
                 && string.Equals(exercise.ExerciseName, exercise.ExerciseSlot.ExerciseName, StringComparison.OrdinalIgnoreCase))
             {
