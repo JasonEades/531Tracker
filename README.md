@@ -134,7 +134,8 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 - Remove a set with **✕** (at least one set stays; remaining sets renumber) or add one back with **+ Add set** while the session is open; this only changes the current session
 - Per-exercise estimated 1RM on the session page, plus estimated 1RM history for compound exercises on the dashboard
 - Completed-session history and volume statistics, viewable for any program
-- Switch the active PPL program from the Workouts page
+- Program landing page at `/ppl/{id}` (opened from the History page or **View All Sessions** on the dashboard), similar to the 5/3/1 cycle page: an **Upcoming** tab shows this week's days (start, continue, or view each in any order) plus the next three planned weeks with each day's exercises, sets × reps, and current weights (customized weeks are flagged and editable), and a **Past** tab lists every logged week with session cards, volume stats, and additional sessions. The legacy `/ppl/history` route redirects here
+- Switch the active PPL program from the Workouts page or the program page
 - Program deletion asks for confirmation and removes all of the program's sessions
 
 ### Notes, history, and exports
@@ -398,6 +399,7 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - PPL weight carry-forward (manually adjusted weight seeds the next session, no automatic increase, user isolation), rotation-based week numbering, and set-value validation
 - PPL set removal/addition (renumbering, at least one set, open sessions only, cross-user isolation)
 - PPL week plan: starting days in any order, replacing untouched open sessions, blocking switches after sets are logged, rejecting days already done this week, and cross-user isolation
+- PPL program overview: current, upcoming (default vs. customized), and past weeks, no sessions created by viewing, and cross-user isolation
 - PPL exercise swaps: same-muscle options, one-off vs. permanent scope, plan weight unchanged after a one-off swap, rejection after sets are logged, and cross-user isolation
 - PPL generic-accessory swaps (last logged weight, cardio and other users' accessories excluded) and per-exercise bars (user-owned bars only, remembered for future sessions, plate loading per bar, default fallback when a bar is deleted)
 - PPL set-weight carry-forward (later incomplete sets only, completed/earlier sets untouched, cross-user isolation)

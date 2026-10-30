@@ -11,7 +11,7 @@
 
 <div class="ppl-setup">
     <div class="setup-header">
-        <button class="btn btn-ghost btn-sm back-btn" @onclick='() => Nav.NavigateTo("/")'>← Dashboard</button>
+        <button class="btn btn-ghost btn-sm back-btn" @onclick='() => Nav.NavigateTo($"/ppl/{ProgramId}")'>← Program</button>
         <h1>Configure PPL Workouts</h1>
         @if (program is not null)
         {
@@ -118,13 +118,14 @@
             <button class="btn btn-primary flex-1 btn-lg" @onclick="Save" disabled="@saving">
                 @(saving ? "Saving…" : $"Save Week {selectedWeek} Workouts")
             </button>
-            <button class="btn btn-outline" @onclick='() => Nav.NavigateTo("/")'>Done</button>
+            <button class="btn btn-outline" @onclick='() => Nav.NavigateTo($"/ppl/{ProgramId}")'>Done</button>
         </div>
     }
 </div>
 
 @code {
     [Parameter] public int ProgramId { get; set; }
+    [SupplyParameterFromQuery] public int? Week { get; set; }
 
     private PplProgram? program;
     private List<WorkoutDayDraft> days = [];
@@ -144,7 +145,7 @@
         program = await PplService.GetProgramWithDetailsAsync(ProgramId);
         if (program is not null)
         {
-            selectedWeek = await PplService.GetCurrentWeekNumberAsync(ProgramId);
+            selectedWeek = Week is > 0 ? Week.Value : await PplService.GetCurrentWeekNumberAsync(ProgramId);
             await LoadWeek();
         }
         loading = false;

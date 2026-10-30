@@ -1,0 +1,428 @@
+@page "/ppl/{ProgramId:int}"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IPplProgramService PplService
+@inject IAdditionalSessionService AdditionalSessions
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+
+<PageTitle>@(overview?.Program.Name ?? "PPL Program") — Jason's Garage Lab</PageTitle>
+
+@if (loading)
+{
+    <div class="loading"><div class="spinner"></div></div>
+}
+else if (overview is null)
+{
+    <div class="empty-state">
+        <h3>PPL program not found</h3>
+        <button class="btn btn-outline mt-1" @onclick='() => Nav.NavigateTo("/cycles")'>Back to History</button>
+    </div>
+}
+else
+{
+    var program = overview.Program;
+    var plan = overview.CurrentWeek;
+    var doneThisWeek = plan.Days.Count(d => d.State == PplDayState.Completed);
+    var weekPct = plan.Days.Count > 0 ? (int)(doneThisWeek * 100.0 / plan.Days.Count) : 0;
+    var currentWeekRecord = overview.Weeks.FirstOrDefault(w => w.WeekNumber == plan.WeekNumber);
+    var pastWeeks = overview.Weeks.Where(w => w.WeekNumber != plan.WeekNumber).ToList();
+
+    @* ── Header ──────────────────────────────────────────── *@
+    <div class="workout-header">
+        <button class="btn btn-ghost btn-sm back-btn" @onclick='() => Nav.NavigateTo("/cycles")'>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+            History
+        </button>
+        <div class="workout-title-row">
+            <div>
+                <h1>@program.Name</h1>
+                <div class="workout-meta-line">
+                    @program.DaysPerWeek-day split · Created @program.CreatedAt.ToLocalTime().ToString("MMM d, yyyy")
+                    <span class="badge @(program.IsActive ? "badge-warning" : "badge-muted") ml-1">@(program.IsActive ? "Active" : "Inactive")</span>
+                </div>
+            </div>
+            <div class="workout-actions">
+                @if (!program.IsActive)
+                {
+                    <button class="btn btn-primary btn-sm" @onclick="SetActive" disabled="@busy">Set Active</button>
+                }
+                <button class="btn btn-outline btn-sm" @onclick="() => Configure(plan.WeekNumber)">Configure Workouts</button>
+                <button class="btn btn-sm" style="color:var(--color-danger);background:var(--color-danger-dim);"
+                        @onclick="DeleteProgram" disabled="@busy">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    @if (!string.IsNullOrWhiteSpace(error))
+    {
+        <div class="alert alert-danger mb-3">@error</div>
+    }
+
+    @* ── Week progress ─────────────────────────────────────── *@
+    <div class="progress-strip mb-4">
+        <div class="flex items-center justify-between mb-1">
+            <span class="sets-progress-label">Week @plan.WeekNumber Progress</span>
+            <span class="sets-progress-label">@doneThisWeek / @plan.Days.Count sessions · @CompletedSessionCount completed overall</span>
+        </div>
+        <div class="progress-bar-wrapper">
+            <div class="progress-bar-fill" style="width:@weekPct%"></div>
+        </div>
+    </div>
+
+    <nav class="ppl-section-tabs mb-4" aria-label="PPL sessions">
+        <button class="ppl-section-tab @(view == SessionView.Upcoming ? "active" : "")" @onclick="() => view = SessionView.Upcoming">
+            Upcoming
+        </button>
+        <button class="ppl-section-tab @(view == SessionView.Past ? "active" : "")" @onclick="() => view = SessionView.Past">
+            Past (@CompletedSessionCount)
+        </button>
+    </nav>
+
+    @if (view == SessionView.Upcoming)
+    {
+        @* ── This week ─────────────────────────────────────── *@
+        <div class="week-section mb-4">
+            <div class="week-section-header">
+                <div class="week-section-title">
+                    Week @plan.WeekNumber
+                    <span class="week-scheme">This week</span>
+                    @if (overview.CurrentSchedule.IsCustomized)
+                    {
+                        <span class="badge badge-info">Custom</span>
+                    }
+                </div>
+                <div class="flex gap-1">
+                    @if (currentWeekRecord is not null)
+                    {
+                        <button class="btn btn-outline btn-sm" @onclick="() => AddSession(currentWeekRecord.Id)">+ Add Session</button>
+                    }
+                </div>
+            </div>
+            <div class="week-grid">
+                @foreach (var day in plan.Days)
+                {
+                    var isNext = day.DayTemplateId == plan.SuggestedDayTemplateId;
+                    var template = overview.CurrentSchedule.Days.FirstOrDefault(t => t.Id == day.DayTemplateId);
+                    <button class="workout-item ppl-day-item" disabled="@busy" @onclick="() => OpenDay(day)">
+                        <div class="flex items-start gap-2 ppl-day-main">
+                            <span class="status-dot @GetDayStateClass(day.State) mt-1"></span>
+                            <div>
+                                <div class="workout-name">
+                                    @day.Name
+                                    <span class="badge @GetDayTypeBadge(day.DayType) ml-1">@day.DayType</span>
+                                </div>
+                                <div class="workout-meta">@GetDayStateLabel(day, isNext)</div>
+                                @if (day.State != PplDayState.Completed && template is not null)
+                                {
+                                    <ul class="ppl-exercise-preview">
+                                        @foreach (var slot in template.ExerciseSlots.OrderBy(s => s.OrderInDay))
+                                        {
+                                            <li><span>@slot.ExerciseName</span><span>@FormatSlot(slot)</span></li>
+                                        }
+                                    </ul>
+                                }
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <span class="badge @(day.State switch { PplDayState.Completed => "badge-success", PplDayState.Open => "badge-warning", _ => isNext ? "badge-info" : "badge-muted" })">
+                                @(day.State switch { PplDayState.Completed => "View", PplDayState.Open => "Continue", _ => "Start" })
+                            </span>
+                            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--color-text-muted)"><polyline points="9 18 15 12 9 6"/></svg>
+                        </div>
+                    </button>
+                }
+            </div>
+            @if (currentWeekRecord is not null && currentWeekRecord.AdditionalSessions.Count > 0)
+            {
+                <div class="week-grid mt-2">
+                    @foreach (var extra in currentWeekRecord.AdditionalSessions.OrderBy(s => s.OccurredOn).ThenBy(s => s.CreatedAt))
+                    {
+                        @RenderAdditionalSession(extra)
+                    }
+                </div>
+            }
+        </div>
+
+        @* ── Planned weeks ────────────────────────────────── *@
+        @foreach (var week in overview.UpcomingWeeks)
+        {
+            <div class="week-section mb-4">
+                <div class="week-section-header">
+                    <div class="week-section-title">
+                        Week @week.WeekNumber
+                        <span class="badge @(week.IsCustomized ? "badge-info" : "badge-muted")">@(week.IsCustomized ? "Custom" : "Default schedule")</span>
+                    </div>
+                    <button class="btn btn-ghost btn-sm" @onclick="() => Configure(week.WeekNumber)">Edit Week</button>
+                </div>
+                <div class="week-grid">
+                    @foreach (var template in week.Days)
+                    {
+                        <div class="workout-item ppl-day-item ppl-day-planned">
+                            <div class="flex items-start gap-2 ppl-day-main">
+                                <span class="status-dot status-not-started mt-1"></span>
+                                <div>
+                                    <div class="workout-name">
+                                        @template.Name
+                                        <span class="badge @GetDayTypeBadge(template.DayType) ml-1">@template.DayType</span>
+                                    </div>
+                                    <div class="workout-meta">Day @template.OrderInWeek · Planned</div>
+                                    <ul class="ppl-exercise-preview">
+                                        @foreach (var slot in template.ExerciseSlots.OrderBy(s => s.OrderInDay))
+                                        {
+                                            <li><span>@slot.ExerciseName</span><span>@FormatSlot(slot)</span></li>
+                                        }
+                                    </ul>
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+            </div>
+        }
+        <p class="text-muted" style="font-size:var(--text-sm)">
+            Weeks advance when every day of the current week is done. Planned weights reflect your current working weights.
+        </p>
+    }
+    else
+    {
+        @* ── Past weeks ───────────────────────────────────── *@
+        @if (CompletedSessionCount == 0 && pastWeeks.Count == 0 && overview.UnassignedSessions.Count == 0
+            && (currentWeekRecord?.AdditionalSessions.Count ?? 0) == 0)
+        {
+            <div class="empty-state" style="padding:var(--space-8) 0">
+                <h3>No past sessions yet</h3>
+                <p>Completed sessions show up here, grouped by week.</p>
+            </div>
+        }
+        else
+        {
+            @foreach (var week in overview.Weeks)
+            {
+                var weekSessions = week.Sessions
+                    .Where(s => s.Status == WorkoutStatus.Completed || week.WeekNumber != plan.WeekNumber)
+                    .OrderByDescending(s => s.CompletedAt ?? s.OccurredOn)
+                    .ToList();
+                if (weekSessions.Count == 0 && week.AdditionalSessions.Count == 0) continue;
+
+                <div class="week-section mb-4">
+                    <div class="week-section-header">
+                        <div class="week-section-title">
+                            Week @week.WeekNumber
+                            @if (week.WeekNumber == plan.WeekNumber)
+                            {
+                                <span class="week-scheme">This week</span>
+                            }
+                            <span class="text-muted" style="font-size:var(--text-sm);font-weight:500">from @week.StartDate.ToString("MMM d")</span>
+                        </div>
+                        <div class="flex items-center gap-1">
+                            <span class="badge badge-muted">@weekSessions.Count(s => s.Status == WorkoutStatus.Completed) done</span>
+                            <button class="btn btn-ghost btn-sm" @onclick="() => AddSession(week.Id)">+ Add Session</button>
+                        </div>
+                    </div>
+                    @foreach (var s in weekSessions)
+                    {
+                        @RenderSessionCard(s)
+                    }
+                    @if (week.AdditionalSessions.Count > 0)
+                    {
+                        <div class="week-grid">
+                            @foreach (var extra in week.AdditionalSessions.OrderBy(s => s.OccurredOn).ThenBy(s => s.CreatedAt))
+                            {
+                                @RenderAdditionalSession(extra)
+                            }
+                        </div>
+                    }
+                </div>
+            }
+
+            @if (overview.UnassignedSessions.Count > 0)
+            {
+                <div class="week-section mb-4">
+                    <div class="week-section-header">
+                        <div class="week-section-title">Other Sessions</div>
+                    </div>
+                    @foreach (var s in overview.UnassignedSessions)
+                    {
+                        @RenderSessionCard(s)
+                    }
+                </div>
+            }
+        }
+    }
+}
+
+@code {
+    [Parameter] public int ProgramId { get; set; }
+    [SupplyParameterFromQuery(Name = "view")] public string? ViewParam { get; set; }
+
+    private enum SessionView { Upcoming, Past }
+
+    private PplProgramOverview? overview;
+    private SessionView view = SessionView.Upcoming;
+    private bool loading = true;
+    private bool busy;
+    private string? error;
+
+    private int CompletedSessionCount =>
+        overview is null ? 0
+        : overview.Weeks.SelectMany(w => w.Sessions).Concat(overview.UnassignedSessions).Count(s => s.Status == WorkoutStatus.Completed);
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
+        view = string.Equals(ViewParam, "past", StringComparison.OrdinalIgnoreCase) ? SessionView.Past : SessionView.Upcoming;
+        await LoadAsync();
+        loading = false;
+    }
+
+    private async Task LoadAsync() => overview = await PplService.GetProgramOverviewAsync(ProgramId);
+
+    private async Task OpenDay(PplWeekDay day)
+    {
+        error = null;
+        if (day.SessionId is int sessionId)
+        {
+            GoToSession(sessionId);
+            return;
+        }
+
+        busy = true;
+        try
+        {
+            var session = await PplService.StartSessionAsync(ProgramId, day.DayTemplateId);
+            GoToSession(session.Id);
+        }
+        catch (InvalidOperationException ex)
+        {
+            error = ex.Message;
+            await LoadAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task SetActive()
+    {
+        busy = true;
+        try
+        {
+            await PplService.SetActiveProgramAsync(ProgramId);
+            await LoadAsync();
+        }
+        finally
+        {
+            busy = false;
+        }
+    }
+
+    private async Task DeleteProgram()
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Delete this PPL program and all of its sessions? This cannot be undone."))
+            return;
+
+        busy = true;
+        await PplService.DeleteProgramAsync(ProgramId);
+        Nav.NavigateTo("/cycles");
+    }
+
+    private async Task DeleteAdditionalSession(int id)
+    {
+        if (!await JS.InvokeAsync<bool>("confirm", "Delete this additional session?")) return;
+        await AdditionalSessions.DeleteAsync(id);
+        await LoadAsync();
+    }
+
+    private void GoToSession(int id) => Nav.NavigateTo($"/ppl/session/{id}?returnProgramId={ProgramId}");
+    private void Configure(int week) => Nav.NavigateTo($"/ppl/{ProgramId}/workouts?week={week}");
+    private void AddSession(int weekId) => Nav.NavigateTo($"/sessions/add/ppl/{weekId}?returnPplProgramId={ProgramId}");
+    private void EditSession(int id) => Nav.NavigateTo($"/sessions/edit/{id}?returnPplProgramId={ProgramId}");
+
+    private RenderFragment RenderSessionCard(PplSession s) => __builder =>
+    {
+        var completedSets = s.Exercises.SelectMany(e => e.Sets).Where(set => set.IsCompleted).ToList();
+        var totalReps = completedSets.Sum(set => set.ActualReps ?? 0);
+        var totalVol = completedSets.Sum(set => (set.ActualWeight ?? 0) * (set.ActualReps ?? 0));
+        <button class="history-session-card" @onclick="() => GoToSession(s.Id)">
+            <div class="history-session-header">
+                <div>
+                    <div class="history-session-name">@s.DayTemplate.Name</div>
+                    <div class="history-session-date">
+                        @((s.CompletedAt ?? s.OccurredOn).ToLocalTime().ToString("ddd, MMM d"))
+                        @if (s.Status != WorkoutStatus.Completed)
+                        {
+                            <span> · @(s.Status == WorkoutStatus.InProgress ? "In progress" : "Not started")</span>
+                        }
+                    </div>
+                </div>
+                <span class="badge @GetDayTypeBadge(s.DayTemplate.DayType)">@s.DayTemplate.DayType</span>
+            </div>
+            <div class="history-session-stats">
+                <div class="history-stat">
+                    <span class="history-stat-value">@completedSets.Count</span>
+                    <span class="history-stat-label">Sets</span>
+                </div>
+                <div class="history-stat">
+                    <span class="history-stat-value">@totalReps</span>
+                    <span class="history-stat-label">Total Reps</span>
+                </div>
+                <div class="history-stat">
+                    <span class="history-stat-value">@((totalVol / 1000.0).ToString("0.0"))k</span>
+                    <span class="history-stat-label">Volume (lbs)</span>
+                </div>
+            </div>
+        </button>
+    };
+
+    private RenderFragment RenderAdditionalSession(AdditionalSession session) => __builder =>
+    {
+        <div class="workout-item">
+            <div>
+                <div class="workout-name">@session.Name</div>
+                <div class="workout-meta">@session.OccurredOn.ToString("MMM d, yyyy") · @session.SessionType</div>
+                @if (session.SessionType == SessionType.Cardio && session.CardioEntries.Count > 0)
+                {
+                    <div class="workout-meta">@string.Join(" · ", session.CardioEntries.Select(e => $"{e.Accessory.Name}: {e.Quantity:g} {e.Unit}"))</div>
+                }
+            </div>
+            <div class="flex items-center gap-1">
+                <button class="btn btn-outline btn-sm" @onclick="() => EditSession(session.Id)">Edit</button>
+                <button class="btn btn-sm" style="color:var(--color-danger);background:var(--color-danger-dim);"
+                        @onclick="() => DeleteAdditionalSession(session.Id)">Delete</button>
+            </div>
+        </div>
+    };
+
+    private static string FormatSlot(PplExerciseSlot slot)
+    {
+        var reps = slot.RepsMin == slot.RepsMax ? $"{slot.RepsMax}" : $"{slot.RepsMin}–{slot.RepsMax}";
+        var load = slot.IsBodyweight ? " · BW" : slot.CurrentWeight is double w ? $" @ {w:g} lb" : "";
+        return $"{slot.TargetSets}×{reps}{load}";
+    }
+
+    private static string GetDayStateLabel(PplWeekDay day, bool isNext) => day.State switch
+    {
+        PplDayState.Completed => "Done",
+        PplDayState.Open => day.HasLoggedSets ? "In progress" : "Ready to start",
+        _ => isNext ? "Up next" : "Not started"
+    };
+
+    private static string GetDayStateClass(PplDayState state) => state switch
+    {
+        PplDayState.Completed => "status-completed",
+        PplDayState.Open => "status-in-progress",
+        _ => "status-not-started"
+    };
+
+    private static string GetDayTypeBadge(PplDayType t) => t switch
+    {
+        PplDayType.Push => "badge-push",
+        PplDayType.Pull => "badge-pull",
+        PplDayType.Legs => "badge-legs",
+        _ => "badge-muted"
+    };
+}

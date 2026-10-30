@@ -19,6 +19,7 @@ public interface IPplProgramService
     Task<PplWeekPlan> GetWeekPlanAsync(int programId);
     Task<PplSession> StartSessionAsync(int programId, int dayTemplateId);
     Task<int> GetCurrentWeekNumberAsync(int programId);
+    Task<PplProgramOverview?> GetProgramOverviewAsync(int programId, int upcomingWeekCount = 3);
 }
 
 public class PplProgramService(
@@ -390,6 +391,55 @@ public class PplProgramService(
         }
 
         return await CreateSessionAsync(programId, userId, template, week.WeekNumber);
+    }
+
+    public async Task<PplProgramOverview?> GetProgramOverviewAsync(int programId, int upcomingWeekCount = 3)
+    {
+        var userId = await userContext.GetUserIdAsync();
+        var program = await db.PplPrograms.AsNoTracking()
+            .FirstOrDefaultAsync(p => p.Id == programId && p.UserId == userId);
+        if (program is null) return null;
+
+        var plan = await GetWeekPlanAsync(programId);
+
+        var templates = await db.PplDayTemplates.AsNoTracking()
+            .Include(d => d.ExerciseSlots.OrderBy(s => s.OrderInDay))
+            .Where(d => d.PplProgramId == programId)
+            .OrderBy(d => d.OrderInWeek)
+            .ToListAsync();
+        PplScheduledWeek Schedule(int weekNumber)
+        {
+            var custom = templates.Where(t => t.WeekNumber == weekNumber).ToList();
+            return custom.Count > 0
+                ? new PplScheduledWeek(weekNumber, true, custom)
+                : new PplScheduledWeek(weekNumber, false, templates.Where(t => t.WeekNumber is null).ToList());
+        }
+
+        var weeks = await db.PplWeeks.AsNoTracking()
+            .Include(w => w.Sessions).ThenInclude(s => s.DayTemplate)
+            .Include(w => w.Sessions).ThenInclude(s => s.Exercises).ThenInclude(e => e.Sets)
+            .Include(w => w.AdditionalSessions).ThenInclude(s => s.CardioEntries).ThenInclude(e => e.Accessory)
+            .Include(w => w.AdditionalSessions).ThenInclude(s => s.StrengthExercises)
+            .Where(w => w.PplProgramId == programId)
+            .OrderByDescending(w => w.WeekNumber)
+            .AsSplitQuery()
+            .ToListAsync();
+
+        var unassigned = await db.PplSessions.AsNoTracking()
+            .Include(s => s.DayTemplate)
+            .Include(s => s.Exercises).ThenInclude(e => e.Sets)
+            .Where(s => s.PplProgramId == programId && s.PplWeekId == null)
+            .OrderByDescending(s => s.OccurredOn)
+            .AsSplitQuery()
+            .ToListAsync();
+
+        return new PplProgramOverview(
+            program,
+            plan,
+            Schedule(plan.WeekNumber),
+            Enumerable.Range(plan.WeekNumber + 1, Math.Max(0, upcomingWeekCount)).Select(Schedule).ToList(),
+            weeks,
+            unassigned);
     }
 
     private async Task EnsureProgramOwnedAsync(int programId, string userId)

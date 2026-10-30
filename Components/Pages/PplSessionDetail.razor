@@ -25,7 +25,7 @@ else
 {
     @* ── Header ─────────────────────────────────────────────── *@
     <div class="workout-header">
-        <button class="btn btn-ghost btn-sm back-btn" @onclick='() => Nav.NavigateTo("/")'>
+        <button class="btn btn-ghost btn-sm back-btn" @onclick='() => Nav.NavigateTo(ReturnProgramId > 0 ? $"/ppl/{ReturnProgramId}" : "/")'>
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
             Back
         </button>
@@ -288,6 +288,7 @@ else
 
 @code {
     [Parameter] public int SessionId { get; set; }
+    [SupplyParameterFromQuery] public int ReturnProgramId { get; set; }
 
     private PplSession? session;
     private bool loading = true;

@@ -2,133 +2,19 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject IPplProgramService PplService
-@inject IPplSessionService SessionService
 @inject NavigationManager Nav
-@inject IJSRuntime JS
 
-<PageTitle>PPL History — Jason's Garage Lab</PageTitle>
-
-<div>
-    <div class="page-header mb-4">
-        <h1>PPL History</h1>
-    </div>
-
-    @if (loading)
-    {
-        <div class="loading"><div class="spinner"></div></div>
-    }
-    else
-    {
-        @if (program is null)
-        {
-            <div class="empty-state">
-                <h3>No PPL program yet</h3>
-                <p>Create a Push-Pull-Legs program to get started.</p>
-                <button class="btn btn-primary mt-2" @onclick='() => Nav.NavigateTo("/ppl/new")'>+ Create PPL Program</button>
-            </div>
-        }
-        else
-        {
-        @* Program info strip *@
-        <div class="history-program-strip mb-4">
-            <div>
-                <div class="history-program-name">@program.Name</div>
-                <div class="history-program-meta">@program.DaysPerWeek-day split · @sessions.Count(s => s.Status == WorkoutStatus.Completed) sessions completed</div>
-            </div>
-            <div class="flex items-center gap-2">
-                <span class="badge @(program.IsActive ? "badge-success" : "badge-muted")">@(program.IsActive ? "Active" : "Inactive")</span>
-                <button class="btn btn-sm" style="color:var(--color-danger);background:var(--color-danger-dim);"
-                        @onclick="DeleteProgram">Delete</button>
-            </div>
-        </div>
-
-        @if (!sessions.Any(s => s.Status == WorkoutStatus.Completed))
-        {
-            <div class="empty-state" style="padding:var(--space-8) 0">
-                <p>No completed sessions yet. Go train!</p>
-            </div>
-        }
-        else
-        {
-            @foreach (var s in sessions.Where(s => s.Status == WorkoutStatus.Completed).OrderByDescending(s => s.CompletedAt))
-            {
-                var totalSets  = s.Exercises.Sum(e => e.Sets.Count);
-                var totalReps  = s.Exercises.Sum(e => e.Sets.Where(set => set.IsCompleted).Sum(set => set.ActualReps ?? 0));
-                var totalVol   = s.Exercises.Sum(e => e.Sets.Where(set => set.IsCompleted && set.ActualWeight.HasValue).Sum(set => (set.ActualWeight ?? 0) * (set.ActualReps ?? 0)));
-
-                <button class="history-session-card" @onclick="() => GoToSession(s.Id)">
-                    <div class="history-session-header">
-                        <div>
-                            <div class="history-session-name">@s.DayTemplate.Name</div>
-                            <div class="history-session-date">@s.OccurredOn.ToLocalTime().ToString("ddd, MMM d")</div>
-                        </div>
-                        <span class="badge @GetDayTypeBadge(s.DayTemplate.DayType)">@s.DayTemplate.DayType</span>
-                    </div>
-                    <div class="history-session-stats">
-                        <div class="history-stat">
-                            <span class="history-stat-value">@totalSets</span>
-                            <span class="history-stat-label">Sets</span>
-                        </div>
-                        <div class="history-stat">
-                            <span class="history-stat-value">@totalReps</span>
-                            <span class="history-stat-label">Total Reps</span>
-                        </div>
-                        <div class="history-stat">
-                            <span class="history-stat-value">@((totalVol / 1000.0).ToString("0.0"))k</span>
-                            <span class="history-stat-label">Volume (lbs)</span>
-                        </div>
-                    </div>
-                </button>
-                @if (s.Week is not null)
-                {
-                    <button class="btn btn-outline btn-sm mb-3" @onclick="() => AddSession(s.Week.Id)">+ Add Session to Week @s.Week.WeekNumber</button>
-                }
-            }
-        }
-        }
-    }
-</div>
+@* Legacy route: PPL sessions now live on the program landing page. *@
+<div class="loading"><div class="spinner"></div></div>
 
 @code {
     [SupplyParameterFromQuery] public int? ProgramId { get; set; }
 
-    private PplProgram? program;
-    private List<PplSession> sessions = [];
-    private bool loading = true;
-
     protected override async Task OnInitializedAsync()
     {
-        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
         if (!RendererInfo.IsInteractive) return;
 
-        program = ProgramId is int id
-            ? (await PplService.GetAllProgramsAsync()).FirstOrDefault(p => p.Id == id)
-            : await PplService.GetActiveProgramAsync();
-        if (program is not null)
-            sessions = await SessionService.GetSessionHistoryAsync(program.Id);
-        loading = false;
+        var id = ProgramId ?? (await PplService.GetActiveProgramAsync())?.Id;
+        Nav.NavigateTo(id is int programId ? $"/ppl/{programId}?view=past" : "/cycles", replace: true);
     }
-
-    private static string GetDayTypeBadge(PplDayType t) => t switch
-    {
-        PplDayType.Push => "badge-push",
-        PplDayType.Pull => "badge-pull",
-        PplDayType.Legs => "badge-legs",
-        _ => "badge-muted"
-    };
-
-    private void GoToSession(int id) => Nav.NavigateTo($"/ppl/session/{id}");
-    private void AddSession(int weekId) => Nav.NavigateTo("/sessions/add/ppl/" + weekId);
-
-    private async Task DeleteProgram()
-    {
-        if (program is null) return;
-        if (!await JS.InvokeAsync<bool>("confirm", "Delete this PPL program and all of its sessions? This cannot be undone."))
-            return;
-
-        await PplService.DeleteProgramAsync(program.Id);
-        program = null;
-        sessions = [];
-    }
-
 }

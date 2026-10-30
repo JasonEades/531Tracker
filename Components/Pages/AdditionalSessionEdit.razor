@@ -81,6 +81,7 @@
     [Parameter] public int PplWeekId { get; set; }
     [Parameter] public int SessionId { get; set; }
     [SupplyParameterFromQuery] public int ReturnCycleId { get; set; }
+    [SupplyParameterFromQuery] public int ReturnPplProgramId { get; set; }
     private SessionType type = SessionType.CustomStrength;
     private DateTime date = DateTime.Today;
     private string? name;
@@ -165,7 +166,7 @@
         NavBack();
     }
 
-    private void NavBack() => Nav.NavigateTo(CycleId > 0 ? $"/cycles/{CycleId}" : ReturnCycleId > 0 ? $"/cycles/{ReturnCycleId}" : WeekId > 0 ? "/" : "/ppl/history");
+    private void NavBack() => Nav.NavigateTo(CycleId > 0 ? $"/cycles/{CycleId}" : ReturnCycleId > 0 ? $"/cycles/{ReturnCycleId}" : ReturnPplProgramId > 0 ? $"/ppl/{ReturnPplProgramId}" : WeekId > 0 ? "/" : "/ppl/history");
     private sealed class CardioDraft { public int AccessoryId { get; set; } public double Quantity { get; set; } public CardioUnit Unit { get; set; } = CardioUnit.Minutes; public string? Notes { get; set; } }
     private sealed class StrengthDraft { public string Name { get; set; } = string.Empty; public double Weight { get; set; } public int Reps { get; set; } }
 }

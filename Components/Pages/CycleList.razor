@@ -211,7 +211,7 @@ else
             var totalSessions     = prog.Sessions.Count;
             var pplPct            = totalSessions > 0 ? (int)(completedSessions * 100.0 / totalSessions) : 0;
             <div class="cycle-card">
-                <div class="cycle-card-header" @onclick='() => Nav.NavigateTo($"/ppl/{prog.Id}/workouts")'>
+                <div class="cycle-card-header" @onclick='() => Nav.NavigateTo($"/ppl/{prog.Id}")'>
                     <div class="cycle-card-left">
                         <div class="cycle-status-dot @(prog.IsActive ? "status-in-progress" : "status-completed")"></div>
                         <div>
@@ -237,7 +237,7 @@ else
                     <div class="cycle-progress-fill" style="width:@pplPct%"></div>
                 </div>
                 <div class="cycle-card-actions">
-                    <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo($"/ppl/history?programId={prog.Id}")'>View Sessions</button>
+                    <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo($"/ppl/{prog.Id}")'>View Sessions</button>
                     <button class="btn btn-ghost btn-sm" @onclick='() => Nav.NavigateTo($"/ppl/{prog.Id}/workouts")'>Configure Workouts</button>
                     @if (!prog.IsActive)
                     {

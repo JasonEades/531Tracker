@@ -951,6 +951,64 @@ public sealed class WorkoutExportTests
     }
 
     [Fact]
+    public async Task PplProgramOverviewListsCurrentUpcomingAndPastWeeksForOwnerOnly()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new TestCurrentUserService("owner");
+        var programService = CreatePplProgramService(context, user);
+        var sessionService = new PplSessionService(context, user);
+        var program = await programService.CreateProgramAsync("PPL", 3);
+
+        var overview = await programService.GetProgramOverviewAsync(program.Id, upcomingWeekCount: 2);
+        Assert.NotNull(overview);
+        Assert.Equal(1, overview.CurrentWeek.WeekNumber);
+        Assert.Equal(3, overview.CurrentSchedule.Days.Count);
+        Assert.All(overview.CurrentSchedule.Days, d => Assert.NotEmpty(d.ExerciseSlots));
+        Assert.Equal([2, 3], overview.UpcomingWeeks.Select(w => w.WeekNumber));
+        Assert.All(overview.UpcomingWeeks, w => Assert.False(w.IsCustomized));
+        Assert.Empty(overview.Weeks);
+        Assert.Empty(await context.PplSessions.ToListAsync()); // viewing the program creates nothing
+
+        // Complete week 1 so it becomes a past week.
+        for (var i = 0; i < 3; i++)
+        {
+            var next = await programService.GetOrCreateNextSessionAsync(program.Id);
+            await sessionService.CompleteSessionAsync(next.Id);
+            context.ChangeTracker.Clear();
+        }
+
+        // Customize week 3 so the upcoming schedule reflects it.
+        var week3 = await programService.GetWeekWorkoutTemplatesAsync(program.Id, 3);
+        await programService.ConfigureWeekWorkoutsAsync(program.Id, 3, week3.Select(t => new PplWorkoutDayDraft(
+            t.Id,
+            t.Name + " (Heavy)",
+            t.ExerciseSlots.Select(s => new PplWorkoutExerciseDraft(
+                s.Id, s.ExerciseName, s.MuscleGroup, s.TargetSets, s.RepsMin, s.RepsMax,
+                s.IsBodyweight, s.ProgressionIncrement, s.StartingWeight, s.CurrentWeight)).ToList())).ToList());
+        context.ChangeTracker.Clear();
+
+        overview = await programService.GetProgramOverviewAsync(program.Id, upcomingWeekCount: 2);
+        Assert.NotNull(overview);
+        Assert.Equal(2, overview.CurrentWeek.WeekNumber);
+        var pastWeek = Assert.Single(overview.Weeks);
+        Assert.Equal(1, pastWeek.WeekNumber);
+        Assert.Equal(3, pastWeek.Sessions.Count(s => s.Status == WorkoutStatus.Completed));
+        Assert.All(pastWeek.Sessions, s => Assert.NotNull(s.DayTemplate));
+        var upcomingWeek3 = overview.UpcomingWeeks.Single(w => w.WeekNumber == 3);
+        Assert.True(upcomingWeek3.IsCustomized);
+        Assert.All(upcomingWeek3.Days, d => Assert.EndsWith("(Heavy)", d.Name));
+
+        var otherService = CreatePplProgramService(context, new TestCurrentUserService("other"));
+        Assert.Null(await otherService.GetProgramOverviewAsync(program.Id));
+    }
+
+    [Fact]
     public async Task PplSwapOffersSameMuscleOptionsAndSupportsOneOffAndPermanentSwaps()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
