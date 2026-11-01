@@ -28,6 +28,11 @@ public interface IPplSessionService
     /// from the most recent earlier PPL session of the user that included an exercise with the same name.
     /// </summary>
     Task<Dictionary<int, Dictionary<int, PplPreviousSet>>> GetPreviousSetsAsync(int sessionId);
+    /// <summary>
+    /// For each exercise in the session (keyed by session-exercise id), the most recent earlier completed PPL set
+    /// for every distinct (set number, weight) pair, so a set can show the reps last achieved at the same weight.
+    /// </summary>
+    Task<Dictionary<int, IReadOnlyList<PplPreviousSet>>> GetSameWeightPreviousSetsAsync(int sessionId);
 }
 
 public class PplSessionService(AppDbContext db, ICurrentUserService userContext) : IPplSessionService
@@ -173,8 +178,10 @@ public class PplSessionService(AppDbContext db, ICurrentUserService userContext)
     }
 
     /// <summary>
-    /// Makes the plan exercise's weight the heaviest weight the user actually completed, so the next session
-    /// starts from it. Weights only ever change through the user's own edits — there is no automatic increase.
+    /// Makes the plan exercise's weight the working weight the user settled on — the weight of the last set
+    /// (completed sets first, otherwise any set with an entered weight) — so the next session starts from it.
+    /// Adjusting mid-session (e.g. 30 → 45 → 55) carries the final 55 forward, up or down.
+    /// Weights only ever change through the user's own edits — there is no automatic increase.
     /// One-off swaps and bodyweight exercises leave the plan untouched.
     /// </summary>
     private static void CarryWeightForward(PplSessionExercise exercise)
@@ -184,13 +191,11 @@ public class PplSessionService(AppDbContext db, ICurrentUserService userContext)
             || !string.Equals(exercise.ExerciseName, slot.ExerciseName, StringComparison.OrdinalIgnoreCase))
             return;
 
-        var used = exercise.Sets
-            .Where(s => s.IsCompleted && s.ActualWeight is > 0)
-            .Select(s => s.ActualWeight!.Value)
-            .DefaultIfEmpty()
-            .Max();
-        if (used > 0)
-            slot.CurrentWeight = used;
+        var weighted = exercise.Sets.Where(s => s.ActualWeight is > 0).ToList();
+        var source = weighted.Any(s => s.IsCompleted) ? weighted.Where(s => s.IsCompleted) : weighted;
+        var working = source.OrderBy(s => s.SetNumber).LastOrDefault();
+        if (working is not null)
+            slot.CurrentWeight = working.ActualWeight;
     }
 
     public async Task<bool> RemoveSetAsync(int setId)
@@ -248,20 +253,23 @@ public class PplSessionService(AppDbContext db, ICurrentUserService userContext)
         return set;
     }
 
-    public async Task<Dictionary<int, Dictionary<int, PplPreviousSet>>> GetPreviousSetsAsync(int sessionId)
+    private sealed record SessionExerciseRef(int Id, string ExerciseName);
+    private sealed record CurrentSessionRef(int Id, DateTime OccurredOn, List<SessionExerciseRef> Exercises);
+    private sealed record EarlierSetRow(string Name, int SessionId, DateTime OccurredOn, int SetNumber, int Reps, double? ActualWeight);
+
+    /// <summary>Loads the owned session and every completed set of the same-named exercises from earlier PPL sessions.</summary>
+    private async Task<(string UserId, CurrentSessionRef? Current, List<EarlierSetRow> Rows)> LoadEarlierPplSetsAsync(int sessionId)
     {
         var userId = await userContext.GetUserIdAsync();
         var current = await db.PplSessions
             .Where(s => s.Id == sessionId && s.Program.UserId == userId)
-            .Select(s => new
-            {
+            .Select(s => new CurrentSessionRef(
                 s.Id,
                 s.OccurredOn,
-                Exercises = s.Exercises.Select(e => new { e.Id, e.ExerciseName }).ToList()
-            })
+                s.Exercises.Select(e => new SessionExerciseRef(e.Id, e.ExerciseName)).ToList()))
             .FirstOrDefaultAsync();
         if (current is null || current.Exercises.Count == 0)
-            return [];
+            return (userId, null, []);
 
         var names = current.Exercises.Select(e => e.ExerciseName.ToLower()).Distinct().ToList();
         var rows = await db.PplSessionSets
@@ -271,16 +279,45 @@ public class PplSessionService(AppDbContext db, ICurrentUserService userContext)
                 && (s.SessionExercise.Session.OccurredOn < current.OccurredOn
                     || (s.SessionExercise.Session.OccurredOn == current.OccurredOn && s.SessionExercise.PplSessionId < current.Id))
                 && names.Contains(s.SessionExercise.ExerciseName.ToLower()))
-            .Select(s => new
-            {
-                Name = s.SessionExercise.ExerciseName,
-                SessionId = s.SessionExercise.PplSessionId,
+            .Select(s => new EarlierSetRow(
+                s.SessionExercise.ExerciseName,
+                s.SessionExercise.PplSessionId,
                 s.SessionExercise.Session.OccurredOn,
                 s.SetNumber,
-                Reps = s.ActualReps!.Value,
-                s.ActualWeight
-            })
+                s.ActualReps!.Value,
+                s.ActualWeight))
             .ToListAsync();
+        return (userId, current, rows);
+    }
+
+    public async Task<Dictionary<int, IReadOnlyList<PplPreviousSet>>> GetSameWeightPreviousSetsAsync(int sessionId)
+    {
+        var (_, current, rows) = await LoadEarlierPplSetsAsync(sessionId);
+        if (current is null || rows.Count == 0)
+            return [];
+
+        var byName = rows
+            .GroupBy(r => r.Name.ToLowerInvariant())
+            .ToDictionary(
+                g => g.Key,
+                g => (IReadOnlyList<PplPreviousSet>)g
+                    .GroupBy(r => (r.SetNumber, r.ActualWeight))
+                    .Select(sg => sg.OrderByDescending(r => r.OccurredOn).ThenByDescending(r => r.SessionId).First())
+                    .Select(r => new PplPreviousSet(r.SetNumber, r.Reps, r.ActualWeight, r.OccurredOn))
+                    .OrderBy(p => p.SetNumber)
+                    .ThenByDescending(p => p.OccurredOn)
+                    .ToList());
+
+        return current.Exercises
+            .Where(e => byName.ContainsKey(e.ExerciseName.ToLowerInvariant()))
+            .ToDictionary(e => e.Id, e => byName[e.ExerciseName.ToLowerInvariant()]);
+    }
+
+    public async Task<Dictionary<int, Dictionary<int, PplPreviousSet>>> GetPreviousSetsAsync(int sessionId)
+    {
+        var (userId, current, rows) = await LoadEarlierPplSetsAsync(sessionId);
+        if (current is null)
+            return [];
 
         var latestByName = rows
             .GroupBy(r => r.Name.ToLowerInvariant())

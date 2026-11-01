@@ -225,7 +225,20 @@ else
                     @DisplayWeight(set.ActualWeight ?? exercise.SuggestedWeight) <span class="set-unit">lbs</span>
                         </div>
                         <div class="set-reps-label">× @set.TargetReps reps target</div>
-                        @if (previousSets.TryGetValue(exercise.Id, out var lastSets) && lastSets.TryGetValue(set.SetNumber, out var last))
+                        @{
+                            var currentSetWeight = exercise.ExerciseSlot.IsBodyweight ? null : set.ActualWeight ?? exercise.SuggestedWeight;
+                            var sameWeight = FindSameWeightPrevious(exercise, set.SetNumber, currentSetWeight);
+                            var last = previousSets.TryGetValue(exercise.Id, out var lastSets) && lastSets.TryGetValue(set.SetNumber, out var lastSet) ? lastSet : null;
+                            // Same-weight result from the latest session already says everything the "Last" line would.
+                            var sameIsLatest = sameWeight is not null && last is not null && last.Source is null && last.OccurredOn == sameWeight.OccurredOn;
+                        }
+                        @if (sameWeight is not null)
+                        {
+                            <div class="set-last-label set-same-weight-label" title="@($"{sameWeight.OccurredOn:MMM d}")">
+                                You got <strong>@sameWeight.Reps</strong> reps on this set last time@(sameWeight.Weight is null ? "" : $" at {DisplayWeight(sameWeight.Weight)} lbs")@(sameIsLatest ? "" : $" ({sameWeight.OccurredOn:MMM d})")
+                            </div>
+                        }
+                        @if (last is not null && !sameIsLatest)
                         {
                             <div class="set-last-label" title="@($"Last session: {last.OccurredOn:MMM d}{(last.Source is null ? "" : $" ({last.Source})")}")">
                                 Last@(last.Source is null ? "" : $" ({last.Source})"): <strong>@last.Reps</strong> reps@(exercise.ExerciseSlot.IsBodyweight || last.Weight is null ? "" : $" @ {DisplayWeight(last.Weight)} lbs")
@@ -306,6 +319,19 @@ else
     private Timer? restTimer;
     private Dictionary<(double Weight, double BarWeight), List<PlateLoadingResult>> plateMap = [];
     private Dictionary<int, Dictionary<int, PplPreviousSet>> previousSets = [];
+    private Dictionary<int, IReadOnlyList<PplPreviousSet>> sameWeightHistory = [];
+
+    /// <summary>Most recent earlier result for this set number at the set's current weight (any weight for bodyweight).</summary>
+    private PplPreviousSet? FindSameWeightPrevious(PplSessionExercise exercise, int setNumber, double? weight)
+    {
+        if (!sameWeightHistory.TryGetValue(exercise.Id, out var history)) return null;
+        if (exercise.ExerciseSlot.IsBodyweight)
+            return history.Where(p => p.SetNumber == setNumber).MaxBy(p => p.OccurredOn);
+        if (weight is not double w) return null;
+        return history
+            .Where(p => p.SetNumber == setNumber && p.Weight is double pw && Math.Abs(pw - w) < 0.01)
+            .MaxBy(p => p.OccurredOn);
+    }
     private string? setError;
     private string? exportError;
     private List<Bar> bars = [];
@@ -408,6 +434,7 @@ else
     {
         session = await SessionService.GetSessionWithDetailsAsync(SessionId);
         previousSets = session is null ? [] : await SessionService.GetPreviousSetsAsync(SessionId);
+        sameWeightHistory = session is null ? [] : await SessionService.GetSameWeightPreviousSetsAsync(SessionId);
         if (session is not null)
         {
             restSeconds = Math.Clamp(session.RestSeconds, 0, 600);

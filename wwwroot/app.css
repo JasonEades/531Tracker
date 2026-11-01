@@ -894,6 +894,7 @@ select.form-control { appearance: auto; cursor: pointer; }
 .set-reps-label { font-size: var(--text-sm); color: var(--color-text-muted); margin-top: 2px; }
 .set-last-label { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 2px; }
 .set-last-label strong { color: var(--color-text); }
+.set-same-weight-label { color: var(--color-text); }
 .set-blurb { font-size: var(--text-xs); color: var(--color-text-muted); margin-top: 4px; font-style: italic; }
 .set-blurb-positive { color: var(--color-success); font-weight: 600; }
 

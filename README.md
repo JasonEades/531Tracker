@@ -127,11 +127,12 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 - **Change bar** on any weighted PPL exercise (e.g. EZ curl, trap, or women's bar from Settings): the plate breakdown recalculates for that bar's weight and the choice is remembered for future sessions of that plan exercise (one-off swaps reset to the default bar)
 - Changing a set's weight in a PPL session carries it forward to every later set of that exercise that isn't checked off yet, so you only enter a new weight once (earlier and completed sets are left alone)
 - Each PPL set shows **Last: N reps @ W lbs** from the same set number in your most recent earlier session of that exercise (matched by exercise name across weeks and programs; only checked-off sets count). If the exercise has never been done in PPL, it falls back to your latest earlier 5/3/1 accessory, main-lift, or additional-strength session with the same or a closely matching name, labelled with its source (e.g. **Last (5/3/1):**)
+- When an earlier PPL session logged the same set number at the set's current weight, the set shows **You got N reps on this set last time at W lbs** (with the date if it came from an older session). It updates as you change the weight, so you can see what to beat at that load
 - New programs derive starting weights from your previous training: each exercise uses the best e1RM from the most recent 5/3/1 cycle or PPL program that trained it (not the all-time best), then to your most recently logged weight for a matching accessory, falling back to manual entry when there is no history
 - Accessory matching during PPL setup: names are matched fuzzily (plurals, hyphens, DB/BB/Ext/RDL/OHP abbreviations) while conflicting equipment or movement words are rejected (e.g. Leg Curl ≠ Dumbbell Curl); each exercise has a "Use weight from" picker listing likely matches first, and logged weights outside the PPL rep range are converted via e1RM
 - Exercise slots and session tracking; set weights (0–2000 lbs) and reps (0–100) are validated
 - Weeks advance by completed rotations (e.g. every 3 sessions on a 3-day split), so missed days never skip workouts
-- No automatic weight increases: you raise (or lower) weights yourself in the session, and the heaviest weight you check off for each plan exercise carries forward as the starting weight of its next session (one-off swaps and bodyweight exercises don't change the plan)
+- No automatic weight increases: you raise (or lower) weights yourself in the session, and the working weight you finish on — the last set's weight (checked-off sets first, otherwise any set you entered a weight for) — carries forward as the starting weight of its next session, so adjusting 30 → 45 → 55 mid-session starts you at 55 next time (one-off swaps and bodyweight exercises don't change the plan)
 - Remove a set with **✕** (at least one set stays; remaining sets renumber) or add one back with **+ Add set** while the session is open; this only changes the current session
 - Per-exercise estimated 1RM on the session page, plus estimated 1RM history for compound exercises on the dashboard
 - Completed-session history and volume statistics, viewable for any program
@@ -405,7 +406,7 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - PPL weekly templates, accessory persistence, and estimated-1RM weight derivation
 - PPL program deletion with existing sessions and cross-user delete isolation
 - First-cycle/program weight seeding from the most recent previous 5/3/1 cycle or PPL program
-- PPL weight carry-forward (manually adjusted weight seeds the next session, no automatic increase, user isolation), rotation-based week numbering, and set-value validation
+- PPL weight carry-forward (final mid-session weight adjustment seeds the next session whether or not sets are checked off, no automatic increase, user isolation), rotation-based week numbering, and set-value validation
 - PPL set removal/addition (renumbering, at least one set, open sessions only, cross-user isolation)
 - PPL week plan: starting days in any order, replacing untouched open sessions, blocking switches after sets are logged, rejecting days already done this week, and cross-user isolation
 - PPL program overview: current, upcoming (default vs. customized), and past weeks, no sessions created by viewing, and cross-user isolation
@@ -413,7 +414,7 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - PPL program Pause/End/Resume (End removes only untouched sessions, cross-user isolation) and cross-program history: PPL "Last" sets and library-exercise suggestions from 5/3/1 or PPL logs, fuzzy-named accessory logs in starting estimates, never using another user's data
 - PPL generic-accessory swaps (last logged weight, cardio and other users' accessories excluded) and per-exercise bars (user-owned bars only, remembered for future sessions, plate loading per bar, default fallback when a bar is deleted)
 - PPL set-weight carry-forward (later incomplete sets only, completed/earlier sets untouched, cross-user isolation)
-- PPL "last time" reps per set (most recent earlier session by name, completed sets only, cross-user isolation)
+- PPL "last time" reps per set (most recent earlier session by name, completed sets only, cross-user isolation) and same-weight reps per set number (latest result for each set number + weight, cross-user isolation)
 - Exercise-library search/filtering, custom-exercise ownership isolation, and PPL catalog selection
 - Accessory/library merge: picker lists each exercise once, picking a library exercise creates one user-owned linked accessory (other users' accessories and custom exercises never reused), linked accessories share last-used weights, accessory logs appear in exercise history under the library name for their owner only, and the merge migration repoints PPL slots off removed duplicate entries and links existing accessories by name without renaming any history
 - Multi-user isolation of settings, bars, programs, accessories, latest accessory weights, and the dashboard's current-cycle lookup

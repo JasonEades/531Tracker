@@ -582,6 +582,50 @@ public sealed class WorkoutExportTests
         Assert.Equal(105, next.SuggestedWeight);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task PplNextSessionStartsFromFinalMidSessionWeightAdjustment(bool tickSets)
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new TestCurrentUserService("owner");
+        var programService = CreatePplProgramService(context, user);
+        var sessionService = new PplSessionService(context, user);
+
+        var program = await programService.CreateProgramAsync("PPL", 3);
+        var details = await programService.GetProgramWithDetailsAsync(program.Id);
+        var slot = details!.DayTemplates.OrderBy(d => d.OrderInWeek).First().ExerciseSlots.First(s => !s.IsBodyweight);
+
+        var session = await programService.GetOrCreateNextSessionAsync(program.Id);
+        var exercise = (await sessionService.GetSessionWithDetailsAsync(session.Id))!.Exercises.Single(e => e.PplExerciseSlotId == slot.Id);
+        var sets = exercise.Sets.OrderBy(s => s.SetNumber).ToList();
+        while (sets.Count < 4)
+            sets.Add((await sessionService.AddSetAsync(exercise.Id))!);
+
+        await sessionService.UpdateSetWeightAsync(sets[0].Id, 30);
+        await sessionService.UpdateSetWeightAsync(sets[1].Id, 45);
+        await sessionService.UpdateSetWeightAsync(sets[3].Id, 55);
+        if (tickSets)
+            foreach (var set in sets)
+                await sessionService.UpdateSetAsync(set.Id, (await context.PplSessionSets.SingleAsync(s => s.Id == set.Id)).ActualWeight, exercise.RepsMax, true);
+        await sessionService.CompleteSessionAsync(session.Id);
+        context.ChangeTracker.Clear();
+
+        Assert.Equal(55, (await context.PplExerciseSlots.SingleAsync(s => s.Id == slot.Id)).CurrentWeight);
+
+        // Lowering the weight mid-session carries the lower working weight forward too.
+        await sessionService.ReopenSessionAsync(session.Id);
+        await sessionService.UpdateSetWeightAsync(sets[3].Id, 50);
+        context.ChangeTracker.Clear();
+        Assert.Equal(50, (await context.PplExerciseSlots.SingleAsync(s => s.Id == slot.Id)).CurrentWeight);
+    }
+
     [Fact]
     public async Task PplSetWeightChangeCarriesForwardToLaterIncompleteSetsForOwnerOnly()
     {
@@ -687,6 +731,65 @@ public sealed class WorkoutExportTests
         Assert.Equal(100, last.Value.Weight);
 
         Assert.Empty(await otherSessionService.GetPreviousSetsAsync(week2.Id));
+    }
+
+    [Fact]
+    public async Task PplSameWeightPreviousSetsKeepLatestRepsPerSetNumberAndWeight()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new TestCurrentUserService("owner");
+        var programService = CreatePplProgramService(context, user);
+        var sessionService = new PplSessionService(context, user);
+        var otherSessionService = new PplSessionService(context, new TestCurrentUserService("other"));
+
+        var program = await programService.CreateProgramAsync("PPL", 3);
+        var details = await programService.GetProgramWithDetailsAsync(program.Id);
+        var template = details!.DayTemplates.OrderBy(d => d.OrderInWeek).First();
+        var slot = template.ExerciseSlots.First(s => !s.IsBodyweight);
+
+        PplSession AddSession(DateTime date, params (int Set, double Weight, int Reps)[] sets)
+        {
+            var session = new PplSession
+            {
+                PplProgramId = program.Id,
+                PplDayTemplateId = template.Id,
+                OccurredOn = date,
+                Exercises =
+                [
+                    new PplSessionExercise
+                    {
+                        PplExerciseSlotId = slot.Id,
+                        ExerciseName = slot.ExerciseName,
+                        TargetSets = 2,
+                        Sets = sets.Length == 0
+                            ? [new PplSessionSet { SetNumber = 1, TargetReps = 8 }, new PplSessionSet { SetNumber = 2, TargetReps = 8 }]
+                            : sets.Select(s => new PplSessionSet { SetNumber = s.Set, TargetReps = 8, ActualWeight = s.Weight, ActualReps = s.Reps, IsCompleted = true }).ToList()
+                    }
+                ]
+            };
+            context.PplSessions.Add(session);
+            return session;
+        }
+
+        AddSession(DateTime.Today.AddDays(-14), (1, 55, 5), (2, 55, 4));
+        AddSession(DateTime.Today.AddDays(-7), (1, 55, 6), (2, 60, 3));
+        var today = AddSession(DateTime.Today);
+        await context.SaveChangesAsync();
+        context.ChangeTracker.Clear();
+
+        var history = Assert.Single(await sessionService.GetSameWeightPreviousSetsAsync(today.Id)).Value;
+
+        Assert.Equal(6, history.Single(p => p.SetNumber == 1 && p.Weight == 55).Reps);
+        Assert.Equal(4, history.Single(p => p.SetNumber == 2 && p.Weight == 55).Reps);
+        Assert.Equal(3, history.Single(p => p.SetNumber == 2 && p.Weight == 60).Reps);
+        Assert.Equal(3, history.Count);
+        Assert.Empty(await otherSessionService.GetSameWeightPreviousSetsAsync(today.Id));
     }
 
     [Fact]
