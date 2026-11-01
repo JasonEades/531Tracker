@@ -115,9 +115,9 @@ else
     }
     @foreach (var exercise in session.Exercises.OrderBy(e => e.OrderInSession))
     {
-        var isOneOffSwap = !string.Equals(exercise.ExerciseName, exercise.ExerciseSlot.ExerciseName, StringComparison.OrdinalIgnoreCase);
-        var e1Rm = exercise.ExerciseSlot.IsBodyweight ? null : Progression.CalculateE1Rm(exercise);
-        var canSwap = session.Status != WorkoutStatus.Completed && !exercise.Sets.Any(s => s.IsCompleted);
+        var isOneOffSwap = exercise.IsOneOffSwap;
+        var e1Rm = exercise.EffectiveIsBodyweight ? null : Progression.CalculateE1Rm(exercise);
+        var canSwap = session.Status != WorkoutStatus.Completed && !exercise.IsAddedToSession && !exercise.Sets.Any(s => s.IsCompleted);
         var exerciseBar = BarFor(exercise);
 
         <div class="ppl-exercise-section">
@@ -126,12 +126,19 @@ else
                     <div class="ppl-exercise-name">@exercise.ExerciseName</div>
                     <div class="ppl-exercise-meta">
                         <span class="badge badge-muted">@exercise.TargetSets×@exercise.RepsMin–@exercise.RepsMax</span>
-                        <span class="badge @GetMuscleGroupBadge(exercise.ExerciseSlot.MuscleGroup)">@exercise.ExerciseSlot.MuscleGroup</span>
+                        @if (exercise.EffectiveMuscleGroup is MuscleGroup muscleGroup)
+                        {
+                            <span class="badge @GetMuscleGroupBadge(muscleGroup)">@muscleGroup</span>
+                        }
+                        @if (exercise.IsAddedToSession)
+                        {
+                            <span class="badge badge-muted" title="Added to this session only; your plan is unchanged">＋ Added this workout</span>
+                        }
                         @if (isOneOffSwap)
                         {
-                            <span class="badge badge-muted" title="Plan exercise: @exercise.ExerciseSlot.ExerciseName">⇄ Swapped for this workout</span>
+                            <span class="badge badge-muted" title="Plan exercise: @exercise.ExerciseSlot!.ExerciseName">⇄ Swapped for this workout</span>
                         }
-                         @if (!exercise.SuggestedWeight.HasValue && !exercise.ExerciseSlot.IsBodyweight)
+                         @if (!exercise.SuggestedWeight.HasValue && !exercise.EffectiveIsBodyweight)
                          {
                              <span class="badge badge-warning">⚠ Starting weight not set</span>
                          }
@@ -145,6 +152,20 @@ else
                 {
                     <button class="btn btn-outline btn-sm" @onclick="() => OpenSwap(exercise.Id)">⇄ Swap</button>
                 }
+                @if (exercise.IsAddedToSession && session.Status != WorkoutStatus.Completed)
+                {
+                    @if (confirmRemoveExerciseId == exercise.Id)
+                    {
+                        <div class="ppl-swap-actions">
+                            <button class="btn btn-danger btn-sm" @onclick="() => RemoveAddedExercise(exercise)">Remove @exercise.ExerciseName</button>
+                            <button class="btn btn-ghost btn-sm" @onclick="() => confirmRemoveExerciseId = null">Keep</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <button class="btn btn-ghost btn-sm" title="Remove from this workout" @onclick="() => confirmRemoveExerciseId = exercise.Id">✕ Remove</button>
+                    }
+                }
             </div>
 
             @if (swapExerciseId == exercise.Id)
@@ -152,7 +173,7 @@ else
                 <div class="ppl-swap-panel">
                     @if (swapOptions.Count == 0 && accessoryOptions.Count == 0)
                     {
-                        <p class="text-muted">No other @exercise.ExerciseSlot.MuscleGroup exercises or accessories available. Add a custom exercise in the exercise library or an accessory on the Accessories page.</p>
+                        <p class="text-muted">No other @exercise.EffectiveMuscleGroup exercises or accessories available. Add a custom exercise in the exercise library or an accessory on the Accessories page.</p>
                     }
                     else
                     {
@@ -160,7 +181,7 @@ else
                         <select id="swap-@exercise.Id" class="form-control form-control-sm" @bind="swapSelection">
                             @if (swapOptions.Count > 0)
                             {
-                                <optgroup label="@($"{exercise.ExerciseSlot.MuscleGroup} exercises")">
+                                <optgroup label="@($"{exercise.EffectiveMuscleGroup} exercises")">
                                     @foreach (var option in swapOptions)
                                     {
                                         <option value="d:@option.Id">@option.Name@(string.IsNullOrWhiteSpace(option.Equipment) ? "" : $" — {option.Equipment}")</option>
@@ -190,7 +211,7 @@ else
                 </div>
             }
 
-            @if (!exercise.ExerciseSlot.IsBodyweight)
+            @if (!exercise.EffectiveIsBodyweight)
             {
                 <div class="ppl-bar-row">
                     @if (barPickerExerciseId == exercise.Id)
@@ -226,7 +247,7 @@ else
                         </div>
                         <div class="set-reps-label">× @set.TargetReps reps target</div>
                         @{
-                            var currentSetWeight = exercise.ExerciseSlot.IsBodyweight ? null : set.ActualWeight ?? exercise.SuggestedWeight;
+                            var currentSetWeight = exercise.EffectiveIsBodyweight ? null : set.ActualWeight ?? exercise.SuggestedWeight;
                             var sameWeight = FindSameWeightPrevious(exercise, set.SetNumber, currentSetWeight);
                             var last = previousSets.TryGetValue(exercise.Id, out var lastSets) && lastSets.TryGetValue(set.SetNumber, out var lastSet) ? lastSet : null;
                             // Same-weight result from the latest session already says everything the "Last" line would.
@@ -241,10 +262,10 @@ else
                         @if (last is not null && !sameIsLatest)
                         {
                             <div class="set-last-label" title="@($"Last session: {last.OccurredOn:MMM d}{(last.Source is null ? "" : $" ({last.Source})")}")">
-                                Last@(last.Source is null ? "" : $" ({last.Source})"): <strong>@last.Reps</strong> reps@(exercise.ExerciseSlot.IsBodyweight || last.Weight is null ? "" : $" @ {DisplayWeight(last.Weight)} lbs")
+                                Last@(last.Source is null ? "" : $" ({last.Source})"): <strong>@last.Reps</strong> reps@(exercise.EffectiveIsBodyweight || last.Weight is null ? "" : $" @ {DisplayWeight(last.Weight)} lbs")
                             </div>
                         }
-                        @if (!exercise.ExerciseSlot.IsBodyweight &&
+                        @if (!exercise.EffectiveIsBodyweight &&
                              (set.ActualWeight ?? exercise.SuggestedWeight) is double setWeight &&
                              plateMap.TryGetValue((setWeight, exerciseBar.Weight), out var plates) &&
                              plates.Count > 0)
@@ -261,7 +282,7 @@ else
                         }
                     </div>
                     <div class="set-inputs">
-                        @if (!exercise.ExerciseSlot.IsBodyweight)
+                        @if (!exercise.EffectiveIsBodyweight)
                         {
                             <input class="set-input" type="number" inputmode="numeric"
                                    value="@DisplayWeight(set.ActualWeight ?? exercise.SuggestedWeight)"
@@ -290,6 +311,73 @@ else
                 <button class="btn btn-ghost btn-sm" @onclick="() => AddSet(exercise)">+ Add set</button>
             }
 
+        </div>
+    }
+
+    @if (session.Status != WorkoutStatus.Completed)
+    {
+        <div class="ppl-exercise-section ppl-add-exercise">
+            @if (!addingExercise)
+            {
+                <button class="btn btn-outline btn-sm" @onclick="OpenAddExercise">＋ Add exercise to this workout</button>
+            }
+            else
+            {
+                <div class="ppl-swap-panel">
+                    <label for="add-exercise-select">Add to this workout only (your plan is unchanged)</label>
+                    @if (addOptions.Exercises.Count == 0 && addOptions.Accessories.Count == 0)
+                    {
+                        <p class="text-muted">Nothing left to add. Create a custom exercise in the exercise library first.</p>
+                    }
+                    else
+                    {
+                        <select id="add-exercise-select" class="form-control form-control-sm" @bind="addSelection">
+                            @foreach (var group in addOptions.Exercises.GroupBy(d => d.PrimaryMuscle))
+                            {
+                                <optgroup label="@group.Key">
+                                    @foreach (var option in group)
+                                    {
+                                        <option value="d:@option.Id">@option.Name@(string.IsNullOrWhiteSpace(option.Equipment) ? "" : $" — {option.Equipment}")</option>
+                                    }
+                                </optgroup>
+                            }
+                            @if (addOptions.Accessories.Count > 0)
+                            {
+                                <optgroup label="Your accessories (last weight)">
+                                    @foreach (var option in addOptions.Accessories)
+                                    {
+                                        <option value="a:@option.AccessoryId">@FormatAccessoryOption(option)</option>
+                                    }
+                                </optgroup>
+                            }
+                        </select>
+                        <div class="form-row">
+                            <div class="form-group">
+                                <label class="form-label" for="add-exercise-sets">Sets</label>
+                                <input id="add-exercise-sets" class="form-control form-control-sm" type="number" min="1" max="10" @bind="addSets" />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="add-exercise-reps-min">Reps min</label>
+                                <input id="add-exercise-reps-min" class="form-control form-control-sm" type="number" min="1" max="@PplSessionService.MaxReps" @bind="addRepsMin" />
+                            </div>
+                            <div class="form-group">
+                                <label class="form-label" for="add-exercise-reps-max">Reps max</label>
+                                <input id="add-exercise-reps-max" class="form-control form-control-sm" type="number" min="1" max="@PplSessionService.MaxReps" @bind="addRepsMax" />
+                            </div>
+                        </div>
+                        <div class="ppl-swap-actions">
+                            <button class="btn btn-primary btn-sm" disabled="@savingAddedExercise" @onclick="ConfirmAddExercise">
+                                @(savingAddedExercise ? "Adding…" : "Add exercise")
+                            </button>
+                        </div>
+                    }
+                    @if (addError is not null)
+                    {
+                        <p class="text-danger">@addError</p>
+                    }
+                    <button class="btn btn-ghost btn-sm" @onclick="CloseAddExercise">Cancel</button>
+                </div>
+            }
         </div>
     }
 
@@ -325,7 +413,7 @@ else
     private PplPreviousSet? FindSameWeightPrevious(PplSessionExercise exercise, int setNumber, double? weight)
     {
         if (!sameWeightHistory.TryGetValue(exercise.Id, out var history)) return null;
-        if (exercise.ExerciseSlot.IsBodyweight)
+        if (exercise.EffectiveIsBodyweight)
             return history.Where(p => p.SetNumber == setNumber).MaxBy(p => p.OccurredOn);
         if (weight is not double w) return null;
         return history
@@ -343,6 +431,71 @@ else
     private string swapSelection = "";
     private bool swapping;
     private string? swapError;
+    private int? confirmRemoveExerciseId;
+    private bool addingExercise;
+    private bool savingAddedExercise;
+    private PplAddExerciseOptions addOptions = new([], []);
+    private string addSelection = "";
+    private int addSets = 3;
+    private int addRepsMin = 10;
+    private int addRepsMax = 15;
+    private string? addError;
+
+    private async Task OpenAddExercise()
+    {
+        addError = null;
+        addOptions = await SwapService.GetAddExerciseOptionsAsync(SessionId);
+        // Default to core work — the most common add-on.
+        var first = addOptions.Exercises.FirstOrDefault(d => d.PrimaryMuscle == MuscleGroup.Core) ?? addOptions.Exercises.FirstOrDefault();
+        addSelection = first is not null
+            ? $"d:{first.Id}"
+            : addOptions.Accessories.FirstOrDefault() is { } accessory ? $"a:{accessory.AccessoryId}" : "";
+        addingExercise = true;
+    }
+
+    private void CloseAddExercise()
+    {
+        addingExercise = false;
+        addOptions = new([], []);
+        addError = null;
+    }
+
+    private async Task ConfirmAddExercise()
+    {
+        if (addSelection.Length < 3 || !int.TryParse(addSelection[2..], out var sourceId)) return;
+
+        var source = addSelection.StartsWith("a:", StringComparison.Ordinal) ? PplAddExerciseSource.Accessory : PplAddExerciseSource.Library;
+        savingAddedExercise = true;
+        try
+        {
+            await SwapService.AddExerciseAsync(SessionId, new PplAddExerciseRequest(source, sourceId, addSets, addRepsMin, addRepsMax));
+            CloseAddExercise();
+            await LoadSession();
+        }
+        catch (InvalidOperationException ex)
+        {
+            addError = ex.Message;
+        }
+        finally
+        {
+            savingAddedExercise = false;
+        }
+    }
+
+    private async Task RemoveAddedExercise(PplSessionExercise exercise)
+    {
+        setError = null;
+        confirmRemoveExerciseId = null;
+        try
+        {
+            await SwapService.RemoveAddedExerciseAsync(exercise.Id);
+            await LoadSession();
+        }
+        catch (InvalidOperationException ex)
+        {
+            setError = ex.Message;
+        }
+    }
 
     private Bar BarFor(PplSessionExercise exercise) =>
         bars.FirstOrDefault(b => b.Id == exercise.BarId)
@@ -356,7 +509,7 @@ else
         {
             await SessionService.SetExerciseBarAsync(exercise.Id, barId);
             exercise.BarId = barId;
-            if (string.Equals(exercise.ExerciseName, exercise.ExerciseSlot.ExerciseName, StringComparison.OrdinalIgnoreCase))
+            if (exercise.ExerciseSlot is not null && !exercise.IsOneOffSwap)
                 exercise.ExerciseSlot.BarId = barId;
             barPickerExerciseId = null;
             await BuildPlateMap();
@@ -544,10 +697,10 @@ else
             var updatedIds = (await SessionService.UpdateSetWeightAsync(set.Id, w)).ToHashSet();
             foreach (var s in exercise.Sets.Where(s => updatedIds.Contains(s.Id)))
                 s.ActualWeight = w;
-            if (!exercise.SuggestedWeight.HasValue && !exercise.ExerciseSlot.IsBodyweight
-                && string.Equals(exercise.ExerciseName, exercise.ExerciseSlot.ExerciseName, StringComparison.OrdinalIgnoreCase))
+            if (!exercise.SuggestedWeight.HasValue && !exercise.EffectiveIsBodyweight
+                && exercise.ExerciseSlot is not null && exercise.PplExerciseSlotId is int slotId && !exercise.IsOneOffSwap)
             {
-                await SessionService.SetStartingWeightAsync(exercise.PplExerciseSlotId, w);
+                await SessionService.SetStartingWeightAsync(slotId, w);
                 exercise.ExerciseSlot.StartingWeight ??= w;
                 exercise.ExerciseSlot.CurrentWeight ??= w;
             }

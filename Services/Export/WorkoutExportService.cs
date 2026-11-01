@@ -232,7 +232,7 @@ public sealed class WorkoutExportService(
         var exercises = session.Exercises.OrderBy(e => e.OrderInSession).Select(e => new ExerciseExportModel
         {
             Name = e.ExerciseName,
-            Category = e.ExerciseSlot?.MuscleGroup.ToString() ?? "Working",
+            Category = e.EffectiveMuscleGroup?.ToString() ?? "Working",
             Sets = e.Sets.OrderBy(s => s.SetNumber).Select(s => new SetExportModel
             {
                 Number = s.SetNumber,

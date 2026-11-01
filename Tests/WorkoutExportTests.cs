@@ -1172,6 +1172,86 @@ public sealed class WorkoutExportTests
     }
 
     [Fact]
+    public async Task PplSessionOnlyExercisesCanBeAddedWithoutChangingThePlan()
+    {
+        await using var connection = new SqliteConnection("Data Source=:memory:");
+        await connection.OpenAsync();
+        var options = new DbContextOptionsBuilder<AppDbContext>().UseSqlite(connection).Options;
+
+        await using var context = new AppDbContext(options);
+        await context.Database.EnsureCreatedAsync();
+
+        var user = new TestCurrentUserService("owner");
+        var calculator = new WeightCalculator();
+        var programService = CreatePplProgramService(context, user);
+        var sessionService = new PplSessionService(context, user);
+        var swap = new PplExerciseSwapService(context, user, new EstimatedStrengthService(context, calculator), calculator, new AccessoryService(context, user));
+        var otherUser = new TestCurrentUserService("other");
+        var otherSwap = new PplExerciseSwapService(context, otherUser, new EstimatedStrengthService(context, calculator), calculator, new AccessoryService(context, otherUser));
+
+        var program = await programService.CreateProgramAsync("PPL", 3);
+        var session = await programService.GetOrCreateNextSessionAsync(program.Id);
+        var slotCount = await context.PplExerciseSlots.CountAsync();
+
+        var addOptions = await swap.GetAddExerciseOptionsAsync(session.Id);
+        var crunch = addOptions.Exercises.Single(d => d.Name == "Cable Crunch");
+        var plank = addOptions.Exercises.Single(d => d.Name == "Plank");
+        Assert.DoesNotContain(addOptions.Exercises, d => d.Name == "Barbell Bench Press"); // already in the session
+        Assert.Empty((await otherSwap.GetAddExerciseOptionsAsync(session.Id)).Exercises);
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            otherSwap.AddExerciseAsync(session.Id, new PplAddExerciseRequest(PplAddExerciseSource.Library, crunch.Id)));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            swap.AddExerciseAsync(session.Id, new PplAddExerciseRequest(PplAddExerciseSource.Library, crunch.Id, RepsMin: 15, RepsMax: 10)));
+
+        var added = await swap.AddExerciseAsync(session.Id, new PplAddExerciseRequest(PplAddExerciseSource.Library, crunch.Id, 2, 12, 15));
+        var addedPlank = await swap.AddExerciseAsync(session.Id, new PplAddExerciseRequest(PplAddExerciseSource.Library, plank.Id, 1, 30, 60));
+        await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            swap.AddExerciseAsync(session.Id, new PplAddExerciseRequest(PplAddExerciseSource.Library, crunch.Id)));
+
+        context.ChangeTracker.Clear();
+        var details = await sessionService.GetSessionWithDetailsAsync(session.Id);
+        var crunchExercise = details!.Exercises.Single(e => e.Id == added.Id);
+        Assert.True(crunchExercise.IsAddedToSession);
+        Assert.Null(crunchExercise.PplExerciseSlotId);
+        Assert.Equal(MuscleGroup.Core, crunchExercise.EffectiveMuscleGroup);
+        Assert.False(crunchExercise.EffectiveIsBodyweight);
+        Assert.Equal(details.Exercises.Max(e => e.OrderInSession), details.Exercises.Single(e => e.Id == addedPlank.Id).OrderInSession);
+        Assert.Equal([1, 2], crunchExercise.Sets.Select(s => s.SetNumber));
+        Assert.All(crunchExercise.Sets, s => Assert.Equal(15, s.TargetReps));
+        Assert.True(details.Exercises.Single(e => e.Id == addedPlank.Id).EffectiveIsBodyweight);
+        Assert.Equal(slotCount, await context.PplExerciseSlots.CountAsync());
+
+        // Added exercises can't be swapped; plan exercises can't be removed.
+        await Assert.ThrowsAsync<InvalidOperationException>(() => swap.SwapAsync(added.Id, plank.Id, PplSwapScope.ThisWorkout));
+        var planExercise = details.Exercises.First(e => !e.IsAddedToSession);
+        await Assert.ThrowsAsync<InvalidOperationException>(() => swap.RemoveAddedExerciseAsync(planExercise.Id));
+        await Assert.ThrowsAsync<InvalidOperationException>(() => otherSwap.RemoveAddedExerciseAsync(addedPlank.Id));
+        await swap.RemoveAddedExerciseAsync(addedPlank.Id);
+
+        // Log 50 then 60 and finish: the plan isn't touched and the session counts toward history and the dashboard.
+        var sets = crunchExercise.Sets.OrderBy(s => s.SetNumber).ToList();
+        await sessionService.UpdateSetAsync(sets[0].Id, 50, 15, true);
+        await sessionService.UpdateSetAsync(sets[1].Id, 60, 12, true);
+        await sessionService.CompleteSessionAsync(session.Id);
+        context.ChangeTracker.Clear();
+        Assert.False(await context.PplSessionExercises.AnyAsync(e => e.Id == addedPlank.Id));
+        Assert.Equal(slotCount, await context.PplExerciseSlots.CountAsync());
+        Assert.DoesNotContain(await context.PplExerciseSlots.Select(s => s.ExerciseName).ToListAsync(), n => n == "Cable Crunch");
+
+        var analytics = await new DashboardAnalyticsService(context, user, calculator).GetDashboardAsync();
+        Assert.Contains(analytics.StrengthProgress, s => s.ExerciseName == "Cable Crunch");
+
+        // The next session doesn't include it, but adding it again starts from the final weight with "last time" reps.
+        var next = await programService.GetOrCreateNextSessionAsync(program.Id);
+        context.ChangeTracker.Clear();
+        Assert.DoesNotContain((await sessionService.GetSessionWithDetailsAsync(next.Id))!.Exercises, e => e.ExerciseName == "Cable Crunch");
+        var again = await swap.AddExerciseAsync(next.Id, new PplAddExerciseRequest(PplAddExerciseSource.Library, crunch.Id, 2, 12, 15));
+        Assert.Equal(60, again.SuggestedWeight);
+        var previous = await sessionService.GetPreviousSetsAsync(next.Id);
+        Assert.Equal(12, previous[again.Id][2].Reps);
+    }
+
+    [Fact]
     public async Task PplSwapOffersSameMuscleOptionsAndSupportsOneOffAndPermanentSwaps()
     {
         await using var connection = new SqliteConnection("Data Source=:memory:");
@@ -1210,7 +1290,7 @@ public sealed class WorkoutExportTests
         context.ChangeTracker.Clear();
         var oneOff = await context.PplSessionExercises.Include(e => e.ExerciseSlot).Include(e => e.Sets).SingleAsync(e => e.Id == incline.Id);
         Assert.Equal("Dumbbell Fly", oneOff.ExerciseName);
-        Assert.Equal("Incline DB Press", oneOff.ExerciseSlot.ExerciseName);
+        Assert.Equal("Incline DB Press", oneOff.ExerciseSlot!.ExerciseName);
         var planWeight = oneOff.ExerciseSlot.CurrentWeight;
         foreach (var set in oneOff.Sets)
             await sessionService.UpdateSetAsync(set.Id, 40, oneOff.RepsMax, true);
@@ -1275,7 +1355,7 @@ public sealed class WorkoutExportTests
         context.ChangeTracker.Clear();
         var saved = await context.PplSessionExercises.Include(e => e.ExerciseSlot).SingleAsync(e => e.Id == exercise.Id);
         Assert.Equal(ezBar.Id, saved.BarId);
-        Assert.Equal(ezBar.Id, saved.ExerciseSlot.BarId);
+        Assert.Equal(ezBar.Id, saved.ExerciseSlot!.BarId);
 
         // Plates are calculated against the selected bar: 135 on a 25 lb bar needs 55/side, not 45/side.
         var onOlympic = await plates.CalculatePlates(135, olympic.Weight);
@@ -1353,7 +1433,7 @@ public sealed class WorkoutExportTests
         var oneOff = await context.PplSessionExercises.Include(e => e.ExerciseSlot).SingleAsync(e => e.Id == incline.Id);
         Assert.Equal("Landmine Press", oneOff.ExerciseName);
         Assert.Equal(75, oneOff.SuggestedWeight);
-        Assert.Equal("Incline DB Press", oneOff.ExerciseSlot.ExerciseName);
+        Assert.Equal("Incline DB Press", oneOff.ExerciseSlot!.ExerciseName);
 
         // Permanent: the plan slot becomes the accessory, keeping its muscle group.
         await swap.SwapToAccessoryAsync(pushdown.Id, neverLogged.Id, PplSwapScope.FutureWorkouts);

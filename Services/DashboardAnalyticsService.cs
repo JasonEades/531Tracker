@@ -96,13 +96,13 @@ public sealed class DashboardAnalyticsService(
             .ToDictionary(
                 session => session.Key,
                 session => session
-                    .GroupBy(x => new { x.SlotId, x.Name })
+                    .GroupBy(x => new { Key = x.SlotId != null ? x.SlotId.Value.ToString() : $"added:{x.Name.ToLowerInvariant()}", x.Name })
                     .Select(exercise => new PplExerciseRow
                     {
-                        Key = exercise.Key.SlotId.ToString(),
+                        Key = exercise.Key.Key,
                         Name = exercise.Key.Name,
                         Sets = exercise
-                            .Select(x => new ActualSetRow { Weight = x.Weight, Reps = x.Reps, LiftName = exercise.Key.Name, LiftKey = exercise.Key.SlotId.ToString() })
+                            .Select(x => new ActualSetRow { Weight = x.Weight, Reps = x.Reps, LiftName = exercise.Key.Name, LiftKey = exercise.Key.Key })
                             .ToList()
                     })
                     .ToList());
@@ -329,7 +329,7 @@ public sealed class DashboardAnalyticsService(
             {
                 s.SessionExercise.ExerciseName,
                 // A slot linked to a 5/3/1 lift only identifies the movement when it wasn't swapped for this session.
-                LinkedLift = s.SessionExercise.ExerciseSlot.LiftId != null && s.SessionExercise.ExerciseSlot.ExerciseName == s.SessionExercise.ExerciseName
+                LinkedLift = s.SessionExercise.ExerciseSlot!.LiftId != null && s.SessionExercise.ExerciseSlot.ExerciseName == s.SessionExercise.ExerciseName
                     ? (LiftType?)s.SessionExercise.ExerciseSlot.Lift!.LiftType
                     : null,
                 s.SessionExercise.Session.OccurredOn,

@@ -1901,6 +1901,12 @@ namespace FiveThreeOneTracker.Migrations
 
                     NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
 
+                    b.Property<bool>("AddedIsBodyweight")
+                        .HasColumnType("boolean");
+
+                    b.Property<string>("AddedMuscleGroup")
+                        .HasColumnType("text");
+
                     b.Property<int?>("BarId")
                         .HasColumnType("integer");
 
@@ -1912,7 +1918,7 @@ namespace FiveThreeOneTracker.Migrations
                     b.Property<int>("OrderInSession")
                         .HasColumnType("integer");
 
-                    b.Property<int>("PplExerciseSlotId")
+                    b.Property<int?>("PplExerciseSlotId")
                         .HasColumnType("integer");
 
                     b.Property<int>("PplSessionId")
@@ -2765,8 +2771,7 @@ namespace FiveThreeOneTracker.Migrations
                     b.HasOne("FiveThreeOneTracker.Models.PplExerciseSlot", "ExerciseSlot")
                         .WithMany("SessionExercises")
                         .HasForeignKey("PplExerciseSlotId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
+                        .OnDelete(DeleteBehavior.Restrict);
 
                     b.HasOne("FiveThreeOneTracker.Models.PplSession", "Session")
                         .WithMany("Exercises")

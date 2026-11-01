@@ -9,8 +9,25 @@ public class PplSessionExercise
     public int PplSessionId { get; set; }
     public PplSession Session { get; set; } = null!;
 
-    public int PplExerciseSlotId { get; set; }
-    public PplExerciseSlot ExerciseSlot { get; set; } = null!;
+    /// <summary>The plan exercise this came from. Null for an exercise added to just this session.</summary>
+    public int? PplExerciseSlotId { get; set; }
+    public PplExerciseSlot? ExerciseSlot { get; set; }
+
+    /// <summary>Muscle group of a session-only exercise (plan exercises use their slot's).</summary>
+    public MuscleGroup? AddedMuscleGroup { get; set; }
+
+    /// <summary>Whether a session-only exercise is bodyweight (plan exercises use their slot's).</summary>
+    public bool AddedIsBodyweight { get; set; }
+
+    public bool IsAddedToSession => PplExerciseSlotId is null && ExerciseSlot is null;
+
+    public MuscleGroup? EffectiveMuscleGroup => ExerciseSlot?.MuscleGroup ?? AddedMuscleGroup;
+
+    public bool EffectiveIsBodyweight => ExerciseSlot?.IsBodyweight ?? AddedIsBodyweight;
+
+    /// <summary>True when a plan exercise was swapped for a different one in this session only.</summary>
+    public bool IsOneOffSwap => ExerciseSlot is not null
+        && !string.Equals(ExerciseName, ExerciseSlot.ExerciseName, StringComparison.OrdinalIgnoreCase);
 
     /// <summary>Snapshot of the exercise name at time of session creation.</summary>
     [Required]

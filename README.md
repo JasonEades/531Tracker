@@ -126,6 +126,7 @@ Additional sets remain separate from programmed sets, stay attached to the histo
 - **Add Accessory Exercise** on any PPL day; accessories carry into generated sessions
 - **⇄ Swap** any exercise in an unstarted PPL session for another catalog or custom exercise that trains the same muscle (same movement type listed first). Choose **This workout only** (the plan and its weight stay unchanged) or **All future workouts** (replaces the plan exercise). The swapped exercise's weight is derived from your e1RM history when available, otherwise from a matching logged accessory. You can also swap to any of your generic accessories (cardio excluded); it starts at the last weight you logged for that accessory
 - **Change bar** on any weighted PPL exercise (e.g. EZ curl, trap, or women's bar from Settings): the plate breakdown recalculates for that bar's weight and the choice is remembered for future sessions of that plan exercise (one-off swaps reset to the default bar)
+- **＋ Add exercise to this workout** at the bottom of an open PPL session (e.g. ab work on leg day): pick any library exercise (grouped by muscle, defaulting to Core) or generic accessory, with sets and a rep range. It's added to that session only — the plan and future sessions are unchanged — and is tagged "Added this workout" with a **Remove** button while the session is open. Its starting weight is the final weight you last logged for that exercise anywhere (otherwise an e1RM/accessory estimate; bodyweight exercises have none), and "last time" reps, history, exports, and the dashboard include it
 - Changing a set's weight in a PPL session carries it forward to every later set of that exercise that isn't checked off yet, so you only enter a new weight once (earlier and completed sets are left alone)
 - Each PPL set shows **Last: N reps @ W lbs** from the same set number in your most recent earlier session of that exercise (matched by exercise name across weeks and programs; only checked-off sets count). If the exercise has never been done in PPL, it falls back to your latest earlier 5/3/1 accessory, main-lift, or additional-strength session with the same or a closely matching name, labelled with its source (e.g. **Last (5/3/1):**)
 - When an earlier PPL session logged the same set number at the set's current weight, the set shows **You got N reps on this set last time at W lbs** (with the date if it came from an older session). It updates as you change the weight, so you can see what to beat at that load
@@ -187,7 +188,7 @@ Planned follow-ups (stable exercise identity on logged sets, and a guided 5/3/1 
 │   ├── PplProgramService       # PPL program management
 │   ├── PplSessionService       # PPL session tracking
 │   ├── PplProgressionService   # PPL e1RM (no automatic progression)
-│   ├── PplExerciseSwapService  # Same-muscle and generic-accessory PPL swaps (one-off or permanent)
+│   ├── PplExerciseSwapService  # Same-muscle and generic-accessory PPL swaps (one-off or permanent) and session-only added exercises (no plan slot)
 │   ├── ExerciseLibraryService  # Curated and account-private exercise definitions
 │   ├── EstimatedStrengthService # User-scoped e1RM used to seed 5/3/1 and PPL weights
 │   ├── SiteContentSeo / SiteContentSitemap # Canonical URLs, metadata, sitemap.xml, robots.txt
@@ -413,6 +414,7 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - PPL week plan: starting days in any order, replacing untouched open sessions, blocking switches after sets are logged, rejecting days already done this week, and cross-user isolation
 - PPL program overview: current, upcoming (default vs. customized), and past weeks, no sessions created by viewing, and cross-user isolation
 - PPL exercise swaps: same-muscle options, one-off vs. permanent scope, plan weight unchanged after a one-off swap, rejection after sets are logged, and cross-user isolation
+- PPL session-only added exercises (validation, duplicates rejected, plan slots untouched, not swappable, only added exercises removable, cross-user isolation, dashboard inclusion, next add starts from the last final weight with "last time" reps)
 - PPL program Pause/End/Resume (End removes only untouched sessions, cross-user isolation) and cross-program history: PPL "Last" sets and library-exercise suggestions from 5/3/1 or PPL logs, fuzzy-named accessory logs in starting estimates, never using another user's data
 - PPL generic-accessory swaps (last logged weight, cardio and other users' accessories excluded) and per-exercise bars (user-owned bars only, remembered for future sessions, plate loading per bar, default fallback when a bar is deleted)
 - PPL set-weight carry-forward (later incomplete sets only, completed/earlier sets untouched, cross-user isolation)

@@ -352,9 +352,11 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
 
         modelBuilder.Entity<PplSessionExercise>(entity =>
         {
+            entity.Property(e => e.AddedMuscleGroup).HasConversion<string>();
             entity.HasOne(e => e.ExerciseSlot)
                   .WithMany(s => s.SessionExercises)
                   .HasForeignKey(e => e.PplExerciseSlotId)
+                  .IsRequired(false)
                   .OnDelete(DeleteBehavior.Restrict);
             entity.HasOne(e => e.Bar)
                   .WithMany()

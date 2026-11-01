@@ -52,7 +52,7 @@ public class PplSessionService(AppDbContext db, ICurrentUserService userContext)
             .Include(s => s.Week)
             .Include(s => s.Exercises.OrderBy(e => e.OrderInSession))
                 .ThenInclude(e => e.ExerciseSlot)
-                    .ThenInclude(s => s.Lift)
+                    .ThenInclude(s => s!.Lift)
             .Include(s => s.Exercises)
                 .ThenInclude(e => e.Sets.OrderBy(s => s.SetNumber))
             .FirstOrDefaultAsync(s => s.Id == sessionId && s.Program.UserId == userId);
@@ -187,8 +187,7 @@ public class PplSessionService(AppDbContext db, ICurrentUserService userContext)
     private static void CarryWeightForward(PplSessionExercise exercise)
     {
         var slot = exercise.ExerciseSlot;
-        if (slot.IsBodyweight
-            || !string.Equals(exercise.ExerciseName, slot.ExerciseName, StringComparison.OrdinalIgnoreCase))
+        if (slot is null || slot.IsBodyweight || exercise.IsOneOffSwap)
             return;
 
         var weighted = exercise.Sets.Where(s => s.ActualWeight is > 0).ToList();
@@ -402,8 +401,8 @@ public class PplSessionService(AppDbContext db, ICurrentUserService userContext)
             throw new InvalidOperationException("The selected bar is unavailable.");
 
         exercise.BarId = barId;
-        // Remember the bar for future sessions of the plan exercise, but not for a one-off swap.
-        if (string.Equals(exercise.ExerciseName, exercise.ExerciseSlot.ExerciseName, StringComparison.OrdinalIgnoreCase))
+        // Remember the bar for future sessions of the plan exercise, but not for a one-off swap or added exercise.
+        if (exercise.ExerciseSlot is not null && !exercise.IsOneOffSwap)
             exercise.ExerciseSlot.BarId = barId;
         await db.SaveChangesAsync();
     }
