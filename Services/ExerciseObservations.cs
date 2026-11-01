@@ -9,7 +9,9 @@ public enum ExerciseObservationKind
     FiveThreeOneLift,
     FiveThreeOneAccessory,
     Ppl,
-    Additional
+    Additional,
+    /// <summary>A hand-entered historical 1RM; only included when a caller opts in.</summary>
+    Manual
 }
 
 /// <summary>One completed working set from any program, normalized so every feature reads history the same way.</summary>
@@ -29,6 +31,7 @@ public sealed record ExerciseObservation(
     {
         ExerciseObservationKind.Ppl => "PPL",
         ExerciseObservationKind.Additional => "Additional",
+        ExerciseObservationKind.Manual => "Manual",
         _ => "5/3/1"
     };
 }
@@ -43,10 +46,12 @@ public sealed record ExercisePerformance(string Name, DateTime Date, string Sour
 /// <summary>
 /// Shared, user-scoped exercise history across 5/3/1 lifts and accessories, PPL, and additional sessions.
 /// Exercise history, starting-weight estimates, "last time" and accessory suggestions all read from here.
+/// Manually entered 1RMs are only included with <c>includeManual</c> (progress views), never for weight suggestions.
 /// </summary>
 public static class ExerciseObservations
 {
-    public static async Task<List<ExerciseObservation>> LoadAsync(AppDbContext db, string userId, IWeightCalculator weightCalculator)
+    public static async Task<List<ExerciseObservation>> LoadAsync(
+        AppDbContext db, string userId, IWeightCalculator weightCalculator, bool includeManual = false)
     {
         var programmed = await db.WorkoutSets.AsNoTracking()
             .Where(s => s.Workout.Week.Cycle.UserId == userId
@@ -158,6 +163,20 @@ public static class ExerciseObservations
                 (x.WeekCycleId ?? x.CycleId) is int cycleId ? $"531:{cycleId}"
                     : x.PplProgramId is int programId ? $"ppl:{programId}"
                     : $"add:s{x.AdditionalSessionId}")));
+
+        if (includeManual)
+        {
+            var manual = await db.ManualOneRepMaxes.AsNoTracking()
+                .Where(x => x.UserId == userId && x.Weight > 0)
+                .Select(x => new { x.Id, x.ExerciseName, x.AchievedOn, x.Weight })
+                .ToListAsync();
+            results.AddRange(manual
+                .Where(x => !string.IsNullOrWhiteSpace(x.ExerciseName))
+                .Select(x => new ExerciseObservation(
+                    x.ExerciseName.Trim(), x.AchievedOn, x.Weight, 1, x.Weight,
+                    ExerciseObservationKind.Manual, "Manual 1RM", 1,
+                    $"man:{x.Id}", "manual")));
+        }
 
         return results;
     }

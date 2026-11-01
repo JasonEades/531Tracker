@@ -63,6 +63,7 @@ The `+` marks the final set as AMRAP (as many reps as possible). The optional 5s
 - Optional warmup sets
 - Estimated 1RM using the Epley formula
 - Dashboard **Progress Since Day One** card: for Squat, Bench Press, Deadlift, and Overhead Press, shows your estimated 1RM from your very first logged session vs. your most recent session (change in lb and %), with an all-time line chart of per-session best e1RM across 5/3/1 main work (deload weeks excluded) and PPL sessions — PPL exercises count when their slot is linked to a 5/3/1 lift or the name matches a main lift (e.g. "Barbell Back Squat", "BB Bench", "OHP"), while variations like Front Squat, RDL, Incline, Dumbbell, or Trap Bar are excluded
+- **Past 1RMs** page at `/past-maxes` (linked from the dashboard and Exercises): manually enter, edit, or delete 1RMs from before you tracked in the app (exercise, weight, date, optional notes; names autocomplete from your logged exercises and the library and reuse their spelling). Entries are per-account and appear in **Progress Since Day One**, the **Estimated 1RM by Lift** table (joined to the matching lift, or as their own row), **Personal Records** (estimated 1RM / heaviest weight, never Rep PRs), and exercise history (source "Manual"). They never affect working-weight suggestions, starting-weight estimates, or "last time" labels
 - **Exercises hub** at `/exercises` with three tabs: **History** (every exercise you have trained across 5/3/1 main/BBB/FSL sets, 5/3/1 accessory logs, PPL, and additional strength work, with best e1RM per exercise), **Library** (the exercise catalog plus your custom exercises), and **Training Maxes** (5/3/1 training maxes and BBB setup). The old `/lifts`, `/accessories`, and `/exercise-library` URLs redirect to the matching tab
 - Plate-loading calculator based on available plates and bar weight
 - Equipment configuration for bars and plate inventory
@@ -180,7 +181,8 @@ Planned follow-ups (stable exercise identity on logged sets, and a guided 5/3/1 
 │   ├── WeightCalculator        # Training Max and set-scheme calculations
 │   ├── PlateCalculatorService  # Plate-loading calculations
 │   ├── AccessoryService        # 5/3/1 accessory logging, unified exercise picker (library + accessories), latest weights and cross-program suggestions (user-scoped)
-│   ├── ExerciseObservations    # Shared user-scoped loader of every logged set (5/3/1, accessories, PPL, additional) used by history, e1RM, and "last time" lookups
+│   ├── ExerciseObservations    # Shared user-scoped loader of every logged set (5/3/1, accessories, PPL, additional) used by history, e1RM, and "last time" lookups; manual 1RMs only when a caller opts in (exercise history)
+│   ├── ManualOneRepMaxService  # User-scoped hand-entered past 1RMs (ManualOneRepMaxes table) for progress views
 │   ├── ExerciseNameMatcher     # Fuzzy exercise-name matching for accessory → PPL weight reuse
 │   ├── PplProgramService       # PPL program management
 │   ├── PplSessionService       # PPL session tracking
@@ -419,6 +421,7 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - Accessory/library merge: picker lists each exercise once, picking a library exercise creates one user-owned linked accessory (other users' accessories and custom exercises never reused), linked accessories share last-used weights, accessory logs appear in exercise history under the library name for their owner only, and the merge migration repoints PPL slots off removed duplicate entries and links existing accessories by name without renaming any history
 - Multi-user isolation of settings, bars, programs, accessories, latest accessory weights, and the dashboard's current-cycle lookup
 - Dashboard all-time compound progression (first session outside the 1-year window, 5/3/1 + PPL merged, deloads excluded, other users' data excluded)
+- Manual past 1RMs (validation, canonical exercise naming, cross-user isolation, inclusion in compound progression / estimated-1RM table / personal records / exercise history, exclusion from weight suggestions)
 - Exercise-name matching (equivalent names auto-match, different movements/equipment are rejected) and accessory weight rep-range conversion
 - Sitemap, robots.txt, and SEO metadata for published content
 

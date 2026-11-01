@@ -110,7 +110,7 @@ public sealed class ExerciseHistoryService(
     }
 
     private async Task<List<ExerciseObservation>> LoadObservationsAsync() =>
-        await ExerciseObservations.LoadAsync(db, await userContext.GetUserIdAsync(), weightCalculator);
+        await ExerciseObservations.LoadAsync(db, await userContext.GetUserIdAsync(), weightCalculator, includeManual: true);
 
     /// <summary>URL-safe, stable identifier derived from the exercise name.</summary>
     public static string BuildKey(string name)

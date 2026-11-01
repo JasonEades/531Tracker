@@ -411,7 +411,7 @@ else
         var chart = BuildProgressChart(analytics.CompoundProgress);
         <div class="card analytics-card analytics-chart-card compound-progress-card">
             <div class="card-header">Progress Since Day One</div>
-            <p class="analytics-description">@DashboardMetricDefinitions.CompoundProgression</p>
+            <p class="analytics-description">@DashboardMetricDefinitions.CompoundProgression <a href="/past-maxes">Add past 1RMs</a></p>
             <div class="compound-progress-grid">
                 @foreach (var lift in analytics.CompoundProgress)
                 {
@@ -465,7 +465,7 @@ else
     {
         <div class="card analytics-card">
             <div class="card-header">Estimated 1RM by Lift</div>
-            <p class="analytics-description">Estimated 1RM uses the existing rounded Epley formula and actual completed sets.</p>
+            <p class="analytics-description">Estimated 1RM uses the existing rounded Epley formula and actual completed sets, plus any <a href="/past-maxes">past 1RMs you entered</a>.</p>
             <div class="estimated-1rm-table-wrapper">
                 <table class="estimated-1rm-table">
                     <thead>
@@ -495,7 +495,7 @@ else
     }
     else
     {
-        <div class="card analytics-card empty-analytics"><div class="card-header">Strength Progress</div><p>Complete a few workouts to start seeing strength trends here.</p></div>
+        <div class="card analytics-card empty-analytics"><div class="card-header">Strength Progress</div><p>Complete a few workouts to start seeing strength trends here, or <a href="/past-maxes">enter past 1RMs</a> from before you tracked in the app.</p></div>
     }
 
     @if (analytics.PersonalRecords.Count > 0)

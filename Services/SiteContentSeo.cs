@@ -64,6 +64,7 @@ public static partial class SiteContentSeo
         $"Disallow: /lifts{Environment.NewLine}" +
         $"Disallow: /accessories{Environment.NewLine}" +
         $"Disallow: /exercises{Environment.NewLine}" +
+        $"Disallow: /past-maxes{Environment.NewLine}" +
         $"Sitemap: {baseUrl.TrimEnd('/')}/sitemap.xml{Environment.NewLine}";
 
     private static string StripMarkdown(string markdown)

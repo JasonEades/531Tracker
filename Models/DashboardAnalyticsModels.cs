@@ -140,7 +140,7 @@ public static class DashboardMetricDefinitions
     public const string CycleCompletion = "Completed programmed workouts / total programmed workouts. Additional sessions are excluded.";
     public const string StrengthVolume = "Sum of actual weight × actual reps for completed strength sets. Planned values are excluded.";
     public const string Estimated1Rm = "The existing rounded Epley formula: weight × (1 + reps / 30), rounded to the nearest 5.";
-    public const string CompoundProgression = "Best estimated 1RM per session for Squat, Bench Press, Deadlift and Overhead Press across your 5/3/1 main work (deload weeks excluded) and PPL sessions, from your first logged session to your most recent. Variations like Front Squat, RDL, Incline, Dumbbell, or Trap Bar lifts are not included.";
+    public const string CompoundProgression = "Best estimated 1RM per session for Squat, Bench Press, Deadlift and Overhead Press across your 5/3/1 main work (deload weeks excluded), PPL sessions, and past 1RMs you entered manually, from your first entry to your most recent. Variations like Front Squat, RDL, Incline, Dumbbell, or Trap Bar lifts are not included.";
     public const string HistoricalLookup = "The most recent valid observation at or before the comparison date; missing history remains unavailable.";
     public const string YearlyWorkouts = "Completed programmed 5/3/1 workouts and completed PPL sessions whose OccurredOn date is in the calendar year.";
 }

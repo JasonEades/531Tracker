@@ -1,0 +1,194 @@
+@page "/past-maxes"
+@attribute [Authorize]
+@rendermode InteractiveServer
+@inject IManualOneRepMaxService ManualMaxes
+
+<PageTitle>Past 1RMs — Jason's Garage Lab</PageTitle>
+
+<div>
+    <div class="page-header mb-4">
+        <h1>Past 1RMs</h1>
+        <p class="page-subtitle">
+            Enter maxes from before you tracked in the app. They show up in dashboard progress, the estimated 1RM table,
+            personal records, and exercise history — but never change your working weights.
+        </p>
+    </div>
+
+    @if (loading)
+    {
+        <div class="loading"><div class="spinner"></div></div>
+    }
+    else
+    {
+        <div class="card mb-4">
+            <div class="card-header">@(editingId == 0 ? "Add a past 1RM" : "Edit past 1RM")</div>
+            <form @onsubmit="SaveAsync" @onsubmit:preventDefault>
+                <div class="body-form-grid">
+                    <label>Exercise
+                        <input class="form-control" type="text" list="past-max-exercises" maxlength="@ManualOneRepMaxService.MaxNameLength"
+                               placeholder="e.g. Bench Press" @bind="exerciseName" required />
+                    </label>
+                    <label>1RM (lb)
+                        <input class="form-control" type="number" inputmode="decimal" min="0" max="@PplSessionService.MaxWeight" step="0.5"
+                               @bind="weight" required />
+                    </label>
+                    <label>Date
+                        <input class="form-control" type="date" max="@DateTime.Today.ToString("yyyy-MM-dd")" @bind="achievedOn" required />
+                    </label>
+                </div>
+                <label class="body-form-notes">Notes
+                    <input class="form-control" type="text" maxlength="@ManualOneRepMaxService.MaxNotesLength" placeholder="Optional (e.g. meet, gym test)" @bind="notes" />
+                </label>
+                <div class="flex items-center gap-2 mt-3">
+                    <button class="btn btn-primary" type="submit" disabled="@saving">@(editingId == 0 ? "Add 1RM" : "Save changes")</button>
+                    @if (editingId != 0)
+                    {
+                        <button class="btn btn-ghost" type="button" @onclick="ResetForm">Cancel</button>
+                    }
+                    @if (!string.IsNullOrEmpty(message))
+                    {
+                        <span class="@(isError ? "text-danger" : "analytics-muted")">@message</span>
+                    }
+                </div>
+            </form>
+            <datalist id="past-max-exercises">
+                @foreach (var name in suggestions)
+                {
+                    <option value="@name"></option>
+                }
+            </datalist>
+        </div>
+
+        <div class="card mb-4">
+            <div class="card-header">Entered 1RMs <span class="badge badge-muted">@entries.Count</span></div>
+            @if (entries.Count == 0)
+            {
+                <p class="analytics-muted">No past 1RMs yet.</p>
+            }
+            else
+            {
+                <div class="estimated-1rm-table-wrapper">
+                    <table class="estimated-1rm-table">
+                        <thead>
+                            <tr>
+                                <th scope="col">Date</th>
+                                <th scope="col">Exercise</th>
+                                <th scope="col">1RM</th>
+                                <th scope="col">Notes</th>
+                                <th scope="col"><span class="visually-hidden">Actions</span></th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var entry in entries)
+                            {
+                                <tr>
+                                    <td>@entry.AchievedOn.ToString("MMM d, yyyy")</td>
+                                    <th scope="row"><a href="@($"/exercises/{ExerciseHistoryService.BuildKey(entry.ExerciseName)}")">@entry.ExerciseName</a></th>
+                                    <td>@entry.Weight.ToString("0.#") lb</td>
+                                    <td>@entry.Notes</td>
+                                    <td>
+                                        <div class="flex gap-2">
+                                            <button class="btn btn-ghost btn-sm" @onclick="() => Edit(entry)">Edit</button>
+                                            <button class="btn btn-ghost btn-sm" @onclick="() => DeleteAsync(entry)">Delete</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    private List<ManualOneRepMax> entries = [];
+    private List<string> suggestions = [];
+    private bool loading = true;
+    private bool saving;
+    private int editingId;
+    private string exerciseName = string.Empty;
+    private double? weight;
+    private DateTime achievedOn = DateTime.Today;
+    private string? notes;
+    private string? message;
+    private bool isError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Load once the circuit is interactive; prerender shows the loading state instead of querying twice.
+        if (!RendererInfo.IsInteractive) return;
+
+        await LoadAsync();
+        suggestions = await ManualMaxes.GetExerciseNameSuggestionsAsync();
+        loading = false;
+    }
+
+    private async Task LoadAsync() => entries = await ManualMaxes.GetEntriesAsync();
+
+    private async Task SaveAsync()
+    {
+        if (weight is not double w)
+        {
+            ShowMessage("Enter the 1RM weight.", error: true);
+            return;
+        }
+
+        saving = true;
+        try
+        {
+            var wasEditing = editingId != 0;
+            var result = await ManualMaxes.SaveAsync(editingId, exerciseName, w, achievedOn, notes);
+            if (!result.Success)
+            {
+                ShowMessage(result.Error, error: true);
+                return;
+            }
+
+            ResetForm();
+            ShowMessage(wasEditing ? "Saved." : $"Added {result.Entry!.ExerciseName} {result.Entry.Weight:0.#} lb.", error: false);
+            await LoadAsync();
+        }
+        finally
+        {
+            saving = false;
+        }
+    }
+
+    private void Edit(ManualOneRepMax entry)
+    {
+        editingId = entry.Id;
+        exerciseName = entry.ExerciseName;
+        weight = entry.Weight;
+        achievedOn = entry.AchievedOn;
+        notes = entry.Notes;
+        message = null;
+    }
+
+    private async Task DeleteAsync(ManualOneRepMax entry)
+    {
+        if (await ManualMaxes.DeleteAsync(entry.Id))
+        {
+            if (editingId == entry.Id) ResetForm();
+            ShowMessage($"Deleted {entry.ExerciseName} ({entry.AchievedOn:MMM d, yyyy}).", error: false);
+            await LoadAsync();
+        }
+    }
+
+    private void ResetForm()
+    {
+        editingId = 0;
+        exerciseName = string.Empty;
+        weight = null;
+        achievedOn = DateTime.Today;
+        notes = null;
+        message = null;
+    }
+
+    private void ShowMessage(string? text, bool error)
+    {
+        message = text;
+        isError = error;
+    }
+}

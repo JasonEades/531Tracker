@@ -1631,6 +1631,46 @@ namespace FiveThreeOneTracker.Migrations
                     b.ToTable("Lifts");
                 });
 
+            modelBuilder.Entity("FiveThreeOneTracker.Models.ManualOneRepMax", b =>
+                {
+                    b.Property<int>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("integer");
+
+                    NpgsqlPropertyBuilderExtensions.UseIdentityByDefaultColumn(b.Property<int>("Id"));
+
+                    b.Property<DateTime>("AchievedOn")
+                        .HasColumnType("date");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("ExerciseName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)");
+
+                    b.Property<string>("Notes")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<double>("Weight")
+                        .HasColumnType("double precision");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("UserId", "AchievedOn");
+
+                    b.ToTable("ManualOneRepMaxes");
+                });
+
             modelBuilder.Entity("FiveThreeOneTracker.Models.PlateInventory", b =>
                 {
                     b.Property<int>("Id")
@@ -2614,6 +2654,17 @@ namespace FiveThreeOneTracker.Migrations
                 });
 
             modelBuilder.Entity("FiveThreeOneTracker.Models.GoogleHealthConnection", b =>
+                {
+                    b.HasOne("FiveThreeOneTracker.Models.ApplicationUser", "User")
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.Navigation("User");
+                });
+
+            modelBuilder.Entity("FiveThreeOneTracker.Models.ManualOneRepMax", b =>
                 {
                     b.HasOne("FiveThreeOneTracker.Models.ApplicationUser", "User")
                         .WithMany()

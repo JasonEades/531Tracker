@@ -34,6 +34,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
 
     // ── Body metrics ─────────────────────────────────────────────────────────
     public DbSet<BodyMetricEntry> BodyMetricEntries => Set<BodyMetricEntry>();
+    public DbSet<ManualOneRepMax> ManualOneRepMaxes => Set<ManualOneRepMax>();
     public DbSet<ProgressPhoto> ProgressPhotos => Set<ProgressPhoto>();
 
     // ── PPL ──────────────────────────────────────────────────────────────────
@@ -284,6 +285,16 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : IdentityDbCo
                   .HasForeignKey(e => e.UserId)
                   .OnDelete(DeleteBehavior.Cascade);
             entity.Property(e => e.RecordedOn).HasColumnType("date");
+        });
+
+        modelBuilder.Entity<ManualOneRepMax>(entity =>
+        {
+            entity.HasIndex(e => new { e.UserId, e.AchievedOn });
+            entity.HasOne(e => e.User)
+                  .WithMany()
+                  .HasForeignKey(e => e.UserId)
+                  .OnDelete(DeleteBehavior.Cascade);
+            entity.Property(e => e.AchievedOn).HasColumnType("date");
         });
 
         modelBuilder.Entity<ProgressPhoto>(entity =>

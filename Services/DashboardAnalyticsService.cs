@@ -162,6 +162,10 @@ public sealed class DashboardAnalyticsService(
             .ToList();
 
         var currentProgram = BuildCurrentProgram(currentCycle, pplSessions, additional, today);
+        var manualMaxes = await db.ManualOneRepMaxes.AsNoTracking()
+            .Where(x => x.UserId == userId && x.Weight > 0)
+            .Select(x => new ManualMaxRow(x.ExerciseName.Trim(), x.AchievedOn, x.Weight))
+            .ToListAsync();
         var allSessions = workouts.Select(w => w.Date).Concat(pplSessions.Select(s => s.Date)).Concat(additional.Select(s => s.Date));
         var yearWorkouts = workouts.Where(w => InYear(w.Date, yearStart)).ToList();
         var yearPpl = pplSessions.Where(s => InYear(s.Date, yearStart)).ToList();
@@ -173,10 +177,10 @@ public sealed class DashboardAnalyticsService(
             ThisWeek = BuildWeek(workouts, pplSessions, additional, weekStart),
             YearToDate = BuildYear(yearStart.Year, yearWorkouts, yearPpl, yearAdditional),
             MonthlyTraining = BuildMonthly(yearStart.Year, yearWorkouts, yearPpl, yearAdditional),
-            StrengthProgress = BuildStrengthProgress(workouts, pplSessions, today, currentCycle?.Id),
-            CompoundProgress = await BuildCompoundProgressAsync(userId),
+            StrengthProgress = BuildStrengthProgress(workouts, pplSessions, manualMaxes, today, currentCycle?.Id),
+            CompoundProgress = await BuildCompoundProgressAsync(userId, manualMaxes),
             RecentRecords = BuildRecords(workouts, pplSessions),
-            PersonalRecords = BuildPersonalRecords(workouts, pplSessions, additional),
+            PersonalRecords = BuildPersonalRecords(workouts, pplSessions, additional, manualMaxes),
             Steps = BuildSteps(stepRecords, today, weekStart, yearStart, hasGoogleHealth)
         };
     }
@@ -264,16 +268,29 @@ public sealed class DashboardAnalyticsService(
         }).ToList();
     }
 
-    private List<StrengthAnalytics> BuildStrengthProgress(List<WorkoutRow> workouts, List<PplSessionRow> ppl, DateTime today, int? currentCycleId)
+    private List<StrengthAnalytics> BuildStrengthProgress(List<WorkoutRow> workouts, List<PplSessionRow> ppl, List<ManualMaxRow> manual, DateTime today, int? currentCycleId)
     {
-        var observations = workouts
+        var tracked = workouts
             .Where(w => w.WeekNumber != WeekNumber.Week4)
             .SelectMany(w => w.Sets
                 .Where(s => s.IsMainWork)
                 .Select(s => new Observation { Key = $"531:{s.LiftKey}", Name = s.LiftName, Date = w.Date, CycleId = w.CycleId, Value = weightCalculator.CalculateEstimated1RM(s.Weight, s.Reps) }))
             .Concat(ppl.SelectMany(s => s.Exercises.SelectMany(e => e.Sets.Select(x => new Observation { Key = $"ppl:{e.Key}", Name = e.Name, Date = s.Date, Value = weightCalculator.CalculateEstimated1RM(x.Weight, x.Reps) }))))
             .Where(x => x.Value > 0)
-            .GroupBy(x => x.Key);
+            .ToList();
+
+        // Manual 1RMs join every tracked lift with the matching name; otherwise they form their own row.
+        var trackedNames = tracked.Select(x => x.Name).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var manualObservations = manual.SelectMany(m =>
+        {
+            var match = ExerciseObservations.MatchName(trackedNames, m.ExerciseName);
+            var keys = match is null
+                ? new List<string> { $"manual:{ExerciseHistoryService.BuildKey(m.ExerciseName)}" }
+                : tracked.Where(t => string.Equals(t.Name, match, StringComparison.OrdinalIgnoreCase)).Select(t => t.Key).Distinct().ToList();
+            return keys.Select(key => new Observation { Key = key, Name = match ?? m.ExerciseName, Date = m.Date, Value = m.Weight, IsManual = true });
+        });
+
+        var observations = tracked.Concat(manualObservations).GroupBy(x => x.Key);
         return observations.Select(group =>
         {
             var items = group
@@ -281,9 +298,10 @@ public sealed class DashboardAnalyticsService(
                 .Select(session => session.OrderByDescending(x => x.Value).First())
                 .OrderBy(x => x.Date)
                 .ToList();
+            var name = group.Where(x => !x.IsManual).OrderBy(x => x.Date).Select(x => x.Name).LastOrDefault() ?? items.Last().Name;
             return new StrengthAnalytics
             {
-                ExerciseKey = group.Key, ExerciseName = items.Last().Name, Current = items.Last().Value,
+                ExerciseKey = group.Key, ExerciseName = name, Current = items.Last().Value,
                 PreviousCycle = currentCycleId is null ? null : items.Where(x => x.CycleId is not null && x.CycleId < currentCycleId).Select(x => (double?)x.Value).LastOrDefault(),
                 ThreeMonthsAgo = AtOrBefore(items, today.AddMonths(-3)), SixMonthsAgo = AtOrBefore(items, today.AddMonths(-6)), OneYearAgo = AtOrBefore(items, today.AddYears(-1)),
                 History = items.Select(x => new StrengthPoint { Date = x.Date, Value = x.Value }).ToList()
@@ -292,7 +310,7 @@ public sealed class DashboardAnalyticsService(
     }
 
     /// <summary>All-time (not windowed) per-session best e1RM for the four main compounds.</summary>
-    private async Task<List<CompoundLiftProgress>> BuildCompoundProgressAsync(string userId)
+    private async Task<List<CompoundLiftProgress>> BuildCompoundProgressAsync(string userId, List<ManualMaxRow> manual)
     {
         var mainSets = await db.WorkoutSets.AsNoTracking()
             .Where(s => s.Workout.Week.Cycle.UserId == userId
@@ -323,6 +341,7 @@ public sealed class DashboardAnalyticsService(
         var observations = mainSets
             .Select(s => (Lift: (LiftType?)s.MainLiftType, s.OccurredOn, Value: weightCalculator.CalculateEstimated1RM(s.Weight, s.Reps)))
             .Concat(pplSets.Select(s => (Lift: s.LinkedLift ?? ResolveCompoundLift(s.ExerciseName), s.OccurredOn, Value: weightCalculator.CalculateEstimated1RM(s.Weight, s.Reps))))
+            .Concat(manual.Select(m => (Lift: ResolveCompoundLift(m.ExerciseName), OccurredOn: m.Date, Value: m.Weight)))
             .Where(o => o.Lift is not null && o.Value > 0);
 
         return observations
@@ -383,7 +402,7 @@ public sealed class DashboardAnalyticsService(
         => workouts.SelectMany(w => w.Sets.Select(s => new PerformanceRecord { ExerciseName = s.LiftName, Date = w.Date, Weight = s.Weight, Reps = s.Reps }))
             .Concat(ppl.SelectMany(s => s.Exercises.SelectMany(e => e.Sets.Select(x => new PerformanceRecord { ExerciseName = e.Name, Date = s.Date, Weight = x.Weight, Reps = x.Reps })))).OrderByDescending(x => x.Date).Take(5).ToList();
 
-    private List<PersonalRecord> BuildPersonalRecords(List<WorkoutRow> workouts, List<PplSessionRow> ppl, List<AdditionalRow> additional)
+    private List<PersonalRecord> BuildPersonalRecords(List<WorkoutRow> workouts, List<PplSessionRow> ppl, List<AdditionalRow> additional, List<ManualMaxRow> manual)
     {
         var observations = workouts.SelectMany(w => w.Sets.Where(s => !s.IsWarmup)
                 .Select(s => new RecordObservation(s.LiftName, w.Date, s.Weight, s.Reps)))
@@ -391,6 +410,7 @@ public sealed class DashboardAnalyticsService(
                 .Select(x => new RecordObservation(e.Name, s.Date, x.Weight, x.Reps)))))
             .Concat(additional.SelectMany(s => s.StrengthSets
                 .Select(x => new RecordObservation(x.LiftName, s.Date, x.Weight, x.Reps))))
+            .Concat(manual.Select(m => new RecordObservation(m.ExerciseName, m.Date, m.Weight, 1, IsManual: true)))
             .Where(x => x.Weight > 0 && x.Reps > 0)
             .ToList();
 
@@ -400,14 +420,17 @@ public sealed class DashboardAnalyticsService(
             {
                 var bestEstimated = group.OrderByDescending(x => weightCalculator.CalculateEstimated1RM(x.Weight, x.Reps)).First();
                 var bestWeight = group.OrderByDescending(x => x.Weight).First();
-                var bestRep = group.OrderByDescending(x => x.Reps).ThenByDescending(x => x.Weight).First();
+                // A manual 1RM is a single max attempt, not a rep record.
+                var bestRep = group.Where(x => !x.IsManual).OrderByDescending(x => x.Reps).ThenByDescending(x => x.Weight).FirstOrDefault();
 
-                return new[]
+                var records = new List<PersonalRecord>
                 {
                     new PersonalRecord { ExerciseName = bestEstimated.ExerciseName, RecordType = "Estimated 1RM", Value = weightCalculator.CalculateEstimated1RM(bestEstimated.Weight, bestEstimated.Reps), Weight = bestEstimated.Weight, Reps = bestEstimated.Reps, Date = bestEstimated.Date },
-                    new PersonalRecord { ExerciseName = bestWeight.ExerciseName, RecordType = "Heaviest weight", Value = bestWeight.Weight, Weight = bestWeight.Weight, Reps = bestWeight.Reps, Date = bestWeight.Date },
-                    new PersonalRecord { ExerciseName = bestRep.ExerciseName, RecordType = "Rep PR", Value = bestRep.Reps, Weight = bestRep.Weight, Reps = bestRep.Reps, Date = bestRep.Date }
+                    new PersonalRecord { ExerciseName = bestWeight.ExerciseName, RecordType = "Heaviest weight", Value = bestWeight.Weight, Weight = bestWeight.Weight, Reps = bestWeight.Reps, Date = bestWeight.Date }
                 };
+                if (bestRep is not null)
+                    records.Add(new PersonalRecord { ExerciseName = bestRep.ExerciseName, RecordType = "Rep PR", Value = bestRep.Reps, Weight = bestRep.Weight, Reps = bestRep.Reps, Date = bestRep.Date });
+                return records;
             })
             .OrderBy(x => x.ExerciseName)
             .ThenBy(x => x.RecordType)
@@ -424,7 +447,8 @@ public sealed class DashboardAnalyticsService(
     private sealed class PplExerciseRow { public string Key { get; init; } = ""; public string Name { get; init; } = ""; public List<ActualSetRow> Sets { get; init; } = []; }
     private sealed class AdditionalRow { public DateTime Date { get; init; } public SessionType Type { get; init; } public List<CardioRow> Cardio { get; init; } = []; public List<ActualSetRow> StrengthSets { get; init; } = []; }
     private sealed class ActualSetRow { public double Weight { get; init; } public int Reps { get; init; } public string LiftName { get; init; } = ""; public string LiftKey { get; init; } = ""; public bool IsWarmup { get; init; } public bool IsMainWork { get; init; } }
-    private sealed record RecordObservation(string ExerciseName, DateTime Date, double Weight, int Reps);
+    private sealed record RecordObservation(string ExerciseName, DateTime Date, double Weight, int Reps, bool IsManual = false);
     private sealed class CardioRow { public double Quantity { get; init; } public CardioUnit Unit { get; init; } }
-    private sealed class Observation { public string Key { get; init; } = ""; public string Name { get; init; } = ""; public DateTime Date { get; init; } public int? CycleId { get; init; } public double Value { get; init; } }
+    private sealed class Observation { public string Key { get; init; } = ""; public string Name { get; init; } = ""; public DateTime Date { get; init; } public int? CycleId { get; init; } public double Value { get; init; } public bool IsManual { get; init; } }
+    private sealed record ManualMaxRow(string ExerciseName, DateTime Date, double Weight);
 }

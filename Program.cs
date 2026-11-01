@@ -39,6 +39,7 @@ builder.Services.AddScoped<IExerciseLibraryService, ExerciseLibraryService>();
 builder.Services.Configure<ProgressPhotoOptions>(builder.Configuration.GetSection(ProgressPhotoOptions.SectionName));
 builder.Services.AddSingleton<IProgressPhotoProcessor, ProgressPhotoProcessor>();
 builder.Services.AddScoped<IBodyMetricService, BodyMetricService>();
+builder.Services.AddScoped<IManualOneRepMaxService, ManualOneRepMaxService>();
 builder.Services.AddScoped<IWorkoutExportRenderer, MarkdownWorkoutExporter>();
 builder.Services.AddScoped<IWorkoutExportRenderer, PdfWorkoutExporter>();
 
