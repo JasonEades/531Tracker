@@ -55,6 +55,7 @@ The `+` marks the final set as AMRAP (as many reps as possible). The optional 5s
 ### 5/3/1 training
 
 - Dashboard showing every active program (5/3/1 and PPL side by side) with direct open actions, so neither requires a trip to History
+- **Workout** nav tab (`/workout`) opens the workout to train next, never the History pages: an in-progress 5/3/1 workout, then a PPL session with logged sets, then the next unfinished 5/3/1 workout, then the active PPL program's open session or program page; with no active program it opens the dashboard
 - Cycle creation and history across weeks and primary lifts
 - Starting Training Maxes derive from estimated 1RMs (TM = 90% of e1RM): when you create your first 5/3/1 cycle and have previous PPL or 5/3/1 training, each lift's TM is set from the most recent program/cycle that trained it, replacing defaults or earlier edits; later cycles keep the normal increments and any manual overrides
 - Main, warmup, BBB, FSL, and AMRAP set prescriptions
@@ -185,6 +186,7 @@ Planned follow-ups (stable exercise identity on logged sets, and a guided 5/3/1 
 │   ├── ExerciseObservations    # Shared user-scoped loader of every logged set (5/3/1, accessories, PPL, additional) used by history, e1RM, and "last time" lookups; manual 1RMs only when a caller opts in (exercise history)
 │   ├── ManualOneRepMaxService  # User-scoped hand-entered past 1RMs (ManualOneRepMaxes table) for progress views
 │   ├── ExerciseNameMatcher     # Fuzzy exercise-name matching for accessory → PPL weight reuse
+│   ├── WorkoutDestination      # Picks where the Workout nav tab (/workout) lands (5/3/1 or PPL)
 │   ├── PplProgramService       # PPL program management
 │   ├── PplSessionService       # PPL session tracking
 │   ├── PplProgressionService   # PPL e1RM (no automatic progression)
@@ -422,6 +424,7 @@ The test project uses xUnit and covers the critical workout/export paths, includ
 - Exercise-library search/filtering, custom-exercise ownership isolation, and PPL catalog selection
 - Accessory/library merge: picker lists each exercise once, picking a library exercise creates one user-owned linked accessory (other users' accessories and custom exercises never reused), linked accessories share last-used weights, accessory logs appear in exercise history under the library name for their owner only, and the merge migration repoints PPL slots off removed duplicate entries and links existing accessories by name without renaming any history
 - Multi-user isolation of settings, bars, programs, accessories, latest accessory weights, and the dashboard's current-cycle lookup
+- Workout nav tab destination (in-progress work first, next unfinished 5/3/1 workout, PPL-only users, no active program never landing on History)
 - Dashboard all-time compound progression (first session outside the 1-year window, 5/3/1 + PPL merged, deloads excluded, other users' data excluded)
 - Manual past 1RMs (validation, canonical exercise naming, cross-user isolation, inclusion in compound progression / estimated-1RM table / personal records / exercise history, exclusion from weight suggestions)
 - Exercise-name matching (equivalent names auto-match, different movements/equipment are rejected) and accessory weight rep-range conversion

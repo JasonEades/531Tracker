@@ -2,27 +2,23 @@
 @attribute [Authorize]
 @rendermode InteractiveServer
 @inject ICycleService CycleService
+@inject IPplProgramService PplProgramService
 @inject NavigationManager Nav
 
-@* Resume an active workout when present; otherwise open the current cycle. *@
+@* Open the workout to train next (5/3/1 or PPL); never the History pages. *@
 
 @code {
     protected override async Task OnInitializedAsync()
     {
         var currentCycle = await CycleService.GetCurrentCycleAsync();
-        if (currentCycle is not null)
+        var activePplProgram = await PplProgramService.GetActiveProgramAsync();
+        PplWeekPlan? pplWeekPlan = null;
+        if (activePplProgram is not null)
         {
-            var inProgressWorkout = currentCycle.Weeks
-                .SelectMany(week => week.Workouts)
-                .FirstOrDefault(workout => workout.Status == WorkoutStatus.InProgress);
-
-            Nav.NavigateTo(
-                inProgressWorkout is null
-                    ? $"/cycles/{currentCycle.Id}"
-                    : $"/workout/{inProgressWorkout.Id}",
-                replace: true);
+            try { pplWeekPlan = await PplProgramService.GetWeekPlanAsync(activePplProgram.Id); }
+            catch (InvalidOperationException) { }
         }
-        else
-            Nav.NavigateTo("/cycles", replace: true);
+
+        Nav.NavigateTo(WorkoutDestination.Resolve(currentCycle, activePplProgram, pplWeekPlan), replace: true);
     }
 }

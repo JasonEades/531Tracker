@@ -15,11 +15,11 @@ Follow-ups from the program-organization review. A (one shared exercise history 
 
 ## C. Guided 5/3/1 ↔ PPL switch flow
 
-**Problem:** Switching programs is manual. `CycleService.CreateNextCycleAsync` adds +5/+10 to the previous training max and ignores newer PPL work. Only the first cycle is seeded from e1RM. The Workout button (`WorkoutRedirect`) only opens 5/3/1.
+**Problem:** Switching programs is manual. `CycleService.CreateNextCycleAsync` adds +5/+10 to the previous training max and ignores newer PPL work. Only the first cycle is seeded from e1RM. The Workout button (`WorkoutRedirect`) opens whichever program has work in progress (5/3/1 first otherwise) but offers no explicit choice when both are active.
 
 **Plan:**
 - Add a "Switch program" action on the dashboard and history page:
   - Choosing PPL → 5/3/1 ends or pauses the active PPL program. A new-cycle form shows, for each lift, the suggested TM (90% of the most recent e1RM from `EstimatedStrengthService`) next to the previous cycle's TM plus the increment. The user picks one or edits it.
   - Choosing 5/3/1 → PPL marks the current cycle complete and creates a PPL program seeded from recent e1RM, which already works.
-- Make `WorkoutRedirect` open whichever program is active, or offer a choice when both are.
+- Offer an explicit 5/3/1 vs. PPL choice in `WorkoutRedirect` when both are active.
 - Tests: suggested TMs use PPL work newer than the last cycle, explicit user choices are kept, and the flow is user-scoped.
