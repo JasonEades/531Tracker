@@ -246,6 +246,31 @@ else
                     @DisplayWeight(set.ActualWeight ?? exercise.SuggestedWeight) <span class="set-unit">lbs</span>
                         </div>
                         <div class="set-reps-label">× @set.TargetReps reps target</div>
+                    </div>
+                    <div class="set-inputs">
+                        @if (!exercise.EffectiveIsBodyweight)
+                        {
+                            <input class="set-input" type="number" inputmode="numeric"
+                                   value="@DisplayWeight(set.ActualWeight ?? exercise.SuggestedWeight)"
+                                   @onchange="e => OnWeightChanged(set, exercise, e)" step="2.5" min="0" max="@PplSessionService.MaxWeight"
+                                   disabled="@(session.Status == WorkoutStatus.Completed)" />
+                        }
+                        <input class="set-input" type="number" inputmode="numeric"
+                               value="@(set.ActualReps ?? set.TargetReps)"
+                               @onchange="e => OnRepsChanged(set, e)" min="0" max="@PplSessionService.MaxReps"
+                               disabled="@(session.Status == WorkoutStatus.Completed)" />
+                    </div>
+                    <button class="check-btn @(set.IsCompleted ? "checked" : "")"
+                            @onclick="() => ToggleSet(set, exercise)"
+                            disabled="@(session.Status == WorkoutStatus.Completed)">
+                        @(set.IsCompleted ? "✓" : "")
+                    </button>
+                    @if (session.Status != WorkoutStatus.Completed && exercise.Sets.Count > 1)
+                    {
+                        <button class="set-remove-btn" title="Remove set @set.SetNumber" aria-label="Remove set @set.SetNumber"
+                                @onclick="() => RemoveSet(set)">✕</button>
+                    }
+                    <div class="set-history">
                         @{
                             var currentSetWeight = exercise.EffectiveIsBodyweight ? null : set.ActualWeight ?? exercise.SuggestedWeight;
                             var sameWeight = FindSameWeightPrevious(exercise, set.SetNumber, currentSetWeight);
@@ -281,29 +306,6 @@ else
                             </div>
                         }
                     </div>
-                    <div class="set-inputs">
-                        @if (!exercise.EffectiveIsBodyweight)
-                        {
-                            <input class="set-input" type="number" inputmode="numeric"
-                                   value="@DisplayWeight(set.ActualWeight ?? exercise.SuggestedWeight)"
-                                   @onchange="e => OnWeightChanged(set, exercise, e)" step="2.5" min="0" max="@PplSessionService.MaxWeight"
-                                   disabled="@(session.Status == WorkoutStatus.Completed)" />
-                        }
-                        <input class="set-input" type="number" inputmode="numeric"
-                               value="@(set.ActualReps ?? set.TargetReps)"
-                               @onchange="e => OnRepsChanged(set, e)" min="0" max="@PplSessionService.MaxReps"
-                               disabled="@(session.Status == WorkoutStatus.Completed)" />
-                    </div>
-                    <button class="check-btn @(set.IsCompleted ? "checked" : "")"
-                            @onclick="() => ToggleSet(set, exercise)"
-                            disabled="@(session.Status == WorkoutStatus.Completed)">
-                        @(set.IsCompleted ? "✓" : "")
-                    </button>
-                    @if (session.Status != WorkoutStatus.Completed && exercise.Sets.Count > 1)
-                    {
-                        <button class="set-remove-btn" title="Remove set @set.SetNumber" aria-label="Remove set @set.SetNumber"
-                                @onclick="() => RemoveSet(set)">✕</button>
-                    }
                 </div>
             }
             @if (session.Status != WorkoutStatus.Completed)
